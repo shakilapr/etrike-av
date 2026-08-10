@@ -1,0 +1,24 @@
+# Auto-detect text files, normalize line endings to LF on commit
+* text=auto
+
+# Shell scripts must use LF
+*.sh text eol=lf
+
+# ROS/colcon files
+*.yaml text
+*.xml text
+*.xacro text
+*.launch.py text
+*.launch.xml text
+*.repos text
+*.cmake text
+CMakeLists.txt text
+package.xml text
+
+# Docs
+*.md text
+
+# Binary
+*.dae binary
+*.jpg binary
+*.png binary
