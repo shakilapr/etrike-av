@@ -1,0 +1,7 @@
+/autoware/src/
+/autoware/build/
+/autoware/install/
+/autoware/log/
+/simulator/AWSIM/
+/data/
+/.stfolder/

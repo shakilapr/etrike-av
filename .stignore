@@ -1,0 +1,15 @@
+/autoware/build
+/autoware/install
+/autoware/log
+
+/data/bags
+
+**/.git
+**/__pycache__
+**/.cache
+
+/simulator/AWSIM/Library
+/simulator/AWSIM/Temp
+/simulator/AWSIM/obj
+/simulator/AWSIM/Logs
+/simulator/AWSIM/UserSettings
