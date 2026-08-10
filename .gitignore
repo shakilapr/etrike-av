@@ -5,3 +5,14 @@
 /simulator/AWSIM/
 /data/
 /.stfolder/
+
+# LaTeX/PDF build outputs
+/tex/generated/
+/tex/output/
+*.pdf
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot

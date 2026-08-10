@@ -1,0 +1,1219 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={E-Trike AV Pipeline Data Flow},
+  pdfauthor={etrike},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+
+\title{E-Trike AV Pipeline Data Flow}
+\author{etrike}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{AV Pipeline: Data Flow Between Stages (Full Message
+Reference)}\label{av-pipeline-data-flow-between-stages-full-message-reference}
+
+This document describes what data (topics / messages / data) flows
+between each stage of the autonomous vehicle pipeline:
+
+\begin{verbatim}
+Sensors → Sensing → Localization + Perception → Planning → Control → Vehicle Interface → Vehicle
+\end{verbatim}
+
+All Autoware message definitions below are taken verbatim from this repo
+(\texttt{autoware/src/core/autoware\_msgs/...}). Standard ROS 2 message
+types (\texttt{std\_msgs}, \texttt{geometry\_msgs},
+\texttt{sensor\_msgs}, \texttt{nav\_msgs}, \texttt{tf2\_msgs},
+\texttt{unique\_identifier\_msgs}, \texttt{geographic\_msgs}) are also
+reproduced in full in the reference section at the bottom.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{1. Sensors → Sensing (raw hardware
+readings)}\label{1-sensors--sensing-raw-hardware-readings}
+
+Raw, uncalibrated, unsynchronized sensor output straight from drivers.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Topic & Msg Type & Contents \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{/sensing/camera/*/image\_raw} & \texttt{sensor\_msgs/msg/Image}
+& Raw camera frames \\
+\texttt{/sensing/camera/*/compressed} &
+\texttt{sensor\_msgs/msg/CompressedImage} & JPEG-compressed frames \\
+\texttt{/sensing/lidar/*/pointcloud\_raw} &
+\texttt{sensor\_msgs/msg/PointCloud2} & Raw LiDAR sweeps
+(motion-distorted) \\
+\texttt{/sensing/imu/imu\_data} & \texttt{sensor\_msgs/msg/Imu} &
+Angular velocity + linear accel + orientation \\
+\texttt{/sensing/gnss/fix} & \texttt{sensor\_msgs/msg/NavSatFix} &
+Latitude / longitude / altitude \\
+\texttt{/sensing/gnss/fix\_velocity} &
+\texttt{geometry\_msgs/msg/TwistWithCovarianceStamped} & GNSS-derived
+velocity \\
+\texttt{/sensing/radar/*/radar\_objs} &
+\texttt{autoware\_sensing\_msgs/msg/RadarObjects} & Radar-tracked
+objects \\
+\texttt{/sensing/radar/*/radar\_info} &
+\texttt{autoware\_sensing\_msgs/msg/RadarInfo} & Radar field metadata \\
+\texttt{/sensing/ultrasonic/*} & \texttt{sensor\_msgs/msg/Range} &
+Proximity distance \\
+\end{longtable}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/Image}}{sensor\_msgs/msg/Image}}\label{sensor_msgsmsgimage}
+
+\begin{verbatim}
+std_msgs/Header header
+uint32 height
+uint32 width
+string encoding
+uint8 is_bigendian
+uint32 step
+uint8[] data
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/CompressedImage}}{sensor\_msgs/msg/CompressedImage}}\label{sensor_msgsmsgcompressedimage}
+
+\begin{verbatim}
+std_msgs/Header header
+string format
+uint8[] data
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/PointCloud2}}{sensor\_msgs/msg/PointCloud2}}\label{sensor_msgsmsgpointcloud2}
+
+\begin{verbatim}
+std_msgs/Header header
+uint32 height
+uint32 width
+sensor_msgs/PointField[] fields
+bool is_bigendian
+uint32 point_step
+uint32 row_step
+uint8[] data
+bool is_dense
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/Imu}}{sensor\_msgs/msg/Imu}}\label{sensor_msgsmsgimu}
+
+\begin{verbatim}
+std_msgs/Header header
+geometry_msgs/Quaternion orientation
+float64[9] orientation_covariance
+geometry_msgs/Vector3 angular_velocity
+float64[9] angular_velocity_covariance
+geometry_msgs/Vector3 linear_acceleration
+float64[9] linear_acceleration_covariance
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/NavSatFix}}{sensor\_msgs/msg/NavSatFix}}\label{sensor_msgsmsgnavsatfix}
+
+\begin{verbatim}
+std_msgs/Header header
+sensor_msgs/NavSatStatus status
+float64 latitude
+float64 longitude
+float64 altitude
+float64[9] position_covariance
+uint8 position_covariance_type   # 0 UNKNOWN / 1 APPROX / 2 DIAGONAL_KNOWN / 3 KNOWN
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_sensing\_msgs/msg/RadarObjects}}{autoware\_sensing\_msgs/msg/RadarObjects}}\label{autoware_sensing_msgsmsgradarobjects}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_sensing_msgs/RadarObject[] objects
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_sensing\_msgs/msg/RadarObject}}{autoware\_sensing\_msgs/msg/RadarObject}}\label{autoware_sensing_msgsmsgradarobject}
+
+\begin{verbatim}
+float32 INVALID_COV_VALUE = -1.0
+uint8 MEASUREMENT_STATUS_INVALID=0
+uint8 MEASUREMENT_STATUS_MEASURED=1
+uint8 MEASUREMENT_STATUS_PREDICTED=2
+uint8 MEASUREMENT_STATUS_NEW=3
+uint8 MEASUREMENT_STATUS_UNKNOWN=4
+uint8 MOVEMENT_STATUS_INVALID=0
+uint8 MOVEMENT_STATUS_DYNAMIC=1
+uint8 MOVEMENT_STATUS_STATIC=2
+uint8 MOVEMENT_STATUS_UNKNOWN=3
+
+uint32 object_id
+uint16 age
+uint8 measurement_status
+uint8 movement_status
+geometry_msgs/Point position
+geometry_msgs/Vector3 velocity
+geometry_msgs/Vector3 acceleration
+geometry_msgs/Vector3 size
+float32[6] position_covariance
+float32[6] velocity_covariance
+float32[6] acceleration_covariance
+float32[6] size_covariance
+float32 orientation
+float32 orientation_std
+float32 orientation_rate
+float32 orientation_rate_std
+float32 existence_probability
+autoware_sensing_msgs/RadarClassification[] classifications
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_sensing\_msgs/msg/RadarInfo}}{autoware\_sensing\_msgs/msg/RadarInfo}}\label{autoware_sensing_msgsmsgradarinfo}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_sensing_msgs/RadarFieldInfo[] object_fields_info
+autoware_sensing_msgs/RadarFieldInfo[] detection_fields_info
+uint32[] available_classes
+bool absolute_dynamics
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/Range}}{sensor\_msgs/msg/Range}}\label{sensor_msgsmsgrange}
+
+\begin{verbatim}
+std_msgs/Header header
+uint8 radiation_type        # 0 ULTRASOUND / 1 INFRARED
+float32 field_of_view
+float32 min_range
+float32 max_range
+float32 range
+\end{verbatim}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{2. Sensing → Localization + Perception (calibrated, synced,
+filtered)}\label{2-sensing--localization--perception-calibrated-synced-filtered}
+
+Sensing performs driver-level preprocessing: calibration, time
+synchronization, distortion correction, filtering. Output is clean,
+sensor-fusion-ready data.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Topic & Msg Type & Contents \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{/sensing/camera/*/image\_rect} & \texttt{sensor\_msgs/msg/Image}
+& Rectified (undistorted) images \\
+\texttt{/sensing/lidar/concatenated/pointcloud} &
+\texttt{sensor\_msgs/msg/PointCloud2} & Deskewed, filtered, calibrated
+cloud \\
+\texttt{/sensing/imu/concat} & \texttt{sensor\_msgs/msg/Imu} &
+Time-synced concatenated IMU \\
+\texttt{/tf} & \texttt{tf2\_msgs/msg/TFMessage} & Sensor extrinsic
+calibration (sensor→base\_link) \\
+\end{longtable}
+
+\subsubsection{\texorpdfstring{\texttt{tf2\_msgs/msg/TFMessage}}{tf2\_msgs/msg/TFMessage}}\label{tf2_msgsmsgtfmessage}
+
+\begin{verbatim}
+geometry_msgs/TransformStamped[] transforms
+\end{verbatim}
+
+(See \texttt{geometry\_msgs/TransformStamped}, \texttt{Transform},
+\texttt{Vector3}, \texttt{Quaternion} in reference section.)
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{3a. Localization → Planning (ego
+state)}\label{3a-localization--planning-ego-state}
+
+Estimates where the vehicle is and how it is moving in the map frame.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Topic & Msg Type & Contents \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{/localization/kinematic\_state} &
+\texttt{nav\_msgs/msg/Odometry} & Ego pose + twist (velocity, yaw
+rate) \\
+\texttt{/localization/pose} &
+\texttt{geometry\_msgs/msg/PoseWithCovarianceStamped} & Filtered pose w/
+covariance \\
+\texttt{/tf} & \texttt{tf2\_msgs/msg/TFMessage} & map → base\_link
+transform \\
+\texttt{/localization/gnss\_pose} &
+\texttt{geometry\_msgs/msg/PoseStamped} & Raw GNSS pose (debug /
+init) \\
+\end{longtable}
+
+\subsubsection{\texorpdfstring{\texttt{nav\_msgs/msg/Odometry}}{nav\_msgs/msg/Odometry}}\label{nav_msgsmsgodometry}
+
+\begin{verbatim}
+std_msgs/Header header
+string child_frame_id
+geometry_msgs/PoseWithCovariance pose
+geometry_msgs/TwistWithCovariance twist
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/PoseWithCovarianceStamped}}{geometry\_msgs/msg/PoseWithCovarianceStamped}}\label{geometry_msgsmsgposewithcovariancestamped}
+
+\begin{verbatim}
+std_msgs/Header header
+geometry_msgs/PoseWithCovariance pose
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/PoseStamped}}{geometry\_msgs/msg/PoseStamped}}\label{geometry_msgsmsgposestamped}
+
+\begin{verbatim}
+std_msgs/Header header
+geometry_msgs/Pose pose
+\end{verbatim}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{3b. Perception → Planning (environment
+understanding)}\label{3b-perception--planning-environment-understanding}
+
+Detects, tracks, and predicts the dynamic and static environment, plus
+the HD map.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Topic & Msg Type & Contents \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{/perception/object\_recognition/objects} &
+\texttt{autoware\_perception\_msgs/msg/TrackedObjects} & Tracked objects
+(box, class, vel, id) \\
+\texttt{/perception/object\_recognition/objects\_predicted} &
+\texttt{autoware\_perception\_msgs/msg/PredictedObjects} & Future
+trajectories of dynamic objects \\
+\texttt{/perception/traffic\_light\_recognition/traffic\_signals} &
+\texttt{autoware\_perception\_msgs/msg/TrafficLightGroupArray} & Signal
+state per junction \\
+\texttt{/perception/occupancy\_grid\_map} &
+\texttt{nav\_msgs/msg/OccupancyGrid} & Costmap / freespace \\
+\texttt{/map/vector\_map} &
+\texttt{autoware\_map\_msgs/msg/LaneletMapBin} & HD map (lanes, rules,
+signals) \\
+\texttt{/map/map\_projector\_info} &
+\texttt{autoware\_map\_msgs/msg/MapProjectorInfo} & Geo projection
+metadata \\
+\end{longtable}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrackedObjects}}{autoware\_perception\_msgs/msg/TrackedObjects}}\label{autoware_perception_msgsmsgtrackedobjects}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_perception_msgs/TrackedObject[] objects
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrackedObject}}{autoware\_perception\_msgs/msg/TrackedObject}}\label{autoware_perception_msgsmsgtrackedobject}
+
+\begin{verbatim}
+unique_identifier_msgs/UUID object_id
+float32 existence_probability
+autoware_perception_msgs/ObjectClassification[] classification
+autoware_perception_msgs/TrackedObjectKinematics kinematics
+autoware_perception_msgs/Shape shape
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrackedObjectKinematics}}{autoware\_perception\_msgs/msg/TrackedObjectKinematics}}\label{autoware_perception_msgsmsgtrackedobjectkinematics}
+
+\begin{verbatim}
+uint8 UNAVAILABLE=0
+uint8 SIGN_UNKNOWN=1
+uint8 AVAILABLE=2
+
+geometry_msgs/PoseWithCovariance pose_with_covariance
+geometry_msgs/TwistWithCovariance twist_with_covariance
+geometry_msgs/AccelWithCovariance acceleration_with_covariance
+uint8 orientation_availability
+bool is_stationary
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/PredictedObjects}}{autoware\_perception\_msgs/msg/PredictedObjects}}\label{autoware_perception_msgsmsgpredictedobjects}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_perception_msgs/PredictedObject[] objects
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/PredictedObject}}{autoware\_perception\_msgs/msg/PredictedObject}}\label{autoware_perception_msgsmsgpredictedobject}
+
+\begin{verbatim}
+unique_identifier_msgs/UUID object_id
+float32 existence_probability
+autoware_perception_msgs/ObjectClassification[] classification
+autoware_perception_msgs/PredictedObjectKinematics kinematics
+autoware_perception_msgs/Shape shape
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/PredictedObjectKinematics}}{autoware\_perception\_msgs/msg/PredictedObjectKinematics}}\label{autoware_perception_msgsmsgpredictedobjectkinematics}
+
+\begin{verbatim}
+geometry_msgs/PoseWithCovariance initial_pose_with_covariance
+geometry_msgs/TwistWithCovariance initial_twist_with_covariance
+geometry_msgs/AccelWithCovariance initial_acceleration_with_covariance
+autoware_perception_msgs/PredictedPath[] predicted_paths
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/PredictedPath}}{autoware\_perception\_msgs/msg/PredictedPath}}\label{autoware_perception_msgsmsgpredictedpath}
+
+\begin{verbatim}
+geometry_msgs/Pose[] path
+builtin_interfaces/Duration time_step
+float32 confidence    # 0.0 to 1.0
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/DetectedObjects}
+(pre-tracking
+output)}{autoware\_perception\_msgs/msg/DetectedObjects (pre-tracking output)}}\label{autoware_perception_msgsmsgdetectedobjects-pre-tracking-output}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_perception_msgs/DetectedObject[] objects
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/DetectedObject}}{autoware\_perception\_msgs/msg/DetectedObject}}\label{autoware_perception_msgsmsgdetectedobject}
+
+\begin{verbatim}
+float32 existence_probability
+autoware_perception_msgs/ObjectClassification[] classification
+autoware_perception_msgs/DetectedObjectKinematics kinematics
+autoware_perception_msgs/Shape shape
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/DetectedObjectKinematics}}{autoware\_perception\_msgs/msg/DetectedObjectKinematics}}\label{autoware_perception_msgsmsgdetectedobjectkinematics}
+
+\begin{verbatim}
+uint8 UNAVAILABLE=0
+uint8 SIGN_UNKNOWN=1
+uint8 AVAILABLE=2
+
+geometry_msgs/PoseWithCovariance pose_with_covariance
+bool has_position_covariance
+uint8 orientation_availability
+geometry_msgs/TwistWithCovariance twist_with_covariance
+bool has_twist
+bool has_twist_covariance
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/ObjectClassification}}{autoware\_perception\_msgs/msg/ObjectClassification}}\label{autoware_perception_msgsmsgobjectclassification}
+
+\begin{verbatim}
+uint8 UNKNOWN=0
+uint8 CAR=1
+uint8 TRUCK=2
+uint8 BUS=3
+uint8 TRAILER=4
+uint8 MOTORCYCLE=5
+uint8 BICYCLE=6
+uint8 PEDESTRIAN=7
+uint8 ANIMAL=8
+uint8 HAZARD=9
+uint8 OVER_DRIVABLE=10
+uint8 UNDER_DRIVABLE=11
+
+uint8 label
+float32 probability    # 0.0 to 1.0
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/Shape}}{autoware\_perception\_msgs/msg/Shape}}\label{autoware_perception_msgsmsgshape}
+
+\begin{verbatim}
+uint8 BOUNDING_BOX=0
+uint8 CYLINDER=1
+uint8 POLYGON=2
+
+uint8 type
+geometry_msgs/Polygon footprint
+geometry_msgs/Vector3 dimensions
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrafficLightGroupArray}}{autoware\_perception\_msgs/msg/TrafficLightGroupArray}}\label{autoware_perception_msgsmsgtrafficlightgrouparray}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+autoware_perception_msgs/TrafficLightGroup[] traffic_light_groups
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrafficLightGroup}}{autoware\_perception\_msgs/msg/TrafficLightGroup}}\label{autoware_perception_msgsmsgtrafficlightgroup}
+
+\begin{verbatim}
+int64 traffic_light_group_id
+autoware_perception_msgs/TrafficLightElement[] elements
+autoware_perception_msgs/PredictedTrafficLightState[] predictions
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrafficLightElement}}{autoware\_perception\_msgs/msg/TrafficLightElement}}\label{autoware_perception_msgsmsgtrafficlightelement}
+
+\begin{verbatim}
+uint8 UNKNOWN=0
+# color
+uint8 RED=1
+uint8 AMBER=2
+uint8 GREEN=3
+uint8 WHITE=4
+# shape
+uint8 CIRCLE=1
+uint8 LEFT_ARROW=2
+uint8 RIGHT_ARROW=3
+uint8 UP_ARROW=4
+uint8 UP_LEFT_ARROW=5
+uint8 UP_RIGHT_ARROW=6
+uint8 DOWN_ARROW=7
+uint8 DOWN_LEFT_ARROW=8
+uint8 DOWN_RIGHT_ARROW=9
+uint8 CROSS=10
+# status
+uint8 SOLID_OFF=1
+uint8 SOLID_ON=2
+uint8 FLASHING=3
+
+uint8 color
+uint8 shape
+uint8 status
+float32 confidence
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/PredictedTrafficLightState}}{autoware\_perception\_msgs/msg/PredictedTrafficLightState}}\label{autoware_perception_msgsmsgpredictedtrafficlightstate}
+
+\begin{verbatim}
+string INFORMATION_SOURCE_V2N="V2N"
+string INFORMATION_SOURCE_V2I="V2I"
+string INFORMATION_SOURCE_V2V="V2V"
+string INFORMATION_SOURCE_LOCAL_PERCEPTION="LOCAL_PERCEPTION"
+string INFORMATION_SOURCE_MANUAL_OVERRIDE="MANUAL_OVERRIDE"
+string INFORMATION_SOURCE_SIMULATION="SIMULATION"
+string INFORMATION_SOURCE_INTERNAL_ESTIMATION="INTERNAL_ESTIMATION"
+
+builtin_interfaces/Time predicted_stamp
+autoware_perception_msgs/TrafficLightElement[] simultaneous_elements
+float32 reliability
+string information_source
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrafficSignalArray}
+(legacy)}{autoware\_perception\_msgs/msg/TrafficSignalArray (legacy)}}\label{autoware_perception_msgsmsgtrafficsignalarray-legacy}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+autoware_perception_msgs/TrafficSignal[] signals
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrafficSignal}
+(legacy)}{autoware\_perception\_msgs/msg/TrafficSignal (legacy)}}\label{autoware_perception_msgsmsgtrafficsignal-legacy}
+
+\begin{verbatim}
+int64 traffic_signal_id
+autoware_perception_msgs/TrafficSignalElement[] elements
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_perception\_msgs/msg/TrafficSignalElement}
+(legacy)}{autoware\_perception\_msgs/msg/TrafficSignalElement (legacy)}}\label{autoware_perception_msgsmsgtrafficsignalelement-legacy}
+
+\begin{verbatim}
+uint8 UNKNOWN=0
+uint8 RED=1
+uint8 AMBER=2
+uint8 GREEN=3
+uint8 WHITE=4
+uint8 CIRCLE=1
+uint8 LEFT_ARROW=2
+uint8 RIGHT_ARROW=3
+uint8 UP_ARROW=4
+uint8 UP_LEFT_ARROW=5
+uint8 UP_RIGHT_ARROW=6
+uint8 DOWN_ARROW=7
+uint8 DOWN_LEFT_ARROW=8
+uint8 DOWN_RIGHT_ARROW=9
+uint8 CROSS=10
+uint8 SOLID_OFF=1
+uint8 SOLID_ON=2
+uint8 FLASHING=3
+
+uint8 color
+uint8 shape
+uint8 status
+float32 confidence
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{nav\_msgs/msg/OccupancyGrid}}{nav\_msgs/msg/OccupancyGrid}}\label{nav_msgsmsgoccupancygrid}
+
+\begin{verbatim}
+std_msgs/Header header
+nav_msgs/MapMetaData info
+int8[] data
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{nav\_msgs/msg/MapMetaData}}{nav\_msgs/msg/MapMetaData}}\label{nav_msgsmsgmapmetadata}
+
+\begin{verbatim}
+builtin_interfaces/Time map_load_time
+float32 resolution
+uint32 width
+uint32 height
+geometry_msgs/Pose origin
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_map\_msgs/msg/LaneletMapBin}}{autoware\_map\_msgs/msg/LaneletMapBin}}\label{autoware_map_msgsmsglaneletmapbin}
+
+\begin{verbatim}
+std_msgs/Header header
+string version_map_format
+string version_map
+string name_map
+uint8[] data
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_map\_msgs/msg/MapProjectorInfo}}{autoware\_map\_msgs/msg/MapProjectorInfo}}\label{autoware_map_msgsmsgmapprojectorinfo}
+
+\begin{verbatim}
+string LOCAL="Local"
+string LOCAL_CARTESIAN_UTM="LocalCartesianUTM"
+string LOCAL_CARTESIAN="LocalCartesian"
+string MGRS="MGRS"
+string TRANSVERSE_MERCATOR="TransverseMercator"
+string projector_type
+string WGS84="WGS84"
+string EGM2008="EGM2008"
+string vertical_datum
+string mgrs_grid
+geographic_msgs/GeoPoint map_origin
+float32 scale_factor
+\end{verbatim}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{4. Planning → Control (desired
+motion)}\label{4-planning--control-desired-motion}
+
+Produces the trajectory the vehicle should follow, derived from route,
+ego state, predicted objects, and traffic rules.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Topic & Msg Type & Contents \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{/planning/trajectory} &
+\texttt{autoware\_planning\_msgs/msg/Trajectory} &
+Time/pose/velocity/accel profile \\
+\texttt{/planning/path} & \texttt{autoware\_planning\_msgs/msg/Path} &
+Geometric path + bounds \\
+\texttt{/planning/mission\_planning/route} &
+\texttt{autoware\_planning\_msgs/msg/LaneletRoute} & Goal route \\
+\texttt{/planning/route\_state} &
+\texttt{autoware\_planning\_msgs/msg/RouteState} & Route status \\
+\texttt{/control/turn\_indicators\_cmd} &
+\texttt{autoware\_vehicle\_msgs/msg/TurnIndicatorsCommand} & Left /
+right / none \\
+\texttt{/control/hazard\_lights\_cmd} &
+\texttt{autoware\_vehicle\_msgs/msg/HazardLightsCommand} & Hazard
+on/off \\
+\end{longtable}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/Trajectory}}{autoware\_planning\_msgs/msg/Trajectory}}\label{autoware_planning_msgsmsgtrajectory}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_planning_msgs/TrajectoryPoint[] points
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/TrajectoryPoint}}{autoware\_planning\_msgs/msg/TrajectoryPoint}}\label{autoware_planning_msgsmsgtrajectorypoint}
+
+\begin{verbatim}
+builtin_interfaces/Duration time_from_start
+geometry_msgs/Pose pose
+float32 longitudinal_velocity_mps
+float32 lateral_velocity_mps
+float32 acceleration_mps2
+float32 heading_rate_rps
+float32 front_wheel_angle_rad
+float32 rear_wheel_angle_rad
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/Path}}{autoware\_planning\_msgs/msg/Path}}\label{autoware_planning_msgsmsgpath}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_planning_msgs/PathPoint[] points
+geometry_msgs/Point[] left_bound
+geometry_msgs/Point[] right_bound
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/PathPoint}}{autoware\_planning\_msgs/msg/PathPoint}}\label{autoware_planning_msgsmsgpathpoint}
+
+\begin{verbatim}
+geometry_msgs/Pose pose
+float32 longitudinal_velocity_mps
+float32 lateral_velocity_mps
+float32 heading_rate_rps
+bool is_final
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/LaneletRoute}}{autoware\_planning\_msgs/msg/LaneletRoute}}\label{autoware_planning_msgsmsglaneletroute}
+
+\begin{verbatim}
+std_msgs/Header header
+geometry_msgs/Pose start_pose
+geometry_msgs/Pose goal_pose
+autoware_planning_msgs/LaneletSegment[] segments
+unique_identifier_msgs/UUID uuid
+bool allow_modification
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/LaneletSegment}}{autoware\_planning\_msgs/msg/LaneletSegment}}\label{autoware_planning_msgsmsglaneletsegment}
+
+\begin{verbatim}
+autoware_planning_msgs/LaneletPrimitive preferred_primitive
+autoware_planning_msgs/LaneletPrimitive[] primitives
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/LaneletPrimitive}}{autoware\_planning\_msgs/msg/LaneletPrimitive}}\label{autoware_planning_msgsmsglaneletprimitive}
+
+\begin{verbatim}
+int64 id
+string primitive_type
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/RouteState}}{autoware\_planning\_msgs/msg/RouteState}}\label{autoware_planning_msgsmsgroutestate}
+
+\begin{verbatim}
+uint8 UNKNOWN=0
+uint8 INITIALIZING=1
+uint8 UNSET=2
+uint8 ROUTING=3
+uint8 SET=4
+uint8 REROUTING=5
+uint8 ARRIVED=6
+uint8 ABORTED=7
+uint8 INTERRUPTED=8
+
+builtin_interfaces/Time stamp
+uint8 state
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_planning\_msgs/msg/PoseWithUuidStamped}}{autoware\_planning\_msgs/msg/PoseWithUuidStamped}}\label{autoware_planning_msgsmsgposewithuuidstamped}
+
+\begin{verbatim}
+std_msgs/Header header
+geometry_msgs/Pose pose
+unique_identifier_msgs/UUID uuid
+\end{verbatim}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{5. Control → Vehicle Interface (actuation
+command)}\label{5-control--vehicle-interface-actuation-command}
+
+Converts the trajectory into a low-level vehicle command.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Topic & Msg Type & Contents \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{/control/command/control\_cmd} &
+\texttt{autoware\_control\_msgs/msg/Control} & Steering + accel/brake +
+velocity \\
+\texttt{/control/command/control\_horizon} &
+\texttt{autoware\_control\_msgs/msg/ControlHorizon} & Predicted control
+sequence \\
+\texttt{/control/command/gear\_cmd} &
+\texttt{autoware\_vehicle\_msgs/msg/GearCommand} & Drive / reverse /
+park \\
+\texttt{/control/command/turn\_indicators\_cmd} &
+\texttt{autoware\_vehicle\_msgs/msg/TurnIndicatorsCommand} & Turn
+signals \\
+\texttt{/control/command/hazard\_lights\_cmd} &
+\texttt{autoware\_vehicle\_msgs/msg/HazardLightsCommand} & Hazard
+lights \\
+\texttt{/control/engage} & \texttt{autoware\_vehicle\_msgs/msg/Engage} &
+Engage/disengage autonomy \\
+\end{longtable}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_control\_msgs/msg/Control}}{autoware\_control\_msgs/msg/Control}}\label{autoware_control_msgsmsgcontrol}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+builtin_interfaces/Time control_time
+autoware_control_msgs/Lateral lateral
+autoware_control_msgs/Longitudinal longitudinal
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_control\_msgs/msg/Lateral}}{autoware\_control\_msgs/msg/Lateral}}\label{autoware_control_msgsmsglateral}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+builtin_interfaces/Time control_time
+float32 steering_tire_angle          # rad, +left
+float32 steering_tire_rotation_rate  # rad/s
+bool is_defined_steering_tire_rotation_rate
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_control\_msgs/msg/Longitudinal}}{autoware\_control\_msgs/msg/Longitudinal}}\label{autoware_control_msgsmsglongitudinal}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+builtin_interfaces/Time control_time
+float32 velocity    # m/s (+forward)
+float32 acceleration  # m/s²
+float32 jerk         # m/s³
+bool is_defined_acceleration
+bool is_defined_jerk
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_control\_msgs/msg/ControlHorizon}}{autoware\_control\_msgs/msg/ControlHorizon}}\label{autoware_control_msgsmsgcontrolhorizon}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+builtin_interfaces/Time control_time
+float32 time_step_ms
+autoware_control_msgs/Control[] controls
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/GearCommand}}{autoware\_vehicle\_msgs/msg/GearCommand}}\label{autoware_vehicle_msgsmsggearcommand}
+
+\begin{verbatim}
+uint8 NONE=0
+uint8 NEUTRAL=1
+uint8 DRIVE=2
+uint8 DRIVE_2=3  ...  uint8 DRIVE_18=19
+uint8 REVERSE=20
+uint8 REVERSE_2=21
+uint8 PARK=22
+uint8 LOW=23
+uint8 LOW_2=24
+
+builtin_interfaces/Time stamp
+uint8 command
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/TurnIndicatorsCommand}}{autoware\_vehicle\_msgs/msg/TurnIndicatorsCommand}}\label{autoware_vehicle_msgsmsgturnindicatorscommand}
+
+\begin{verbatim}
+uint8 NO_COMMAND=0
+uint8 DISABLE=1
+uint8 ENABLE_LEFT=2
+uint8 ENABLE_RIGHT=3
+
+builtin_interfaces/Time stamp
+uint8 command
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/HazardLightsCommand}}{autoware\_vehicle\_msgs/msg/HazardLightsCommand}}\label{autoware_vehicle_msgsmsghazardlightscommand}
+
+\begin{verbatim}
+uint8 NO_COMMAND=0
+uint8 DISABLE=1
+uint8 ENABLE=2
+
+builtin_interfaces/Time stamp
+uint8 command
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/Engage}}{autoware\_vehicle\_msgs/msg/Engage}}\label{autoware_vehicle_msgsmsgengage}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+bool engage
+\end{verbatim}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{6. Vehicle Interface → Vehicle
+(drive-by-wire)}\label{6-vehicle-interface--vehicle-drive-by-wire}
+
+Translates high-level commands into actuator signals on the vehicle bus,
+and reports actual actuator state back.
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule\noalign{}
+Direction & Topic & Msg Type & Contents \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Control → VI & \texttt{/vehicle/command/actuation\_cmd} &
+\texttt{autoware\_vehicle\_msgs/msg/ActuationCommandStamped} & Final
+accel/brake/steer command \\
+VI → Vehicle & CAN / CAN-FD frames & vendor-proprietary & Steering
+torque/angle, throttle \%, brake pressure, gear shift, indicator
+relays \\
+VI → Control & \texttt{/vehicle/status/control\_mode} &
+\texttt{autoware\_vehicle\_msgs/msg/ControlModeReport} & Autonomous /
+manual \\
+VI → Control & \texttt{/vehicle/status/steering\_status} &
+\texttt{autoware\_vehicle\_msgs/msg/SteeringReport} & Actual steering
+angle \\
+VI → Localization & \texttt{/vehicle/status/velocity\_status} &
+\texttt{autoware\_vehicle\_msgs/msg/VelocityReport} & Actual velocity /
+yaw rate \\
+VI → Control & \texttt{/vehicle/status/gear\_status} &
+\texttt{autoware\_vehicle\_msgs/msg/GearReport} & Actual gear \\
+VI → Control & \texttt{/vehicle/status/turn\_indicators\_status} &
+\texttt{autoware\_vehicle\_msgs/msg/TurnIndicatorsReport} & Indicator
+state \\
+VI → Control & \texttt{/vehicle/status/hazard\_lights\_status} &
+\texttt{autoware\_vehicle\_msgs/msg/HazardLightsReport} & Hazard
+state \\
+Vehicle → VI & CAN feedback & vendor-proprietary & Speed, steering
+angle, gear, faults \\
+\end{longtable}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/ActuationCommandStamped}}{autoware\_vehicle\_msgs/msg/ActuationCommandStamped}}\label{autoware_vehicle_msgsmsgactuationcommandstamped}
+
+\begin{verbatim}
+std_msgs/Header header
+autoware_vehicle_msgs/ActuationCommand actuation_command
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/ActuationCommand}}{autoware\_vehicle\_msgs/msg/ActuationCommand}}\label{autoware_vehicle_msgsmsgactuationcommand}
+
+\begin{verbatim}
+float64 accel_cmd
+float64 brake_cmd
+float64 steer_cmd
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/ActuationReport}}{autoware\_vehicle\_msgs/msg/ActuationReport}}\label{autoware_vehicle_msgsmsgactuationreport}
+
+\begin{verbatim}
+float64 accel_report
+float64 brake_report
+float64 steer_report
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/ControlModeReport}}{autoware\_vehicle\_msgs/msg/ControlModeReport}}\label{autoware_vehicle_msgsmsgcontrolmodereport}
+
+\begin{verbatim}
+uint8 NO_COMMAND=0
+uint8 AUTONOMOUS=1
+uint8 AUTONOMOUS_STEER_ONLY=2
+uint8 AUTONOMOUS_VELOCITY_ONLY=3
+uint8 MANUAL=4
+uint8 DISENGAGED=5
+uint8 NOT_READY=6
+
+builtin_interfaces/Time stamp
+uint8 mode
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/SteeringReport}}{autoware\_vehicle\_msgs/msg/SteeringReport}}\label{autoware_vehicle_msgsmsgsteeringreport}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+float32 steering_tire_angle   # rad, +left
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/VelocityReport}}{autoware\_vehicle\_msgs/msg/VelocityReport}}\label{autoware_vehicle_msgsmsgvelocityreport}
+
+\begin{verbatim}
+std_msgs/Header header
+float32 longitudinal_velocity  # m/s, +forward
+float32 lateral_velocity       # m/s, +left
+float32 heading_rate           # rad/s, +ccw
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/GearReport}}{autoware\_vehicle\_msgs/msg/GearReport}}\label{autoware_vehicle_msgsmsggearreport}
+
+\begin{verbatim}
+uint8 NONE=0
+uint8 NEUTRAL=1
+uint8 DRIVE=2  ...  uint8 DRIVE_18=19
+uint8 REVERSE=20
+uint8 REVERSE_2=21
+uint8 PARK=22
+uint8 LOW=23
+uint8 LOW_2=24
+
+builtin_interfaces/Time stamp
+uint8 report
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/TurnIndicatorsReport}}{autoware\_vehicle\_msgs/msg/TurnIndicatorsReport}}\label{autoware_vehicle_msgsmsgturnindicatorsreport}
+
+\begin{verbatim}
+uint8 DISABLE=1
+uint8 ENABLE_LEFT=2
+uint8 ENABLE_RIGHT=3
+
+builtin_interfaces/Time stamp
+uint8 report
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{autoware\_vehicle\_msgs/msg/HazardLightsReport}}{autoware\_vehicle\_msgs/msg/HazardLightsReport}}\label{autoware_vehicle_msgsmsghazardlightsreport}
+
+\begin{verbatim}
+uint8 DISABLE=1
+uint8 ENABLE=2
+
+builtin_interfaces/Time stamp
+uint8 report
+\end{verbatim}
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\subsection{Feedback loops (closed control
+chain)}\label{feedback-loops-closed-control-chain}
+
+\begin{verbatim}
+Vehicle → VI → /vehicle/status/velocity_status (VelocityReport)
+                → Localization (wheel-odometry ego state re-entry)
+VI → /vehicle/status/control_mode (ControlModeReport) → Control (sanity / fallback)
+Localization → map→base_link (TF) → Planning (ego pose re-entry)
+\end{verbatim}
+
+The velocity/steering/gear reports feed back into Localization and
+Control so the system can dead-reckon and verify that commanded
+actuation matches actual motion.
+
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\section{Standard ROS 2 Message Reference (nested
+types)}\label{standard-ros-2-message-reference-nested-types}
+
+All nested standard types used above, in full.
+
+\subsubsection{\texorpdfstring{\texttt{std\_msgs/msg/Header}}{std\_msgs/msg/Header}}\label{std_msgsmsgheader}
+
+\begin{verbatim}
+builtin_interfaces/Time stamp
+string frame_id
+# uint32 seq  (deprecated)
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{builtin\_interfaces/msg/Time}}{builtin\_interfaces/msg/Time}}\label{builtin_interfacesmsgtime}
+
+\begin{verbatim}
+int32 sec
+uint32 nanosec
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{builtin\_interfaces/msg/Duration}}{builtin\_interfaces/msg/Duration}}\label{builtin_interfacesmsgduration}
+
+\begin{verbatim}
+int32 sec
+uint32 nanosec
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{unique\_identifier\_msgs/msg/UUID}}{unique\_identifier\_msgs/msg/UUID}}\label{unique_identifier_msgsmsguuid}
+
+\begin{verbatim}
+uint8[16] uuid
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geographic\_msgs/msg/GeoPoint}}{geographic\_msgs/msg/GeoPoint}}\label{geographic_msgsmsggeopoint}
+
+\begin{verbatim}
+float64 latitude
+float64 longitude
+float64 altitude
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Point}}{geometry\_msgs/msg/Point}}\label{geometry_msgsmsgpoint}
+
+\begin{verbatim}
+float64 x
+float64 y
+float64 z
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Point32}}{geometry\_msgs/msg/Point32}}\label{geometry_msgsmsgpoint32}
+
+\begin{verbatim}
+float32 x
+float32 y
+float32 z
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Quaternion}}{geometry\_msgs/msg/Quaternion}}\label{geometry_msgsmsgquaternion}
+
+\begin{verbatim}
+float64 x
+float64 y
+float64 z
+float64 w
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Vector3}}{geometry\_msgs/msg/Vector3}}\label{geometry_msgsmsgvector3}
+
+\begin{verbatim}
+float64 x
+float64 y
+float64 z
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Pose}}{geometry\_msgs/msg/Pose}}\label{geometry_msgsmsgpose}
+
+\begin{verbatim}
+geometry_msgs/Point position
+geometry_msgs/Quaternion orientation
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Twist}}{geometry\_msgs/msg/Twist}}\label{geometry_msgsmsgtwist}
+
+\begin{verbatim}
+geometry_msgs/Vector3 linear
+geometry_msgs/Vector3 angular
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Accel}}{geometry\_msgs/msg/Accel}}\label{geometry_msgsmsgaccel}
+
+\begin{verbatim}
+geometry_msgs/Vector3 linear
+geometry_msgs/Vector3 angular
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/PoseWithCovariance}}{geometry\_msgs/msg/PoseWithCovariance}}\label{geometry_msgsmsgposewithcovariance}
+
+\begin{verbatim}
+geometry_msgs/Pose pose
+float64[36] covariance
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/TwistWithCovariance}}{geometry\_msgs/msg/TwistWithCovariance}}\label{geometry_msgsmsgtwistwithcovariance}
+
+\begin{verbatim}
+geometry_msgs/Twist twist
+float64[36] covariance
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/AccelWithCovariance}}{geometry\_msgs/msg/AccelWithCovariance}}\label{geometry_msgsmsgaccelwithcovariance}
+
+\begin{verbatim}
+geometry_msgs/Accel accel
+float64[36] covariance
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Transform}}{geometry\_msgs/msg/Transform}}\label{geometry_msgsmsgtransform}
+
+\begin{verbatim}
+geometry_msgs/Vector3 translation
+geometry_msgs/Quaternion rotation
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/TransformStamped}}{geometry\_msgs/msg/TransformStamped}}\label{geometry_msgsmsgtransformstamped}
+
+\begin{verbatim}
+std_msgs/Header header
+string child_frame_id
+geometry_msgs/Transform transform
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/Polygon}}{geometry\_msgs/msg/Polygon}}\label{geometry_msgsmsgpolygon}
+
+\begin{verbatim}
+geometry_msgs/Point32[] points
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{geometry\_msgs/msg/TwistWithCovarianceStamped}}{geometry\_msgs/msg/TwistWithCovarianceStamped}}\label{geometry_msgsmsgtwistwithcovariancestamped}
+
+\begin{verbatim}
+std_msgs/Header header
+geometry_msgs/TwistWithCovariance twist
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/PointField}}{sensor\_msgs/msg/PointField}}\label{sensor_msgsmsgpointfield}
+
+\begin{verbatim}
+uint8 INT8=1
+uint8 UINT8=2
+uint8 INT16=3
+uint8 UINT16=4
+uint8 INT32=5
+uint8 UINT32=6
+uint8 FLOAT32=7
+uint8 FLOAT64=8
+
+string name
+uint32 offset
+uint8 datatype
+uint32 count
+\end{verbatim}
+
+\subsubsection{\texorpdfstring{\texttt{sensor\_msgs/msg/NavSatStatus}}{sensor\_msgs/msg/NavSatStatus}}\label{sensor_msgsmsgnavsatstatus}
+
+\begin{verbatim}
+uint16 STATUS_NO_FIX=0
+uint16 STATUS_FIX=1
+uint16 STATUS_SBAS_FIX=2
+uint16 STATUS_GBAS_FIX=3
+uint16 SERVICE_GPS=1
+uint16 SERVICE_GLONASS=2
+uint16 SERVICE_COMPASS=4
+uint16 SERVICE_GALILEO=8
+
+uint16 status
+uint16 service
+\end{verbatim}
+
+\end{document}
