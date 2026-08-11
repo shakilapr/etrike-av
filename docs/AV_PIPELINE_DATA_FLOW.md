@@ -783,14 +783,39 @@ engage: true
 | Direction | Topic | Msg Type | Contents |
 |-----------|-------|----------|----------|
 | Control → VI | `/vehicle/command/actuation_cmd` | `autoware_vehicle_msgs/msg/ActuationCommandStamped` | Final accel/brake/steer |
-| VI → Vehicle | CAN / CAN-FD frames | vendor-proprietary | Actuator signals |
+| VI → Vehicle | CAN / CAN-FD frames (raw) | **NOT DEFINED in this repo** — vendor/OEM-specific (see note below) | Actuator signals |
 | VI → Control | `/vehicle/status/control_mode` | `autoware_vehicle_msgs/msg/ControlModeReport` | Autonomous / manual |
 | VI → Control | `/vehicle/status/steering_status` | `autoware_vehicle_msgs/msg/SteeringReport` | Actual steering |
 | VI → Localization | `/vehicle/status/velocity_status` | `autoware_vehicle_msgs/msg/VelocityReport` | Actual velocity |
 | VI → Control | `/vehicle/status/gear_status` | `autoware_vehicle_msgs/msg/GearReport` | Actual gear |
 | VI → Control | `/vehicle/status/turn_indicators_status` | `autoware_vehicle_msgs/msg/TurnIndicatorsReport` | Indicator state |
 | VI → Control | `/vehicle/status/hazard_lights_status` | `autoware_vehicle_msgs/msg/HazardLightsReport` | Hazard state |
-| Vehicle → VI | CAN feedback | vendor-proprietary | Speed, steer, gear, faults |
+| Vehicle → VI | CAN feedback (raw) | **NOT DEFINED in this repo** — vendor/OEM-specific | Speed, steer, gear, faults |
+
+> **Note — VI ↔ Vehicle (CAN) is not defined in this repository.**
+> Autoware core only specifies the **ROS** interface at the VI boundary:
+> - *in*: `Control` / `ActuationCommandStamped` (decoded from ROS by the `vehicle_interface` node)
+> - *out*: `ControlModeReport`, `VelocityReport`, `SteeringReport`, `GearReport`, indicator reports
+>
+> The actual **wire format** (CAN IDs, signal scaling, byte layout, DBC) is
+> vehicle/OEM-specific and lives in a separate vehicle-adapter package
+> (e.g. an OEM `xxx_vehicle` package with a `.dbc` or hardcoded mapping)
+> that is **not checked out here** — the top-level `vehicle/` directory is
+> only empty `.gitkeep` placeholders, and no `.dbc` file exists in the repo.
+>
+> **CAN FD vs Classic CAN:** this is *not* decided by Autoware's message
+> definitions; it is a property of the vehicle bus / transceiver configured
+> in the vehicle launch. Autoware's `vehicle_interface` typically uses
+> `socketcan` (`can_msgs/Frame`), and whether the frames are **CAN FD** or
+> **classic CAN (CAN 2.0)** depends on the hardware and the DBC:
+> - Reference/demo platforms commonly use **classic CAN @ 500 kbps** for
+>   actuation (steering/ throttle/ brake/ gear/ indicators).
+> - **CAN FD** is used only when the target OEM bus requires it (larger
+>   payloads, e.g. high-rate state or advanced actuator frames).
+>
+> To make this repo self-contained, the DBC (or the CAN-ID ↔ signal mapping)
+> and the `can_fd: true/false` setting must be added to `vehicle/` and
+> documented here.
 
 ### `autoware_vehicle_msgs/msg/ActuationCommandStamped`
 ```
