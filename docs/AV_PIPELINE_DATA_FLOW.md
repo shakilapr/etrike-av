@@ -198,10 +198,65 @@ available_classes: [1, 2, 6, 7]      # car, truck, bicycle, pedestrian
 absolute_dynamics: true
 ```
 
+### `autoware_sensing_msgs/msg/RadarClassification`  (nested in `RadarObject.classifications`)
+```
+uint8 UNKNOWN=0
+uint8 CAR=1
+uint8 TRUCK=2
+uint8 BUS=3
+uint8 TRAILER=4
+uint8 MOTORCYCLE=5
+uint8 BICYCLE=6
+uint8 PEDESTRIAN=7
+uint8 ANIMAL=8
+uint8 HAZARD=9
+uint8 OVER_DRIVABLE=10
+uint8 UNDER_DRIVABLE=11
+
+uint8 label
+float32 probability    # 0.0 to 1.0
+```
+
+### `autoware_sensing_msgs/msg/RadarFieldInfo`  (nested in `RadarInfo.object_fields_info` / `detection_fields_info`)
+```
+std_msgs/String field_name
+bool min_value_available
+bool max_value_available
+bool resolution_available
+float32 min_value
+float32 max_value
+float32 resolution
+```
+
+### `autoware_sensing_msgs/msg/SourcePointCloudInfo`  (nested in `ConcatenatedPointCloudInfo`)
+```
+uint8 STATUS_OK=0
+uint8 STATUS_TIMEOUT=1
+uint8 STATUS_INVALID=2
+
+std_msgs/Header header
+string topic
+uint8 status
+uint32 idx_begin
+uint32 length
+```
+
+### `autoware_sensing_msgs/msg/ConcatenatedPointCloudInfo`  (metadata for `/sensing/lidar/concatenated/pointcloud`)
+```
+uint8 STRATEGY_NAIVE=0
+uint8 STRATEGY_ADVANCED=1
+
+std_msgs/Header header
+bool concatenation_success
+uint8 matching_strategy
+uint8[] matching_strategy_config
+autoware_sensing_msgs/SourcePointCloudInfo[] source_info
+```
+
 ### `sensor_msgs/msg/Range`
 ```
 std_msgs/Header header
-uint8 radiation_type
+uint8 radiation_type        # 0 ULTRASOUND / 1 INFRARED
 float32 field_of_view
 float32 min_range
 float32 max_range
@@ -860,6 +915,11 @@ All nested standard types used above, in full.
 builtin_interfaces/Time stamp
 string frame_id
 # uint32 seq  (deprecated)
+```
+
+### `std_msgs/msg/String`
+```
+string data
 ```
 
 ### `builtin_interfaces/msg/Time`
