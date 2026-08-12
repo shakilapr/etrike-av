@@ -1,4 +1,5 @@
-/autoware/src/
+/autoware/src/*
+!/autoware/src/our_packages/
 /autoware/build/
 /autoware/install/
 /autoware/log/
