@@ -1,21 +1,41 @@
-# E-Trike custom Autoware packages
+# E-Trike vehicle packages — sourced from https://github.com/shakilapr/etrike
+#
 # These packages provide the vehicle interface for the E-Trike tricycle.
+# They are synced into autoware/src/our_packages/ via git subtree.
+#
+# To pull updates:
+#   git fetch etrike
+#   git subtree pull --prefix=autoware/src/our_packages etrike/main -m "sync: pull from etrike"
+#
 # See docs/av-project-deployment-plan.md for deployment details.
 
 repositories:
-  our_packages/etrike_protocol:
-    type: git
-    url: https://github.com/your-org/etrike_protocol.git
-    version: main
+  # The four packages below live in the etrike repo under jetson/src/ and protocol/.
+  # They are imported into av_project via git subtree, not vcs import.
+  # This manifest is for documentation purposes; actual sync uses:
+  #   git remote add etrike https://github.com/shakilapr/etrike.git
+  #   git subtree pull --prefix=autoware/src/our_packages etrike/main
+
   our_packages/autoware_vehicle_bridge:
     type: git
-    url: https://github.com/your-org/autoware_vehicle_bridge.git
+    url: https://github.com/shakilapr/etrike.git
     version: main
+    # Source path in etrike repo: jetson/src/autoware_vehicle_bridge/
+
+  our_packages/etrike_protocol:
+    type: git
+    url: https://github.com/shakilapr/etrike.git
+    version: main
+    # Source path in etrike repo: protocol/
+
   our_packages/etrike_vehicle_launch:
     type: git
-    url: https://github.com/your-org/etrike_vehicle_launch.git
+    url: https://github.com/shakilapr/etrike.git
     version: main
+    # Source path in etrike repo: jetson/src/etrike_vehicle_launch/
+
   our_packages/etrike_vehicle_description:
     type: git
-    url: https://github.com/your-org/etrike_vehicle_description.git
+    url: https://github.com/shakilapr/etrike.git
     version: main
+    # Source path in etrike repo: jetson/src/etrike_vehicle_description/
