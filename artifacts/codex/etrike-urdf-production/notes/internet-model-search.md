@@ -56,6 +56,12 @@ simple cross sections and the measured project dimensions. It contains no
 lights, windows, trim, seats, branding, fenders, or wheel covers. Circular
 openings are cut into the rear side walls around the exposed rear tires; these
 are body clearances, not covering geometry. The center floor remains solid.
+The production side wall terminates on the rear-wheel center plane at
+Y=+/-0.575 m. With each 0.102 m tire centered there, the outer 0.051 m is
+visible from above. This half-width requirement applies solely in the lateral
+direction: the previous Z=0.280 m lower body line is retained, while the
+circular opening remains centered at the 0.203 m axle height with a 0.225 m
+radius.
 
 The downloaded model's front wheel has a 0.276-source-unit radius. Excluding
 its separate `bump_front_ok` mudguard group, the nearest useful main-body
