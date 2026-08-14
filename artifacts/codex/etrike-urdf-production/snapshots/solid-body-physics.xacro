@@ -32,8 +32,7 @@
   <link name="base_link">
     <!--
       One closed, undecorated Bajaj-style visual body. A small convex collision
-      decomposition follows the same envelope. The body ends behind the front
-      wheel, leaving all three tires completely external and uncovered.
+      decomposition follows the same envelope and leaves all wheels external.
     -->
     <inertial>
       <origin xyz="0.550 0 0.800" rpy="0 0 0"/>
@@ -44,14 +43,14 @@
     <visual name="solid_body">
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://etrike_vehicle_description/meshes/etrike_body.stl" scale="1 1 1"/>
+        <mesh filename="package://etrike_vehicle_description/meshes/etrike_body.obj" scale="1 1 1"/>
       </geometry>
       <material name="body_blue"/>
     </visual>
 
     <collision name="chassis_collision">
-      <origin xyz="0.690 0 0.225" rpy="0 0 0"/>
-      <geometry><box size="1.950 0.240 0.110"/></geometry>
+      <origin xyz="0.765 0 0.225" rpy="0 0 0"/>
+      <geometry><box size="2.100 0.240 0.110"/></geometry>
     </collision>
     <collision name="lower_body_collision">
       <origin xyz="0.583 0 0.550" rpy="0 0 0"/>
@@ -62,12 +61,12 @@
       <geometry><box size="1.650 1.200 0.830"/></geometry>
     </collision>
     <collision name="sloped_front_collision">
-      <origin xyz="1.575 0 0.895" rpy="0 0.650 0"/>
-      <geometry><box size="0.600 0.900 0.240"/></geometry>
+      <origin xyz="1.750 0 0.800" rpy="0 0.480 0"/>
+      <geometry><box size="0.900 0.980 0.240"/></geometry>
     </collision>
-    <collision name="front_apron_collision">
-      <origin xyz="1.625 0 0.400" rpy="0 0 0"/>
-      <geometry><box size="0.290 0.800 0.180"/></geometry>
+    <collision name="front_face_collision">
+      <origin xyz="2.250 0 0.690" rpy="0 0 0"/>
+      <geometry><box size="0.200 0.980 0.500"/></geometry>
     </collision>
   </link>
 

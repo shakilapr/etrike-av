@@ -1,0 +1,20 @@
+/**:
+  ros__parameters:
+    # Documented wheel and steering geometry.
+    wheel_base: 2.000
+    max_steer_angle: 0.747
+    wheel_radius: 0.203
+    wheel_width: 0.102
+    wheel_tread: 1.150
+
+    # Published body envelope.
+    overall_length: 2.635
+    overall_width: 1.300
+    vehicle_height: 1.700
+    ground_clearance: 0.170
+
+    # Estimated overhang split; measure before footprint-critical deployment.
+    front_overhang: 0.35
+    rear_overhang: 0.285
+    left_overhang: 0.075
+    right_overhang: 0.075

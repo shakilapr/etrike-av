@@ -1,0 +1,8 @@
+{
+  "urdf-editor.CameraAlpha": 215,
+  "urdf-editor.CameraBeta": 85,
+  "urdf-editor.CameraDistanceToRobot": 4.5,
+  "urdf-editor.BackgroundColor": "#101820",
+  "urdf-editor.GridMainColor": "#2d8a4b",
+  "urdf-editor.GridMinorColor": "#163c27"
+}

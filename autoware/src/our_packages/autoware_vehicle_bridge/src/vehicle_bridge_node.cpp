@@ -483,10 +483,10 @@ VehicleBridgeNode::VehicleBridgeNode(const rclcpp::NodeOptions & options)
   using autoware_vehicle_msgs::msg::TurnIndicatorsCommand;
   using tier4_vehicle_msgs::msg::VehicleEmergencyStamped;
 
-  declare_parameter("wheel_base", 1.5);
+  declare_parameter("wheel_base", 2.0);
   declare_parameter("max_speed_forward", 3.0);
   declare_parameter("max_speed_reverse", 0.5);
-  declare_parameter("max_steering_angle", 0.698);
+  declare_parameter("max_steering_angle", 0.747);
   declare_parameter("max_brake_pressure_kpa", 5000.0);
   declare_parameter("max_deceleration", 5.0);
   declare_parameter("low_speed_threshold", 0.05);

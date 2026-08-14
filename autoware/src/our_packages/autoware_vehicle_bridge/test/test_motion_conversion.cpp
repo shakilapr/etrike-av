@@ -8,8 +8,8 @@ using autoware_vehicle_bridge::motion::legacy_yaw_mrad_s;
 
 int main()
 {
-  constexpr double wheel_base = 1.5;
-  constexpr double max_angle = 0.698;
+  constexpr double wheel_base = 2.0;
+  constexpr double max_angle = 0.747;
   constexpr double threshold = 0.05;
   constexpr double left_10deg = 0.17453292519943295;
 

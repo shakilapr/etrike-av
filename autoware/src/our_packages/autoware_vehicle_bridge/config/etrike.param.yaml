@@ -1,9 +1,9 @@
 /**:
   ros__parameters:
-    wheel_base: 1.5
+    wheel_base: 2.0
     max_speed_forward: 3.0
     max_speed_reverse: 0.5
-    max_steering_angle: 0.698
+    max_steering_angle: 0.747
     max_brake_pressure_kpa: 5000
     max_deceleration: 5.0
     low_speed_threshold: 0.05

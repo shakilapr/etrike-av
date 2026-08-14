@@ -65,10 +65,10 @@ private:
 // ---- Vehicle parameters (immutable after configure) ----
 struct VehicleParams
 {
-  double wheel_base{1.5};
+  double wheel_base{2.0};
   double max_speed_forward{3.0};
   double max_speed_reverse{0.5};
-  double max_steering_angle{0.698};
+  double max_steering_angle{0.747};
   double max_brake_pressure_kpa{5000.0};
   double max_deceleration{5.0};
   double low_speed_threshold{0.05};
