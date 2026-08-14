@@ -36,7 +36,8 @@ vehicle/parameters/
 ### NOT tracked (`.gitignore`)
 
 ```
-/autoware/src/           ← 33 repos, each has its own Git
+/autoware/src/*          ← 33 repos, each has its own Git
+!/autoware/src/our_packages/  ← E-Trike packages (tracked via git subtree)
 /autoware/build/         ← colcon output
 /autoware/install/       ← colcon output
 /autoware/log/           ← colcon output
@@ -53,6 +54,52 @@ They are NOT in this repo. They are pulled via `vcs import` from `repositories/o
 - **Our custom packages (2–5):** our own repos on GitHub.
 
 See `docs/GIT_STRATEGY.md` for details.
+
+## E-Trike vehicle packages (git subtree)
+
+The four E-Trike packages live in the **etrike** repo (`https://github.com/shakilapr/etrike`)
+and are synced into this repo via **git subtree** under `autoware/src/our_packages/`:
+
+| Package | Source in etrike repo | Purpose |
+|---|---|---|
+| `autoware_vehicle_bridge` | `jetson/src/autoware_vehicle_bridge/` | Bridge node (Autoware ↔ CAN) |
+| `etrike_protocol` | `protocol/` | Generated CAN protocol headers |
+| `etrike_vehicle_launch` | `jetson/src/etrike_vehicle_launch/` | Launch wrapper |
+| `etrike_vehicle_description` | `jetson/src/etrike_vehicle_description/` | Vehicle model + params |
+
+### Pulling updates from etrike
+
+When the etrike repo is updated (e.g. protocol changes):
+
+```bash
+cd ~/av_project
+
+# First time only: add the etrike remote
+git remote add etrike https://github.com/shakilapr/etrike.git
+
+# Pull updates
+git fetch etrike
+git subtree pull --prefix=autoware/src/our_packages etrike/main -m "sync: pull updates from etrike"
+```
+
+This merges only the `our_packages/` subtree. The full commit history from etrike is preserved.
+
+### Pushing changes back to etrike
+
+If you edit the packages in av_project and want to push back:
+
+```bash
+cd ~/av_project
+git subtree push --prefix=autoware/src/our_packages etrike main
+```
+
+### On a fresh clone
+
+The etrike remote is local config (not in git). After cloning av_project:
+
+```bash
+git remote add etrike https://github.com/shakilapr/etrike.git
+```
 
 ## Daily workflow
 
@@ -83,11 +130,14 @@ git add <files>
 git commit -m "Update vehicle parameters"
 git push
 
-# Source code changes (inner repos)
-cd ~/av_project/autoware/src/our_packages/etrike_controller
-git add .
-git commit -m "Add steering control"
-git push origin main
+# E-Trike package changes (synced via subtree)
+cd ~/av_project
+git add autoware/src/our_packages/
+git commit -m "Update bridge code"
+git push
+
+# To also push changes back to etrike repo:
+git subtree push --prefix=autoware/src/our_packages etrike main
 ```
 
 Syncthing mirrors everything to `E:\work\av_project` on Windows — including uncommitted changes.
@@ -104,8 +154,18 @@ Syncthing mirrors everything to `E:\work\av_project` on Windows — including un
 
 ```bash
 git clone https://github.com/shakilapr/etrike-av.git ~/av_project
-cd ~/av_project/autoware
-vcs import src < ../repositories/our_autoware.repos
+cd ~/av_project
+
+# Add etrike remote for subtree syncing
+git remote add etrike https://github.com/shakilapr/etrike.git
+
+# Pull upstream Autoware packages
+cd autoware
+vcs import src < ../repositories/autoware.repos
+
+# E-Trike packages are already in autoware/src/our_packages/ (in git)
+# No vcs import needed for them
+
 # Restore data/ and simulator/AWSIM/ from backup
 # Run docker/build.sh
 ```
