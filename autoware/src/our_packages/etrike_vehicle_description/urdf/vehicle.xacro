@@ -55,7 +55,7 @@
       <geometry><box size="1.950 0.240 0.110"/></geometry>
     </collision>
     <collision name="lower_body_collision">
-      <origin xyz="0.583 0 0.550" rpy="0 0 0"/>
+      <origin xyz="0.583 0 0.555" rpy="0 0 0"/>
       <geometry><box size="1.735 0.900 0.550"/></geometry>
     </collision>
     <collision name="cabin_collision">
@@ -131,12 +131,12 @@
   <!-- Steering knuckle is at the documented front-wheel center. -->
   <link name="front_steering_link">
     <inertial>
-      <origin xyz="-0.030 0 0.180" rpy="0 0 0"/>
+      <origin xyz="-0.030 0 0.383" rpy="0 0 0"/>
       <mass value="1.0"/>
       <inertia ixx="0.0078" ixy="0" ixz="0" iyy="0.0078" iyz="0" izz="0.0006"/>
     </inertial>
     <collision name="steering_carrier_collision">
-      <origin xyz="-0.030 0 0.180" rpy="0 0 0"/>
+      <origin xyz="-0.030 0 0.383" rpy="0 0 0"/>
       <geometry><box size="0.060 0.060 0.360"/></geometry>
     </collision>
   </link>

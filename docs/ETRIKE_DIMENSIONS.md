@@ -77,25 +77,27 @@ front_overhang + rear_overhang
 
 The individual front and rear overhangs should be measured directly from the actual vehicle.
 
-The current visualization model uses an explicit provisional split that preserves
-the published overall length:
+The current visualization model uses an explicit longitudinal split that preserves
+the published overall length, keeping the front tire as the foremost element:
 
 ```text
-front_overhang = 0.350 m (estimated)
-rear_overhang  = 0.285 m (estimated)
+front_overhang = 0.203 m
+rear_overhang  = 0.432 m
 ```
 
-Estimated lateral body overhang:
+The rear body ends strictly at the tire center plane (1.150 / 2 = 0.575 m). The 0.102 m tires are exposed, becoming the outermost edge of the vehicle.
+
+Lateral overhang from wheel center:
 
 ```text
-(1.300 - 1.150) / 2 = 0.075 m
+0.102 / 2 = 0.051 m
 ```
 
 Therefore:
 
 ```text
-left_overhang  ~= 0.075 m
-right_overhang ~= 0.075 m
+left_overhang  = 0.051 m
+right_overhang = 0.051 m
 ```
 
 These values assume the rear wheel track and body are centered symmetrically.
@@ -136,13 +138,13 @@ For accurate simulation and odometry, measure the loaded rolling radius on the a
     # Body dimensions
     vehicle_height: 1.700
 
-    # Estimated lateral overhang
-    left_overhang: 0.075
-    right_overhang: 0.075
+    # Lateral overhang (outer half of tire width)
+    left_overhang: 0.051
+    right_overhang: 0.051
 
-    # Measure on the actual vehicle
-    front_overhang: ???
-    rear_overhang: ???
+    # Longitudinal overhangs per explicit visual envelope
+    front_overhang: 0.203
+    rear_overhang: 0.432
 ```
 
 ## 7. Measurements Still Required on the Actual Vehicle
