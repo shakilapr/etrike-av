@@ -1,7 +1,7 @@
 // Copyright 2026 E-Trike
 // Licensed under the Apache License, Version 2.0
 //
-// Canonical Bajaj RE tuktuk body silhouette.
+// Canonical Bajaj RE tuktuk body silhouette with sculpted waistline & canopy brow.
 // Coordinates use ROS convention: +X forward, +Y left, +Z up.
 
 $fn = 64;
@@ -10,58 +10,66 @@ module body_envelope() {
   polyhedron(
     points = [
       // Station 0: Rear Back Panel (X = -0.432)
-      // Sloped rear canopy roof tapering down to Z = 1.480
       [-0.432, -0.575, 0.280], // 0: rear left floor
       [-0.432,  0.575, 0.280], // 1: rear right floor
       [-0.432,  0.575, 0.740], // 2: rear right beltline
-      [-0.432,  0.480, 1.180], // 3: rear right shoulder
-      [-0.432,  0.360, 1.480], // 4: rear right roof
-      [-0.432, -0.360, 1.480], // 5: rear left roof
-      [-0.432, -0.480, 1.180], // 6: rear left shoulder
+      [-0.432,  0.530, 1.180], // 3: rear right shoulder
+      [-0.432,  0.490, 1.480], // 4: rear right roof
+      [-0.432, -0.490, 1.480], // 5: rear left roof
+      [-0.432, -0.530, 1.180], // 6: rear left shoulder
       [-0.432, -0.575, 0.740], // 7: rear left beltline
 
-      // Station 1: Passenger Cabin Peak (X = 0.400)
-      // Maximum cabin height Z = 1.700
-      [ 0.400, -0.575, 0.280], // 8: mid left floor
-      [ 0.400,  0.575, 0.280], // 9: mid right floor
-      [ 0.400,  0.575, 0.760], // 10: mid right beltline
-      [ 0.400,  0.500, 1.250], // 11: mid right shoulder
-      [ 0.400,  0.380, 1.700], // 12: mid right roof
-      [ 0.400, -0.380, 1.700], // 13: mid left roof
-      [ 0.400, -0.500, 1.250], // 14: mid left shoulder
-      [ 0.400, -0.575, 0.760], // 15: mid left beltline
+      // Station 1: Rear Axle / Passenger Seat (X = 0.000)
+      [ 0.000, -0.575, 0.280], // 8: axle left floor
+      [ 0.000,  0.575, 0.280], // 9: axle right floor
+      [ 0.000,  0.575, 0.760], // 10: axle right beltline
+      [ 0.000,  0.540, 1.250], // 11: axle right shoulder
+      [ 0.000,  0.490, 1.660], // 12: axle right roof
+      [ 0.000, -0.490, 1.660], // 13: axle left roof
+      [ 0.000, -0.540, 1.250], // 14: axle left shoulder
+      [ 0.000, -0.575, 0.760], // 15: axle left beltline
 
-      // Station 2: Windshield Top / Front Cabin (X = 0.850)
-      [ 0.850, -0.575, 0.280], // 16: cabin front left floor
-      [ 0.850,  0.575, 0.280], // 17: cabin front right floor
-      [ 0.850,  0.560, 0.760], // 18: cabin front right beltline
-      [ 0.850,  0.480, 1.250], // 19: cabin front right shoulder
-      [ 0.850,  0.370, 1.680], // 20: cabin front right roof
-      [ 0.850, -0.370, 1.680], // 21: cabin front left roof
-      [ 0.850, -0.480, 1.250], // 22: cabin front left shoulder
-      [ 0.850, -0.560, 0.760], // 23: cabin front left beltline
+      // Station 2: Passenger Entry Waistline Dip (X = 0.500)
+      [ 0.500, -0.575, 0.280], // 16: entry left floor
+      [ 0.500,  0.575, 0.280], // 17: entry right floor
+      [ 0.500,  0.560, 0.680], // 18: entry right waistline dip
+      [ 0.500,  0.540, 1.250], // 19: entry right shoulder
+      [ 0.500,  0.490, 1.700], // 20: entry right roof peak
+      [ 0.500, -0.490, 1.700], // 21: entry left roof peak
+      [ 0.500, -0.540, 1.250], // 22: entry left shoulder
+      [ 0.500, -0.560, 0.680], // 23: entry left waistline dip
 
-      // Station 3: Windshield Base / Cowl (X = 1.350)
-      [ 1.350, -0.480, 0.280], // 24: cowl left floor
-      [ 1.350,  0.480, 0.280], // 25: cowl right floor
-      [ 1.350,  0.460, 0.750], // 26: cowl right beltline
-      [ 1.350,  0.380, 1.150], // 27: cowl right windshield mid
-      [ 1.350, -0.380, 1.150], // 28: cowl left windshield mid
-      [ 1.350, -0.460, 0.750], // 29: cowl left beltline
+      // Station 3: Windshield Top / Canopy Brow (X = 1.150)
+      [ 1.150, -0.560, 0.280], // 24: cabin front left floor
+      [ 1.150,  0.560, 0.280], // 25: cabin front right floor
+      [ 1.150,  0.550, 0.760], // 26: cabin front right beltline
+      [ 1.150,  0.520, 1.250], // 27: cabin front right shoulder
+      [ 1.150,  0.480, 1.680], // 28: cabin front right roof brow
+      [ 1.150, -0.480, 1.680], // 29: cabin front left roof brow
+      [ 1.150, -0.520, 1.250], // 30: cabin front left shoulder
+      [ 1.150, -0.550, 0.760], // 31: cabin front left beltline
 
-      // Station 4: Front Apron (X = 1.790)
-      [ 1.790, -0.400, 0.280], // 30: apron left floor
-      [ 1.790,  0.400, 0.280], // 31: apron right floor
-      [ 1.790,  0.380, 0.740], // 32: apron right beltline
-      [ 1.790,  0.320, 0.950], // 33: apron right top
-      [ 1.790, -0.320, 0.950], // 34: apron left top
-      [ 1.790, -0.380, 0.740]  // 35: apron left beltline
+      // Station 4: Dashboard / Windshield Base (X = 1.600)
+      [ 1.600, -0.480, 0.280], // 32: cowl left floor
+      [ 1.600,  0.480, 0.280], // 33: cowl right floor
+      [ 1.600,  0.460, 0.750], // 34: cowl right beltline
+      [ 1.600,  0.400, 1.100], // 35: cowl right windshield base
+      [ 1.600, -0.400, 1.100], // 36: cowl left windshield base
+      [ 1.600, -0.460, 0.750], // 37: cowl left beltline
+
+      // Station 5: Front Apron Nose (X = 1.790)
+      [ 1.790, -0.380, 0.280], // 38: apron left floor
+      [ 1.790,  0.380, 0.280], // 39: apron right floor
+      [ 1.790,  0.360, 0.700], // 40: apron right beltline
+      [ 1.790,  0.300, 0.920], // 41: apron right top
+      [ 1.790, -0.300, 0.920], // 42: apron left top
+      [ 1.790, -0.360, 0.700]  // 43: apron left beltline
     ],
     faces = [
       // Rear Face (X = -0.432)
       [0, 1, 2, 3, 4, 5, 6, 7],
 
-      // Station 0 -> Station 1 (Rear Cabin to Peak)
+      // Station 0 -> Station 1
       [0, 8, 9, 1],
       [1, 9, 10, 2],
       [2, 10, 11, 3],
@@ -71,7 +79,7 @@ module body_envelope() {
       [6, 14, 15, 7],
       [7, 15, 8, 0],
 
-      // Station 1 -> Station 2 (Cabin Peak to Windshield Top)
+      // Station 1 -> Station 2 (Door Dip)
       [8, 16, 17, 9],
       [9, 17, 18, 10],
       [10, 18, 19, 11],
@@ -81,26 +89,36 @@ module body_envelope() {
       [14, 22, 23, 15],
       [15, 23, 16, 8],
 
-      // Station 2 -> Station 3 (Windshield Slope)
+      // Station 2 -> Station 3 (Roof Peak to Brow)
       [16, 24, 25, 17],
       [17, 25, 26, 18],
       [18, 26, 27, 19],
-      [19, 27, 20],
-      [20, 27, 28, 21],
-      [21, 28, 22],
-      [22, 28, 29, 23],
-      [23, 29, 24, 16],
+      [19, 27, 28, 20],
+      [20, 28, 29, 21],
+      [21, 29, 30, 22],
+      [22, 30, 31, 23],
+      [23, 31, 24, 16],
 
-      // Station 3 -> Station 4 (Front Cowl to Apron)
-      [24, 30, 31, 25],
-      [25, 31, 32, 26],
-      [26, 32, 33, 27],
-      [27, 33, 34, 28],
-      [28, 34, 35, 29],
-      [29, 35, 30, 24],
+      // Station 3 -> Station 4 (Windshield Slope)
+      [24, 32, 33, 25],
+      [25, 33, 34, 26],
+      [26, 34, 35, 27],
+      [27, 35, 28],
+      [28, 35, 36, 29],
+      [29, 36, 30],
+      [30, 36, 37, 31],
+      [31, 37, 32, 24],
+
+      // Station 4 -> Station 5 (Front Cowl to Apron)
+      [32, 38, 39, 33],
+      [33, 39, 40, 34],
+      [34, 40, 41, 35],
+      [35, 41, 42, 36],
+      [36, 42, 43, 37],
+      [37, 43, 38, 32],
 
       // Front Face (X = 1.790)
-      [30, 35, 34, 33, 32, 31]
+      [38, 43, 42, 41, 40, 39]
     ],
     convexity = 10
   );
