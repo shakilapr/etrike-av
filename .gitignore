@@ -44,12 +44,8 @@
 *.pyc
 *.pyo
 
-# Local URDF development tools and generated review evidence
+# Local URDF development tool
 /rde-urdf/
-/artifacts/codex/etrike-urdf-production/downloads/
-/artifacts/codex/etrike-urdf-production/screenshots/
-/artifacts/codex/etrike-urdf-production/logs/colcon-attempt/
-/artifacts/codex/etrike-urdf-production/logs/playwright-internet-search/
 
 # Repository-owned runtime mesh generated from etrike_body.scad
 !/autoware/src/our_packages/etrike_vehicle_description/meshes/etrike_body.obj
