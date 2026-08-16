@@ -25,13 +25,16 @@ generic cabin.
   tire. No wheel covers, mudguards, fenders, hubs, or decorative wheel parts
   may be added.
 - Rear body clearances shall be circular around the tire profile. Angled,
-  straight sliced cuts through the rear body are not acceptable.
-- In plan/top view, the body side shall finish at each rear tire centre plane:
-  Y = +/-0.575 m. With the 0.102 m tire width centred there, the outer 0.051 m
-  (one half of the tire width) shall remain visibly outside the body on each
-  side. This is a left/right requirement only; do not move the body or tires
-  up or down to satisfy it.
-- The centre floor shall remain solid between the rear tires.
+  triangular, or middle-of-body slices are not acceptable.
+- In an exact orthographic top view, the rear body shall use a constant,
+  straight outer edge at each tire centre plane: Y = +/-0.575 m throughout the
+  rear-wheel zone (X=-0.203 m to X=+0.203 m). The outer half of each rear tire
+  width, Y=+/-0.575 m to Y=+/-0.626 m, shall therefore be outside the body and
+  visibly exposed. This must be achieved by shrinking the rear body envelope,
+  not by adding diagonal cuts from the body middle or by moving parts in Z.
+- The circular side clearance may begin at the floor plane, but it shall never
+  remove, angle, step, or notch the underside. The full lower floor remains
+  flat and solid at Z=0.280 m between the rear tires.
 
 ## Deliberate simplification
 

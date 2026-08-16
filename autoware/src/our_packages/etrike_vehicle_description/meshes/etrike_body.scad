@@ -10,8 +10,8 @@ module body_envelope() {
   polyhedron(
     points = [
       // Rear cabin station.
-      [-0.432, -0.460, 0.280],
-      [-0.432,  0.460, 0.280],
+      [-0.432, -0.575, 0.280],
+      [-0.432,  0.575, 0.280],
       [-0.432,  0.575, 0.780],
       [-0.432,  0.420, 1.680],
       [-0.432, -0.420, 1.680],
@@ -19,8 +19,8 @@ module body_envelope() {
 
       // Front of passenger cabin. The short roof and following long slope
       // keep the silhouette recognisably tuktuk-shaped rather than boxy.
-      [0.850, -0.460, 0.280],
-      [0.850,  0.460, 0.280],
+      [0.850, -0.575, 0.280],
+      [0.850,  0.575, 0.280],
       [0.850,  0.575, 0.780],
       [0.850,  0.420, 1.700],
       [0.850, -0.420, 1.700],
@@ -73,12 +73,16 @@ module body_envelope() {
 }
 
 module rear_wheel_opening(side) {
-  // A short transverse cutter removes only the outer side wall. The center
-  // floor remains solid, while the 0.225 m radius gives each 0.203 m tire a
-  // close circular opening without creating a fender or wheel cover.
-  translate([0, side * 0.580, 0.203])
-    rotate([90, 0, 0])
-      cylinder(h = 0.400, r = 0.225, center = true);
+  // The body ends on the tire centre plane, exposing the outer half of its
+  // width in top view. This circular side-only cutter is clipped above the
+  // flat Z=0.280 floor so it cannot create an underside notch or diagonal cut.
+  intersection() {
+    translate([0, side * 0.640, 0.203])
+      rotate([90, 0, 0])
+        cylinder(h = 0.300, r = 0.225, center = true);
+    translate([-0.300, -1.000, 0.280001])
+      cube([0.600, 2.000, 1.000]);
+  }
 }
 
 difference() {
