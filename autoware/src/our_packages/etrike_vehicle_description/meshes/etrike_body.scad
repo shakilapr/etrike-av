@@ -125,11 +125,14 @@ module body_envelope() {
 }
 
 module rear_wheel_opening(side) {
-  // Fitted circular rear wheel arch clearance clipped above Z = 0.280 floor plane.
+  // Circular wheel arch cut into the side wall of the body.
+  // Radius r = 0.240 m (Diameter = 0.480 m), which equals wheel diameter (0.406 m)
+  // plus ~3 inches (0.074 m) clearance for a fitted wheel opening.
+  // Clipped above Z = 0.280 m so the lower floor plane remains 100% flat and solid.
   intersection() {
-    translate([0, side * 0.725, 0.203])
+    translate([0, side * 0.580, 0.203])
       rotate([90, 0, 0])
-        cylinder(h = 0.300, r = 0.235, center = true);
+        cylinder(h = 0.400, r = 0.240, center = true);
     translate([-0.350, -1.000, 0.280001])
       cube([0.700, 2.000, 1.000]);
   }
