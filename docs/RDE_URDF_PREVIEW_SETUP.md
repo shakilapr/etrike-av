@@ -2,16 +2,18 @@
 
 ## Overview
 
-This document describes how to set up the [Robot Developer Extensions for URDF (rde-urdf)](https://github.com/Ranch-Hand-Robotics/rde-urdf) VS Code extension to preview the E-Trike vehicle URDF/Xacro model.
+This document describes how to set up the Robot Developer Extensions for URDF
+(rde-urdf) VS Code extension to preview the E-Trike vehicle URDF/Xacro model.
+RDE-URDF is an optional, local-only preview tool and is not a production
+dependency of the vehicle package.
 
 ## Steps Performed
 
-### 1. Clone the rde-urdf Repository
+### 1. Provide the Local rde-urdf Checkout
 
-```bash
-cd E:\work\av_project
-git clone https://github.com/Ranch-Hand-Robotics/rde-urdf.git
-```
+Place the approved rde-urdf source checkout at
+`E:\work\av_project\rde-urdf`. This directory is intentionally ignored by
+the project and is not part of the production repository.
 
 ### 2. Install Dependencies
 
@@ -83,7 +85,7 @@ autoware/src/our_packages/etrike_vehicle_description/
     └── vehicle.xacro
 ```
 
-## References
+## Preview Tool Location
 
-- [rde-urdf GitHub Repository](https://github.com/Ranch-Hand-Robotics/rde-urdf)
-- [rde-urdf Documentation](https://ranchhandrobotics.com/rde-urdf/)
+The local preview source and generated VSIX are kept outside version control
+under `E:\work\av_project\rde-urdf`.
