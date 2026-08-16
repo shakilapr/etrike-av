@@ -13,8 +13,8 @@
     vehicle_height: 1.700
     ground_clearance: 0.170
 
-    # Estimated overhang split; measure before footprint-critical deployment.
-    front_overhang: 0.35
-    rear_overhang: 0.285
+    # Visual-envelope split; measure before footprint-critical deployment.
+    front_overhang: 0.203
+    rear_overhang: 0.432
     left_overhang: 0.075
     right_overhang: 0.075

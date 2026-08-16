@@ -20,9 +20,10 @@
   <xacro:property name="overall_height" value="1.700"/>
   <xacro:property name="ground_clearance" value="0.170"/>
 
-  <!-- Estimated split; replace after measuring the physical vehicle. -->
-  <xacro:property name="front_overhang" value="0.350"/>
-  <xacro:property name="rear_overhang" value="0.285"/>
+  <!-- Visual-envelope split: front tire edge to rear body panel. Measure the
+       physical vehicle before footprint-critical deployment. -->
+  <xacro:property name="front_overhang" value="0.203"/>
+  <xacro:property name="rear_overhang" value="0.432"/>
 
   <material name="body_blue"><color rgba="0.035 0.235 0.510 1.0"/></material>
   <material name="tire_black"><color rgba="0.025 0.025 0.030 1.0"/></material>
