@@ -1,0 +1,23 @@
+<launch>
+  <!-- IMU launch stub for the E-Trike.
+       When a physical IMU is connected, replace this with the actual IMU
+       driver launch (e.g., tamagawa_imu, xsens, etc.) publishing to
+       /sensing/imu/imu_data.
+       Currently launches a placeholder that the distortion_corrector_node
+       can subscribe to once a real IMU is available. -->
+  <arg name="launch_driver" default="true"/>
+  <group>
+    <push-ros-namespace namespace="imu"/>
+    <!-- TODO: Add actual IMU driver here. Example:
+    <include file="$(find-pkg-share <imu_driver_pkg>)/launch/<imu>.launch.xml">
+      <arg name="imu_frame" value="imu_link"/>
+      <arg name="output_topic" value="imu_data"/>
+    </include>
+    -->
+    <node pkg="topic_tools" exec="relay" name="imu_relay" if="$(var launch_driver)">
+      <!-- Placeholder: relay from a potential IMU topic to the standard name -->
+      <remap from="input" to="/imu_raw"/>
+      <remap from="output" to="imu_data"/>
+    </node>
+  </group>
+</launch>

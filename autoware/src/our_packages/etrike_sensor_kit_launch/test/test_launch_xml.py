@@ -59,6 +59,13 @@ def test_sensing_launch_includes_lidar_and_velocity_converter() -> None:
     ), "sensing.launch.xml must include the velocity converter"
 
 
+def test_sensing_launch_includes_imu() -> None:
+    root = _parse("sensing.launch.xml")
+    includes = _collect_includes(root)
+    inc_text = " ".join(includes)
+    assert "imu.launch.xml" in inc_text, "sensing.launch.xml must include imu.launch.xml"
+
+
 def test_lidar_launch_includes_hesai_xt32m2x() -> None:
     root = _parse("lidar.launch.xml")
     includes = _collect_includes(root)
