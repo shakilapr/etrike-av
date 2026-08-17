@@ -138,8 +138,39 @@ module rear_wheel_opening(side) {
   }
 }
 
+module front_fork_extension() {
+  // Front steering fork / connector strut connecting the front apron (X = 1.790 m)
+  // to the front wheel hub (X = 2.000 m, Z = 0.203 m), without a wheel cover.
+  polyhedron(
+    points = [
+      // Base at apron connection (X = 1.790 m)
+      [1.790, -0.040, 0.280], // 0: rear left floor
+      [1.790,  0.040, 0.280], // 1: rear right floor
+      [1.790,  0.040, 0.550], // 2: rear right top
+      [1.790, -0.040, 0.550], // 3: rear left top
+      // Extension at front wheel hub (X = 1.990 m)
+      [1.990, -0.035, 0.203], // 4: front left axle
+      [1.990,  0.035, 0.203], // 5: front right axle
+      [1.970,  0.035, 0.380], // 6: front right top
+      [1.970, -0.035, 0.380]  // 7: front left top
+    ],
+    faces = [
+      [3, 2, 1, 0], // rear connection face
+      [0, 1, 5, 4], // bottom face
+      [1, 2, 6, 5], // right face
+      [2, 3, 7, 6], // top face
+      [3, 0, 4, 7], // left face
+      [4, 5, 6, 7]  // front face
+    ],
+    convexity = 10
+  );
+}
+
 difference() {
-  body_envelope();
+  union() {
+    body_envelope();
+    front_fork_extension();
+  }
   rear_wheel_opening(1);
   rear_wheel_opening(-1);
 }
