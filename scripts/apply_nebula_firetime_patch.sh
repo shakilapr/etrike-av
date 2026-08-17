@@ -325,7 +325,19 @@ if grep -q "firetime_file_path" "$WRAPPER_CPP" 2>/dev/null; then
     echo "[SKIP] hesai_ros_wrapper.cpp already has firetime_file_path parameter"
 else
     echo "[PATCH] hesai_ros_wrapper.cpp: adding firetime_file_path ROS parameter"
-    sed -i '/config.calibration_download_enabled =/a\  config.firetime_path =\n    declare_parameter<std::string>("firetime_file_path", "", param_read_only());' "$WRAPPER_CPP"
+    python3 -c "
+with open('$WRAPPER_CPP', 'r') as f:
+    content = f.read()
+old = '''  config.calibration_download_enabled =
+    declare_parameter<bool>(\"calibration_download_enabled\", param_read_only());'''
+new = '''  config.calibration_download_enabled =
+    declare_parameter<bool>(\"calibration_download_enabled\", param_read_only());
+  config.firetime_path =
+    declare_parameter<std::string>(\"firetime_file_path\", \"\", param_read_only());'''
+content = content.replace(old, new, 1)
+with open('$WRAPPER_CPP', 'w') as f:
+    f.write(content)
+"
 fi
 
 echo ""
