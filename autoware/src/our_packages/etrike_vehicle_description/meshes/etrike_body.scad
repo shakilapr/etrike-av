@@ -14,8 +14,8 @@ module body_envelope() {
       [-0.432,  0.575, 0.280], // 1: rear right floor
       [-0.432,  0.575, 0.740], // 2: rear right beltline
       [-0.432,  0.530, 1.180], // 3: rear right shoulder
-      [-0.432,  0.490, 1.480], // 4: rear right roof
-      [-0.432, -0.490, 1.480], // 5: rear left roof
+      [-0.432,  0.480, 1.520], // 4: rear right roof
+      [-0.432, -0.480, 1.520], // 5: rear left roof
       [-0.432, -0.530, 1.180], // 6: rear left shoulder
       [-0.432, -0.575, 0.740], // 7: rear left beltline
 
@@ -24,8 +24,8 @@ module body_envelope() {
       [ 0.000,  0.575, 0.280], // 9: axle right floor
       [ 0.000,  0.575, 0.760], // 10: axle right beltline
       [ 0.000,  0.540, 1.250], // 11: axle right shoulder
-      [ 0.000,  0.490, 1.660], // 12: axle right roof
-      [ 0.000, -0.490, 1.660], // 13: axle left roof
+      [ 0.000,  0.480, 1.700], // 12: axle right roof (flat LiDAR deck Z = 1.700)
+      [ 0.000, -0.480, 1.700], // 13: axle left roof (flat LiDAR deck Z = 1.700)
       [ 0.000, -0.540, 1.250], // 14: axle left shoulder
       [ 0.000, -0.575, 0.760], // 15: axle left beltline
 
@@ -34,8 +34,8 @@ module body_envelope() {
       [ 0.500,  0.575, 0.280], // 17: entry right floor
       [ 0.500,  0.560, 0.680], // 18: entry right waistline dip
       [ 0.500,  0.540, 1.250], // 19: entry right shoulder
-      [ 0.500,  0.490, 1.700], // 20: entry right roof peak
-      [ 0.500, -0.490, 1.700], // 21: entry left roof peak
+      [ 0.500,  0.480, 1.700], // 20: entry right roof peak (flat LiDAR deck Z = 1.700)
+      [ 0.500, -0.480, 1.700], // 21: entry left roof peak (flat LiDAR deck Z = 1.700)
       [ 0.500, -0.540, 1.250], // 22: entry left shoulder
       [ 0.500, -0.560, 0.680], // 23: entry left waistline dip
 
@@ -44,8 +44,8 @@ module body_envelope() {
       [ 1.150,  0.560, 0.280], // 25: cabin front right floor
       [ 1.150,  0.550, 0.760], // 26: cabin front right beltline
       [ 1.150,  0.520, 1.250], // 27: cabin front right shoulder
-      [ 1.150,  0.480, 1.680], // 28: cabin front right roof brow
-      [ 1.150, -0.480, 1.680], // 29: cabin front left roof brow
+      [ 1.150,  0.480, 1.700], // 28: cabin front right roof brow (flat LiDAR deck Z = 1.700)
+      [ 1.150, -0.480, 1.700], // 29: cabin front left roof brow (flat LiDAR deck Z = 1.700)
       [ 1.150, -0.520, 1.250], // 30: cabin front left shoulder
       [ 1.150, -0.550, 0.760], // 31: cabin front left beltline
 
