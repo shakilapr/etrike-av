@@ -55,14 +55,24 @@ class StabilityGuardNode(Node):
         self.declare_parameter("emergency_topic", "/control/command/emergency_cmd")
         self.declare_parameter("diagnostics_topic", "/diagnostics")
 
-        wheel_base = self.get_parameter("wheel_base").value
-        track_width = self.get_parameter("track_width").value
-        cog_height = self.get_parameter("cog_height").value
-        gravity = self.get_parameter("gravity").value
-        safety_margin = self.get_parameter("safety_margin").value
-        warn_ratio = self.get_parameter("warn_ratio").value
-        error_ratio = self.get_parameter("error_ratio").value
-        self.enable_emergency = self.get_parameter("enable_emergency").value
+        # Launch passes these as strings (LaunchConfiguration), so coerce
+        # explicitly. Without this the node crashes on `str * float` and the
+        # "monitor-only" default would be misread as truthy (emergency ON).
+        def as_float(name: str) -> float:
+            return float(self.get_parameter(name).value)
+
+        wheel_base = as_float("wheel_base")
+        track_width = as_float("track_width")
+        cog_height = as_float("cog_height")
+        gravity = as_float("gravity")
+        safety_margin = as_float("safety_margin")
+        warn_ratio = as_float("warn_ratio")
+        error_ratio = as_float("error_ratio")
+        self.enable_emergency = str(self.get_parameter("enable_emergency").value).lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         if wheel_base <= 0.0 or track_width <= 0.0 or cog_height <= 0.0:
             raise ValueError("wheel_base, track_width and cog_height must be positive")
