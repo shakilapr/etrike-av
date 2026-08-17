@@ -1,0 +1,31 @@
+<launch>
+  <arg name="launch_driver" default="true"/>
+  <arg name="host_ip" default="192.168.1.10"/>
+  <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
+  <arg name="vehicle_mirror_param_file"/>
+  <arg name="pointcloud_container_name" default="pointcloud_container"/>
+
+  <group>
+    <push-ros-namespace namespace="lidar"/>
+
+    <group>
+      <push-ros-namespace namespace="top"/>
+      <include file="$(find-pkg-share etrike_common_launch)/launch/hesai_XT32M2X.launch.xml">
+        <arg name="max_range" value="300.0"/>
+        <arg name="min_range" value="0.3"/>
+        <arg name="sensor_frame" value="lidar_link"/>
+        <arg name="sensor_ip" value="192.168.1.201"/>
+        <arg name="host_ip" value="$(var host_ip)"/>
+        <arg name="data_port" value="2368"/>
+        <arg name="gnss_port" value="10110"/>
+        <arg name="rotation_speed" value="600"/>
+        <arg name="return_mode" value="LastStrongest"/>
+        <arg name="scan_phase" value="0.0"/>
+        <arg name="launch_driver" value="$(var launch_driver)"/>
+        <arg name="setup_sensor" value="$(var launch_driver)"/>
+        <arg name="vehicle_mirror_param_file" value="$(var vehicle_mirror_param_file)"/>
+        <arg name="container_name" value="$(var pointcloud_container_name)"/>
+      </include>
+    </group>
+  </group>
+</launch>
