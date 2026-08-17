@@ -177,11 +177,11 @@ public:
   explicit VehicleBridgeNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
   ~VehicleBridgeNode() override;
 
-  CallbackReturn on_configure(const State & previous_state) override;
-  CallbackReturn on_activate(const State & previous_state) override;
-  CallbackReturn on_deactivate(const State & previous_state) override;
-  CallbackReturn on_cleanup(const State & previous_state) override;
-  CallbackReturn on_shutdown(const State & previous_state) override;
+  CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_activate(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_deactivate(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override;
+  CallbackReturn on_shutdown(const rclcpp_lifecycle::State & previous_state) override;
 
   // Testing hooks
   void set_can_driver(std::unique_ptr<CanDriver> driver);

@@ -4,7 +4,7 @@
     max_speed_forward: 3.0
     max_speed_reverse: 0.5
     max_steering_angle: 0.747
-    max_brake_pressure_kpa: 5000
+    max_brake_pressure_kpa: 5000.0
     max_deceleration: 5.0
     low_speed_threshold: 0.05
     loop_rate: 100.0

@@ -198,9 +198,9 @@ bool CanEncoder::encode_drive(const autoware_control_msgs::msg::Control & cmd,
   if (!std::isfinite(speed_ms) || !std::isfinite(cmd.lateral.steering_tire_angle)) return false;
   int32_t speed_mmps = speed_to_mmps(speed_ms);
 
-  float steer = std::clamp(cmd.lateral.steering_tire_angle,
+  float steer = static_cast<float>(std::clamp(static_cast<double>(cmd.lateral.steering_tire_angle),
                            -params_.max_steering_angle,
-                            params_.max_steering_angle);
+                            params_.max_steering_angle));
   int32_t yaw_mrad = steering_to_yaw(steer, speed_ms);
 
   uint8_t gear = derive_gear(speed_mmps, gear_override, has_override);
@@ -367,7 +367,7 @@ bool CanDecoder::decode_diagnostics(const struct can_frame & frame,
     diagnostic_msgs::msg::DiagnosticStatus s;
     s.name = name;
     s.hardware_id = "etrike";
-    s.values = {{"raw", std::to_string(value)}};
+    { diagnostic_msgs::msg::KeyValue kv; kv.key = "raw"; kv.value = std::to_string(value); s.values.push_back(kv); }
     s.level = level;
     s.message = message;
     msg.status.push_back(s);
@@ -538,7 +538,7 @@ VehicleBridgeNode::~VehicleBridgeNode() { can_->close(); }
 void VehicleBridgeNode::set_can_driver(std::unique_ptr<CanDriver> driver) { can_ = std::move(driver); }
 
 // ---- Lifecycle ----
-CallbackReturn VehicleBridgeNode::on_configure(const State &)
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn VehicleBridgeNode::on_configure(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "on_configure");
   if (!load_parameters()) return CallbackReturn::FAILURE;
@@ -576,7 +576,7 @@ CallbackReturn VehicleBridgeNode::on_configure(const State &)
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn VehicleBridgeNode::on_activate(const State &)
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn VehicleBridgeNode::on_activate(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "on_activate");
   // Reopen CAN socket (was closed in on_deactivate)
@@ -610,7 +610,7 @@ CallbackReturn VehicleBridgeNode::on_activate(const State &)
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn VehicleBridgeNode::on_deactivate(const State &)
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn VehicleBridgeNode::on_deactivate(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "on_deactivate");
   timer_control_->cancel();
@@ -633,7 +633,7 @@ CallbackReturn VehicleBridgeNode::on_deactivate(const State &)
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn VehicleBridgeNode::on_cleanup(const State &)
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn VehicleBridgeNode::on_cleanup(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "on_cleanup");
   can_->close();
@@ -656,7 +656,7 @@ CallbackReturn VehicleBridgeNode::on_cleanup(const State &)
   return CallbackReturn::SUCCESS;
 }
 
-CallbackReturn VehicleBridgeNode::on_shutdown(const State &)
+rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn VehicleBridgeNode::on_shutdown(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "on_shutdown");
   rx_running_ = false;
@@ -1063,7 +1063,7 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
         s.name = "brake/" + name;
         s.hardware_id = "etrike";
         s.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-        s.values = {{"value", std::to_string(val)}, {"unit", unit}};
+    { diagnostic_msgs::msg::KeyValue kv1; kv1.key = "value"; kv1.value = std::to_string(val); s.values.push_back(kv1); diagnostic_msgs::msg::KeyValue kv2; kv2.key = "unit"; kv2.value = unit; s.values.push_back(kv2); }
         diag.status.push_back(s);
       };
       add_kv("pressure", message.pressure_raw, "MPa");

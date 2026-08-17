@@ -23,6 +23,7 @@ def generate_launch_description() -> LaunchDescription:
         package="autoware_vehicle_bridge",
         executable="vehicle_bridge_node",
         name="vehicle_bridge",
+        namespace="",
         output="screen",
         parameters=[parameter_file, {"can_interface": can_interface}],
         remappings=[("~/input/engage", engage_topic)],
@@ -65,3 +66,4 @@ def generate_launch_description() -> LaunchDescription:
             ),
         ]
     )
+
