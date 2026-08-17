@@ -27,8 +27,8 @@ You can write and edit your code normally on your Windows computer.
 ## 4. Build Code (On Linux)
 Instead of typing long docker commands, you can use the helpful shortcut scripts included in the project.
 
-1. Open a **new Windows PowerShell** window.
-2. Log into the Linux computer by copying and running this:
+1. Open **Windows PowerShell**.
+2. Log into the Linux computer:
    ```powershell
    ssh med1@172.16.25.56
    ```
@@ -42,16 +42,81 @@ Instead of typing long docker commands, you can use the helpful shortcut scripts
    ```
    *(This automatically handles everything inside the Docker container.)*
 
+### Build only the E-Trike custom packages (faster)
+```bash
+# Enter the container first
+./docker/shell.sh
+
+# Then inside the container:
+source /opt/autoware/setup.bash
+cd /workspace/autoware
+colcon build --symlink-install --packages-select \
+  etrike_protocol \
+  autoware_vehicle_bridge \
+  etrike_vehicle_description \
+  etrike_vehicle_launch \
+  etrike_common_launch \
+  etrike_sensor_kit_launch \
+  etrike_sensor_kit_description
+```
+
 ## 5. Start the Simulator & RViz (On Linux)
-Once your code is built, you can easily launch the Autoware planning simulator (which automatically opens RViz).
+Once your code is built, you can easily launch the Autoware planning simulator (which automatically opens RViz on the Jetson's physical display).
 
 Still in the `~/av_project` folder on the Linux computer, run this shortcut command:
 ```bash
 ./docker/run.sh
 ```
 
+This launches the **E-Trike planning simulator** with:
+- `vehicle_model:=etrike_vehicle` (Bajaj RE three-wheeler geometry + Hesai XT32M2X lidar_link)
+- `sensor_model:=etrike_sensor_kit` (Nebula Hesai driver + pointcloud preprocessing pipeline)
+- RViz2 opens automatically on the Jetson's monitor (`DISPLAY=:1`)
+
+### What you'll see in RViz2
+- The E-Trike vehicle model (blue Bajaj body + wheels + roof-mounted lidar cylinder)
+- TF frames: `base_footprint -> base_link -> lidar_link` + `sensor_kit_base_link`
+- Map view with lanelet2 roads
+- Once you set an initial pose (2D Pose Estimate), you can plan routes and engage autonomous driving
+
+### Run tests
+```bash
+# Inside the container
+colcon test --packages-select \
+  etrike_common_launch \
+  etrike_sensor_kit_launch \
+  etrike_sensor_kit_description
+colcon test-result --verbose
+```
+
 ### Need to run custom commands?
 If you ever need an interactive shell inside the container (with GPU and display setup ready to go), use:
 ```bash
 ./docker/shell.sh
+```
+
+## 6. LiDAR Sensor Bring-Up (when hardware is connected)
+
+### Network setup
+```bash
+sudo ./scripts/setup_lidar_network.sh
+```
+Configures the Jetson Ethernet interface (192.168.1.10/24) for the XT32M2X (192.168.1.201), pings the sensor, and checks for UDP traffic on port 2368.
+
+### Bench bring-up
+```bash
+./scripts/lidar_bringup.sh
+```
+Automates the full bring-up: network check, UDP verification, launches the sensing pipeline, checks for point cloud topics, and verifies the TF tree. Use `--check-only` for just network/UDP, or `--no-driver` to test the preprocessor pipeline without the sensor.
+
+### PTP time sync (production)
+```bash
+sudo ./scripts/setup_ptp.sh eth0
+```
+Sets up ptp4l (PTP slave) + phc2sys + chrony for IEEE 1588v2 time synchronization. Requires a PTP grandmaster on the vehicle network.
+
+### Nebula firetime patch (first time only)
+```bash
+./scripts/apply_nebula_firetime_patch.sh
+colcon build --symlink-install --packages-select nebula_hesai_common nebula_hesai_decoders nebula_hesai
 ```
