@@ -316,7 +316,7 @@ docker run ... (same mounts) ... /bin/bash -c "
   exec \"\$@\"
 " -- ros2 launch autoware_launch planning_simulator.launch.xml \
     map_path:=/autoware_map/sample-map-planning \
-    vehicle_model:=sample_vehicle \
+    vehicle_model:=etrike_vehicle \
     sensor_model:=sample_sensor_kit
 ```
 
@@ -495,7 +495,7 @@ source /opt/autoware/setup.bash
 source /workspace/autoware/install/setup.bash
 ros2 launch autoware_launch planning_simulator.launch.xml \
   map_path:=/autoware_map/sample-map-planning \
-  vehicle_model:=sample_vehicle \
+  vehicle_model:=etrike_vehicle \
   sensor_model:=sample_sensor_kit
 ```
 
