@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <!--
+    E-Trike sensor-kit macro.
+
+    The Hesai XT32M2X lidar_link is already defined in
+    etrike_vehicle_description/urdf/vehicle.xacro with the correct roof-mounted
+    origin, inertial properties, and parent joint from base_link. This macro
+    only creates the sensor_kit_base_link frame that Autoware's config_dir
+    resolution expects. It deliberately does NOT re-parent lidar_link (that
+    would create a duplicate-parent URDF error).
+  -->
+  <xacro:macro name="sensor_kit_macro" params="parent x y z roll pitch yaw">
+    <xacro:property name="sensor_kit_base_link" default="sensor_kit_base_link"/>
+
+    <joint name="${sensor_kit_base_link}_joint" type="fixed">
+      <origin rpy="${roll} ${pitch} ${yaw}" xyz="${x} ${y} ${z}"/>
+      <parent link="${parent}"/>
+      <child link="${sensor_kit_base_link}"/>
+    </joint>
+    <link name="${sensor_kit_base_link}">
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+    </link>
+  </xacro:macro>
+</robot>
