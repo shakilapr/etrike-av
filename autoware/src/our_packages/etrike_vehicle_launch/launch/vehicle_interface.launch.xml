@@ -8,4 +8,8 @@
   <include file="$(find-pkg-share autoware_vehicle_bridge)/launch/vehicle_bridge.launch.py">
     <arg name="can_interface" value="$(var can_interface)"/>
   </include>
+
+  <!-- Roll/tip-over guard. Monitor-only by default; pass enable_emergency:=true
+       after validating cog_height / track_width on the physical vehicle. -->
+  <include file="$(find-pkg-share etrike_stability_guard)/launch/stability_guard.launch.py"/>
 </launch>
