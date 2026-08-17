@@ -173,4 +173,38 @@
     <limit effort="120.0" velocity="45.0"/>
     <dynamics damping="0.05" friction="0.02"/>
   </joint>
+
+  <!-- Hesai XT32M2X 3D LiDAR Link (Autoware / ROS 2) -->
+  <xacro:property name="lidar_x" value="0.575"/>
+  <xacro:property name="lidar_y" value="0.000"/>
+  <xacro:property name="lidar_roof_z" value="1.700"/>
+  <xacro:property name="lidar_optical_height" value="0.0464"/>
+  <xacro:property name="lidar_total_height" value="0.075"/>
+  <xacro:property name="lidar_radius" value="0.0465"/>
+
+  <material name="lidar_dark_grey"><color rgba="0.15 0.15 0.18 1.0"/></material>
+
+  <link name="lidar_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.490"/>
+      <inertia ixx="0.00049" ixy="0" ixz="0" iyy="0.00049" iyz="0" izz="0.00053"/>
+    </inertial>
+    <visual name="hesai_xt32m2x_visual">
+      <origin xyz="0 0 ${-lidar_optical_height + (lidar_total_height / 2.0)}" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_total_height}"/></geometry>
+      <material name="lidar_dark_grey"/>
+    </visual>
+    <collision name="hesai_xt32m2x_collision">
+      <origin xyz="0 0 ${-lidar_optical_height + (lidar_total_height / 2.0)}" rpy="0 0 0"/>
+      <geometry><cylinder radius="${lidar_radius}" length="${lidar_total_height}"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <!-- Sensor frame origin matches Hesai optical measurement origin (+46.4mm above roof) -->
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_roof_z + lidar_optical_height}" rpy="0 0 0"/>
+  </joint>
 </robot>

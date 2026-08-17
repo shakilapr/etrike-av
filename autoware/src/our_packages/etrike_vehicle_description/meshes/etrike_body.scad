@@ -166,10 +166,19 @@ module front_fork_extension() {
   );
 }
 
+module hesai_xt32m2x_lidar() {
+  // Hesai XT32M2X 3D LiDAR sensor representation.
+  // Base diameter: Ø93.0 mm (r = 0.0465 m), Height: 75.0 mm (h = 0.075 m).
+  // Positioned at top-center of flat roof deck (X = 0.575 m, Y = 0.000 m, Z = 1.700 m).
+  translate([0.575, 0, 1.700])
+    cylinder(h = 0.075, r = 0.0465, $fn = 32);
+}
+
 difference() {
   union() {
     body_envelope();
     front_fork_extension();
+    hesai_xt32m2x_lidar();
   }
   rear_wheel_opening(1);
   rear_wheel_opening(-1);
