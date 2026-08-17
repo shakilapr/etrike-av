@@ -135,7 +135,7 @@ docker run -it --rm \
   ghcr.io/autowarefoundation/autoware:universe-cuda-humble \
   ros2 launch autoware_launch planning_simulator.launch.xml \
     map_path:=/autoware_map/sample-map-planning \
-    vehicle_model:=sample_vehicle \
+    vehicle_model:=etrike_vehicle \
     sensor_model:=sample_sensor_kit
 ```
 
@@ -194,7 +194,7 @@ docker run -it --rm \
     source /workspace/opt/autoware/setup.bash && \
     ros2 launch autoware_launch planning_simulator.launch.xml \
       map_path:=/autoware_map/sample-map-planning \
-      vehicle_model:=sample_vehicle \
+      vehicle_model:=etrike_vehicle \
       sensor_model:=sample_sensor_kit
   "
 ```
@@ -230,7 +230,7 @@ source install/setup.bash
 # Test
 ros2 launch autoware_launch planning_simulator.launch.xml \
   map_path:=/autoware_map/sample-map-planning \
-  vehicle_model:=sample_vehicle \
+  vehicle_model:=etrike_vehicle \
   sensor_model:=sample_sensor_kit
 ```
 
