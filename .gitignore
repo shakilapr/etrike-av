@@ -7,6 +7,11 @@
 /data/
 /.stfolder/
 
+# Downloaded files and installers
+/downloads/
+/programs/
+download/
+
 # LaTeX/PDF build outputs
 /tex/generated/
 /tex/output/
