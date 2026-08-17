@@ -26,12 +26,23 @@ colcon build --symlink-install --packages-select \
   etrike_protocol \
   autoware_vehicle_bridge \
   etrike_vehicle_description \
-  etrike_vehicle_launch
+  etrike_vehicle_launch \
+  etrike_common_launch \
+  etrike_sensor_kit_launch \
+  etrike_sensor_kit_description
 ```
 
 ### Run Tests
 ```bash
+# Vehicle bridge
 colcon test --packages-select autoware_vehicle_bridge
+
+# E-Trike sensor kit (XT32M2X / Nebula)
+colcon test --packages-select \
+  etrike_common_launch \
+  etrike_sensor_kit_launch \
+  etrike_sensor_kit_description
+
 colcon test-result --verbose
 ```
 
@@ -67,8 +78,11 @@ candump vcan0
 | `~/av_project/autoware/src/our_packages/` | Custom packages |
 | `~/av_project/autoware/src/our_packages/autoware_vehicle_bridge/` | Vehicle bridge node |
 | `~/av_project/autoware/src/our_packages/etrike_protocol/` | CAN protocol headers |
-| `~/av_project/autoware/src/our_packages/etrike_vehicle_description/` | URDF and meshes |
-| `~/av_project/autoware/src/our_packages/etrike_vehicle_launch/` | Launch files |
+| `~/av_project/autoware/src/our_packages/etrike_vehicle_description/` | URDF and meshes (includes lidar_link for XT32M2X) |
+| `~/av_project/autoware/src/our_packages/etrike_vehicle_launch/` | Vehicle interface launch files |
+| `~/av_project/autoware/src/our_packages/etrike_common_launch/` | Nebula Hesai XT32M2X driver launch + configs |
+| `~/av_project/autoware/src/our_packages/etrike_sensor_kit_launch/` | Sensor-kit sensing launch entry point |
+| `~/av_project/autoware/src/our_packages/etrike_sensor_kit_description/` | Sensor-kit URDF + extrinsic calibration |
 | `~/av_project/docker/` | Docker scripts |
 | `~/av_project/docs/` | Documentation |
 
@@ -83,6 +97,26 @@ candump vcan0
 | `/vehicle/status/gear_status` | `GearReport` | Current gear |
 | `/vehicle/status/control_mode` | `ControlModeReport` | AUTO/MANUAL |
 | `/diagnostics` | `DiagnosticArray` | System health |
+
+### LiDAR (Hesai XT32M2X via Nebula)
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/sensing/lidar/top/pointcloud_raw_ex` | `PointCloud2` | Raw point cloud from Nebula |
+| `/sensing/lidar/top/self_cropped/pointcloud_ex` | `PointCloud2` | Self-cropped (vehicle body removed) |
+| `/sensing/lidar/top/mirror_cropped/pointcloud_ex` | `PointCloud2` | Mirror-cropped |
+| `/sensing/lidar/top/rectified/pointcloud_ex` | `PointCloud2` | Distortion-corrected |
+| `/sensing/lidar/top/pointcloud_before_sync` | `PointCloud2` | Final preprocessed output to Autoware |
+
+### Planning Simulator (with E-Trike vehicle + sensor kit)
+```bash
+source /opt/autoware/setup.bash
+source /workspace/autoware/install/setup.bash
+ros2 launch autoware_launch planning_simulator.launch.xml \
+  map_path:=/autoware_map/sample-map-planning \
+  vehicle_model:=etrike_vehicle \
+  sensor_model:=etrike_sensor_kit
+```
 
 ---
 
