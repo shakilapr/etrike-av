@@ -212,6 +212,8 @@ colcon test --packages-select \
 colcon test-result --verbose
 ```
 
+**Verified on Jetson Orin (2026-08-17):** All 16 pytest tests pass (0 errors, 0 failures). All linters pass (copyright, lint_cmake, xmllint). URDF xacro assembles correctly with both `sample_vehicle` and `etrike_vehicle` models. TF tree confirmed: `base_footprint → base_link → lidar_link` + `base_link → sensor_kit_base_link`. Planning simulator runs successfully with `vehicle_model:=etrike_vehicle sensor_model:=etrike_sensor_kit`.
+
 ---
 
 ## 10. Roadmap
@@ -219,6 +221,6 @@ colcon test-result --verbose
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 0 | Done | Workspace prep — vendored Nebula verified, device CSV deployed |
-| 1 | Done | Create `etrike_sensor_kit_launch` (3 packages), wire `docker/run.sh` |
-| 2 | Pending | Bench bring-up with real XT32M2X — verify point cloud, TF, timestamps |
+| 1 | Done | Create `etrike_sensor_kit_launch` (3 packages), wire `docker/run.sh`, build + test on Jetson, verify planning_simulator |
+| 2 | Pending | Bench bring-up with real XT32M2X — connect sensor, verify UDP :2368, confirm `/sensing/lidar/top/pointcloud_raw_ex` in RViz |
 | 3 | Pending | Firetime-CSV decoder patch, PTP grandmaster, IMU driver, real `autoware.launch.xml` |
