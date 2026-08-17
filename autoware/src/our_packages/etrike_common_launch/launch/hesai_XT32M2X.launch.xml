@@ -25,6 +25,11 @@
        back to the vendored nebula_hesai_decoders/calibration/PandarXT32M.csv. -->
   <arg name="calibration_file_path" default="$(find-pkg-share etrike_common_launch)/config/lidar/PandarXT32M.csv"/>
 
+  <!-- Device-specific firetime (firing-time) correction. When set, Nebula's
+       PandarXT32M decoder uses per-channel firing times from this CSV instead
+       of the hard-coded formula (368 + 2888 * channel_id ns). -->
+  <arg name="firetime_file_path" default="$(find-pkg-share etrike_common_launch)/config/lidar/XT32M2X_Firetime.csv"/>
+
   <!-- PTP configuration (sensor-side; configured by Nebula when setup_sensor=true).
        A PTP grandmaster still must supply the clock on the network. -->
   <arg name="ptp_profile" default="1588v2"/>
@@ -54,6 +59,7 @@
     <arg name="udp_only" value="$(var udp_only)"/>
     <arg name="calibration_download_enabled" value="$(var calibration_download_enabled)"/>
     <arg name="calibration_file_path" value="$(var calibration_file_path)"/>
+    <arg name="firetime_file_path" value="$(var firetime_file_path)"/>
     <arg name="ptp_profile" value="$(var ptp_profile)"/>
     <arg name="ptp_domain" value="$(var ptp_domain)"/>
     <arg name="ptp_transport_type" value="$(var ptp_transport_type)"/>

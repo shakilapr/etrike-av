@@ -132,6 +132,7 @@ def launch_setup(context, *args, **kwargs):
                         "setup_sensor",
                         "udp_only",
                         "calibration_download_enabled",
+                        "firetime_file_path",
                         "ptp_profile",
                         "ptp_domain",
                         "ptp_transport_type",
@@ -289,6 +290,7 @@ def generate_launch_description():
     # Hesai-specific sensor configuration (passed through to Nebula HesaiRosWrapper)
     add_launch_arg("udp_only", "False", "use UDP-only communication with the sensor")
     add_launch_arg("calibration_download_enabled", "False", "allow Nebula to download calibration from the sensor")
+    add_launch_arg("firetime_file_path", "", "optional path to per-channel firetime CSV; empty = use decoder's built-in formula")
     add_launch_arg("ptp_profile", "1588v2", "PTP profile: 1588v2 / 8021AS / gPTP")
     add_launch_arg("ptp_domain", "0", "PTP domain number")
     add_launch_arg("ptp_transport_type", "UDP", "PTP transport: UDP / L2")
