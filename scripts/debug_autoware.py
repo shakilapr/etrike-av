@@ -32,7 +32,7 @@ def main():
     
     # Try launching with foreground to see errors
     print("\n=== Launch Autoware (foreground, 30s timeout) ===")
-    ssh_run(client, "docker exec autoware_test bash -c 'source /opt/autoware/setup.bash && source /workspace/autoware/install/setup.bash && timeout 30 ros2 launch autoware_launch planning_simulator.launch.xml map_path:=/autoware_map/sample-map-planning vehicle_model:=sample_vehicle sensor_model:=sample_sensor_kit rviz:=false 2>&1'", timeout=45)
+    ssh_run(client, "docker exec autoware_test bash -c 'source /opt/autoware/setup.bash && source /workspace/autoware/install/setup.bash && timeout 30 ros2 launch autoware_launch planning_simulator.launch.xml map_path:=/autoware_map/sample-map-planning vehicle_model:=etrike_vehicle sensor_model:=sample_sensor_kit rviz:=false 2>&1'", timeout=45)
     
     # Check ROS domain ID
     print("\n=== ROS environment ===")
