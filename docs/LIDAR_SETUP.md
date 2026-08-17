@@ -152,11 +152,11 @@ source install/setup.bash
 ```bash
 ros2 launch autoware_launch planning_simulator.launch.xml \
   map_path:=/autoware_map/sample-map-planning \
-  vehicle_model:=sample_vehicle \
+  vehicle_model:=etrike_vehicle \
   sensor_model:=etrike_sensor_kit
 ```
 
-Or simply use the updated `docker/run.sh` which now defaults to `sensor_model:=etrike_sensor_kit`.
+Or simply use the updated `docker/run.sh` which now defaults to `vehicle_model:=etrike_vehicle sensor_model:=etrike_sensor_kit`.
 
 > **Note:** `planning_simulator.launch.xml` sets `launch_sensing:=false`, so the Nebula driver is not started. This command only validates that the URDF assembles and the sensor-kit packages are discoverable.
 
@@ -165,9 +165,16 @@ Or simply use the updated `docker/run.sh` which now defaults to `sensor_model:=e
 ```bash
 ros2 launch autoware_launch autoware.launch.xml \
   map_path:=/autoware_map/your-map \
-  vehicle_model:=sample_vehicle \
+  vehicle_model:=etrike_vehicle \
   sensor_model:=etrike_sensor_kit \
   launch_sensing_driver:=true
+```
+
+Or use the automated bring-up script:
+```bash
+./scripts/lidar_bringup.sh          # full bring-up
+./scripts/lidar_bringup.sh --check-only  # network/UDP check only
+./scripts/lidar_bringup.sh --no-driver   # pipeline without sensor
 ```
 
 Verify the point cloud in RViz:
@@ -175,32 +182,60 @@ Verify the point cloud in RViz:
 - Fixed frame: `base_link`
 - The cloud should appear in the `lidar_link` frame at the roof position.
 
+### 7.3 Network setup
+
+Before connecting the sensor, configure the Jetson's Ethernet interface:
+```bash
+sudo ./scripts/setup_lidar_network.sh [INTERFACE] [HOST_IP] [SENSOR_IP]
+# Defaults: eth0, 192.168.1.10, 192.168.1.201
+```
+
 ---
 
-## 8. PTP time synchronization (Phase 3)
+## 8. PTP time synchronization
 
 For production, deploy a PTP grandmaster driven by GNSS/INS:
 
 1. **Grandmaster:** GNSS receiver → PTP GM (e.g., an IEEE 1588v2-capable switch or dedicated card).
 2. **XT32M2X:** Nebula configures it as a PTP slave via `setup_sensor: true` (`ptp_profile: 1588v2`, `ptp_domain: 0`, `ptp_transport_type: UDP`).
-3. **Jetson:** Run `ptp4l` on the lidar-facing NIC and `chrony` to steer the system clock:
+3. **Jetson:** Run the PTP setup script:
    ```bash
-   sudo ptp4l -i eth0 -m -S
-   sudo chronyd -f /etc/chrony/chrony.conf
+   sudo ./scripts/setup_ptp.sh eth0
    ```
+   This installs `config/ptp4l.conf` and `config/chrony.conf`, starts `ptp4l` (PTP slave) + `phc2sys` (HW clock sync) + `chrony` (system clock management).
 
 Without PTP, Nebula falls back to the sensor's internal clock. This is fine for bench bring-up but will cause timestamp drift during moving-vehicle localization.
 
 ---
 
-## 9. Tests
+## 9. Firetime CSV support (Phase 3 — done)
+
+Nebula's `PandarXT32M` decoder originally used a hard-coded firing-time formula (`368 + 2888 * channel_id` ns). The device's actual firing times (from `XT32M2X_Firetime_Correction_File.csv.csv`) differ by ~5.6 µs mean, causing per-point timestamp errors that affect distortion correction and localization.
+
+**Solution:** A patch to vendored Nebula adds per-channel firetime CSV loading:
+- `HesaiFiretimeConfiguration` struct loads `Channel, fire time(us)` CSV files
+- `PandarXT32M::set_firetime_configuration()` stores per-channel offsets
+- `HesaiDecoder` constructor loads the CSV if `firetime_path` is set
+- `hesai_ros_wrapper.cpp` declares the `firetime_file_path` ROS parameter
+
+**Applying the patch:** Since vendored Nebula is gitignored, use the idempotent apply script:
+```bash
+./scripts/apply_nebula_firetime_patch.sh
+colcon build --symlink-install --packages-select nebula_hesai_common nebula_hesai_decoders nebula_hesai
+```
+
+The launch files automatically pass `firetime_file_path` to the Nebula node, defaulting to `etrike_common_launch/config/lidar/XT32M2X_Firetime.csv`.
+
+---
+
+## 10. Tests
 
 Each package has pytest tests runnable via `colcon test`:
 
 | Package | Test file | Tests |
 |---------|-----------|-------|
-| `etrike_common_launch` | `test/test_calibration_and_configs.py` | 5 — CSV channel count, elevation range, azimuth range, YAML loads |
-| `etrike_sensor_kit_launch` | `test/test_launch_xml.py` | 6 — XML structure, include wiring, namespace, frame_id |
+| `etrike_common_launch` | `test/test_calibration_and_configs.py` | 8 — angle CSV (channels, elevation, azimuth), firetime CSV (channels, values, formula diff), YAML loads |
+| `etrike_sensor_kit_launch` | `test/test_launch_xml.py` | 7 — XML structure, include wiring (lidar, IMU, velocity), namespace, frame_id |
 | `etrike_sensor_kit_description` | `test/test_description.py` | 5 — xacro XML, no lidar_link re-parenting, calibration YAML schema |
 
 Run all E-Trike sensor tests:
@@ -212,15 +247,15 @@ colcon test --packages-select \
 colcon test-result --verbose
 ```
 
-**Verified on Jetson Orin (2026-08-17):** All 16 pytest tests pass (0 errors, 0 failures). All linters pass (copyright, lint_cmake, xmllint). URDF xacro assembles correctly with both `sample_vehicle` and `etrike_vehicle` models. TF tree confirmed: `base_footprint → base_link → lidar_link` + `base_link → sensor_kit_base_link`. Planning simulator runs successfully with `vehicle_model:=etrike_vehicle sensor_model:=etrike_sensor_kit`.
+**Verified on Jetson Orin (2026-08-17):** All 20 pytest tests pass (0 errors, 0 failures). All linters pass. Nebula compiles with firetime patch (3 packages). URDF xacro assembles correctly. TF tree confirmed: `base_footprint → base_link → lidar_link` + `base_link → sensor_kit_base_link`. Planning simulator runs successfully with `vehicle_model:=etrike_vehicle sensor_model:=etrike_sensor_kit`.
 
 ---
 
-## 10. Roadmap
+## 11. Roadmap
 
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 0 | Done | Workspace prep — vendored Nebula verified, device CSV deployed |
 | 1 | Done | Create `etrike_sensor_kit_launch` (3 packages), wire `docker/run.sh`, build + test on Jetson, verify planning_simulator |
-| 2 | Pending | Bench bring-up with real XT32M2X — connect sensor, verify UDP :2368, confirm `/sensing/lidar/top/pointcloud_raw_ex` in RViz |
-| 3 | Pending | Firetime-CSV decoder patch, PTP grandmaster, IMU driver, real `autoware.launch.xml` |
+| 2 | Ready | Bench bring-up with real XT32M2X — scripts ready (`lidar_bringup.sh`, `setup_lidar_network.sh`), just connect sensor |
+| 3 | Partial | Firetime-CSV patch done, PTP config done, IMU stub done. Remaining: PTP grandmaster hardware, real IMU driver, full `autoware.launch.xml` testing |
