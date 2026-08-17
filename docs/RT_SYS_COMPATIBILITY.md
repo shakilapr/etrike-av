@@ -1,7 +1,7 @@
 # RT & SYS Compatibility Analysis
 
 **Date:** 2026-08-17  
-**Status:** Current Implementation Review
+**Status:** Verified on Jetson (Humble)
 
 ---
 
@@ -13,6 +13,28 @@ The `autoware_vehicle_bridge` node bridges Autoware ROS 2 messages to the E-Trik
 |------------|------|---------|
 | **RT** (Real-Time) | Motion control, steering, braking, state reporting | 0x204, 0x205, 0x210, 0x220, 0x303, 0x310, 0x311, 0x7FD |
 | **SYS** (System) | Safety monitoring, mode control, diagnostics, heartbeat | 0x011, 0x110, 0x600, 0x7FE |
+
+---
+
+## 2. Build Status
+
+**All packages build successfully on Jetson (aarch64, Humble):**
+
+| Package | Status | Notes |
+|---------|--------|-------|
+| `etrike_protocol` | ✅ Build | Added `protocol/core/` headers, fixed CMakeLists include path |
+| `autoware_vehicle_bridge` | ✅ Build | Fixed Humble lifecycle API, std::clamp, DiagnosticStatus |
+| `etrike_vehicle_description` | ✅ Build | URDF, meshes, configs |
+| `etrike_vehicle_launch` | ✅ Build | Vehicle interface launch |
+| `etrike_common_launch` | ✅ Build | Hesai XT32M2X LiDAR via Nebula |
+
+**Humble compatibility fixes applied:**
+- Lifecycle `State` type: Use `rclcpp_lifecycle::State` instead of bare `State`
+- `CallbackReturn`: Use full qualification in `.cpp` file
+- `std::clamp`: Cast `float` to `double` for template deduction
+- `DiagnosticStatus` values: Use `push_back()` instead of brace initialization
+- Launch file: Add `namespace=""` to `LifecycleNode`
+- Config: Change `max_brake_pressure_kpa` from int `5000` to float `5000.0`
 
 ---
 

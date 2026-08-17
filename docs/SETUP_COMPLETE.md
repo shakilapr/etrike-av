@@ -71,7 +71,12 @@ cd ~/av_project
 │   │   ├── sensor_component/    ← sensor drivers (126M)
 │   │   ├── simulator/           ← scenario_simulator_v2
 │   │   ├── tools/               ← autoware_tools
-│   │   └── our_packages/        ← empty skeleton for our custom packages
+│   │   └── our_packages/        ← our custom packages
+│   │       ├── autoware_vehicle_bridge/   ← CAN bridge node
+│   │       ├── etrike_protocol/           ← CAN protocol headers
+│   │       ├── etrike_vehicle_description/ ← URDF, meshes, configs
+│   │       ├── etrike_vehicle_launch/     ← vehicle interface launch
+│   │       └── etrike_common_launch/      ← LiDAR launch (Nebula)
 │   ├── build/                   ← colcon build output (excluded from sync)
 │   ├── install/                 ← colcon install output (excluded from sync)
 │   └── log/                     ← build logs (excluded from sync)
@@ -518,17 +523,23 @@ ssh -N -L 8384:localhost:8384 med1@172.16.25.56   # tunnel to web GUI
 
 ## 12. What's Still Pending
 
-- [ ] **First build completion** — `colcon build` was still running at the time of writing
+- [x] **First build completion** — `colcon build` completed successfully
+- [x] **Create our custom packages** under `src/our_packages/`
+  - `autoware_vehicle_bridge` — CAN bridge node (Humble-compatible)
+  - `etrike_protocol` — CAN protocol headers with `protocol/core/`
+  - `etrike_vehicle_description` — URDF, meshes, configs
+  - `etrike_vehicle_launch` — vehicle interface launch
+  - `etrike_common_launch` — Hesai XT32M2X LiDAR via Nebula
+- [x] **Humble compatibility fixes** — All packages build on Jetson
+- [x] **Autoware integration** — etrike_vehicle launches with planning simulator
 - [ ] **AWSIM-Labs clone completion** — `simulator/AWSIM/` (v1.6.1) was still cloning (451 MB downloaded so far)
-- [ ] **Create our custom packages** under `src/our_packages/`
-      (planned: `our_vehicle_interface`, `our_controller`, `our_msgs`, `our_bridge`)
 - [ ] **Write `our_autoware.repos`** manifest mixing upstream + forks
 - [ ] **Vehicle calibration** — `vehicle/calibration/` is empty
 - [ ] **Custom controller implementation**
 - [ ] Set up Git remotes (origin = our fork, upstream = Autoware Foundation)
-- [ ] Syncthing device pairing & first sync from Windows (Part B)
+- [ ] HIL testing with real RT/SYS controllers
+- [ ] Vehicle on jack stands test
 
 ---
 
-*Last updated: 2026-08-10 — setup phase. See the companion docs for the detailed
-history of each step.*
+*Last updated: 2026-08-17 — Build fixes, Autoware integration verified, PandarView2 documented.*

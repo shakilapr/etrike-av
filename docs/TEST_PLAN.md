@@ -5,6 +5,22 @@
 
 ---
 
+## Test Results Summary
+
+| Category | Status | Notes |
+|----------|--------|-------|
+| Build | ✅ PASS | All packages compile on Jetson (Humble) |
+| Unit Tests | ✅ PASS | motion_conversion tests pass |
+| Lifecycle | ✅ PASS | Node activates correctly |
+| CAN Output | ✅ PASS | 0x300, 0x303, 0x7FC frames verified |
+| Safety Gate | ✅ PASS | Blocks when feedback missing |
+| Engage | ✅ PASS | Engage/disengage works |
+| Autoware Integration | ✅ PASS | 106 nodes start with etrike_vehicle |
+| Emergency Stop | ⚠️ HIL | Needs real hardware verification |
+| Heartbeat Timeout | ⚠️ HIL | Needs real RT/SYS verification |
+
+---
+
 ## 1. Prerequisites
 
 ### 1.1 SSH Access
@@ -36,10 +52,11 @@ colcon build --symlink-install --packages-select \
   etrike_protocol \
   autoware_vehicle_bridge \
   etrike_vehicle_description \
-  etrike_vehicle_launch
+  etrike_vehicle_launch \
+  etrike_common_launch
 ```
 
-**Expected:** All packages build without errors.
+**Expected:** All packages build without errors. ✅ Verified
 
 ### 2.2 Build Verification
 

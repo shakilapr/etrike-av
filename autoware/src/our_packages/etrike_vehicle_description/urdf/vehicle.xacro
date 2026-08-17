@@ -45,7 +45,7 @@
     <visual name="solid_body">
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://etrike_vehicle_description/meshes/etrike_body.stl" scale="1 1 1"/>
+        <mesh filename="package://etrike_vehicle_description/meshes/etrike_body_binary.stl" scale="1 1 1"/>
       </geometry>
       <material name="body_blue"/>
     </visual>
