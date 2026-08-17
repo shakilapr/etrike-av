@@ -27,5 +27,5 @@ docker run -it --rm \
     exec \"\$@\"
   " -- ros2 launch autoware_launch planning_simulator.launch.xml \
     map_path:=/autoware_map/sample-map-planning \
-    vehicle_model:=sample_vehicle \
+    vehicle_model:=etrike_vehicle \
     sensor_model:=etrike_sensor_kit
