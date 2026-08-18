@@ -121,7 +121,7 @@ Automates the full bring-up: network check, UDP verification, launches the sensi
 
 ### PTP time sync (production)
 ```bash
-sudo ./scripts/setup_ptp.sh eth0
+sudo ./scripts/setup_ptp.sh eno1
 ```
 Sets up ptp4l (PTP slave) + phc2sys + chrony for IEEE 1588v2 time synchronization. Requires a PTP grandmaster on the vehicle network.
 

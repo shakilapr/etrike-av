@@ -1,5 +1,16 @@
-// Copyright 2026 E-Trike
-// Licensed under the Apache License, Version 2.0
+// Copyright 2026 E-Trike Dev. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #ifndef AUTOWARE_VEHICLE_BRIDGE__MOTION_CONVERSION_HPP_
 #define AUTOWARE_VEHICLE_BRIDGE__MOTION_CONVERSION_HPP_
@@ -29,14 +40,14 @@ inline int16_t to_trike_steering_0_1deg(double universe_angle_rad, double max_an
 {
   constexpr double kRadTo01Deg = 1800.0 / 3.14159265358979323846;
   return static_cast<int16_t>(std::lround(
-    to_trike_steering_rad(universe_angle_rad, max_angle_rad) * kRadTo01Deg));
+           to_trike_steering_rad(universe_angle_rad, max_angle_rad) * kRadTo01Deg));
 }
 
 inline int32_t legacy_yaw_mrad_s(
   double universe_angle_rad, double speed_mps, double wheel_base,
   double max_angle_rad, double low_speed_threshold)
 {
-  if (std::abs(speed_mps) < low_speed_threshold) return 0;
+  if (std::abs(speed_mps) < low_speed_threshold) {return 0;}
   const double trike_angle = to_trike_steering_rad(universe_angle_rad, max_angle_rad);
   const double yaw = speed_mps * std::tan(trike_angle) / wheel_base;
   return std::clamp(static_cast<int32_t>(std::lround(yaw * 1000.0)), -3000, 3000);

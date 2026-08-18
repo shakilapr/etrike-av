@@ -11,11 +11,11 @@
 #
 # Usage:
 #   sudo ./scripts/setup_lidar_network.sh [INTERFACE] [HOST_IP] [SENSOR_IP]
-#   Defaults: INTERFACE=eth0, HOST_IP=192.168.1.10, SENSOR_IP=192.168.1.201
+#   Defaults: INTERFACE=eno1, HOST_IP=192.168.1.10, SENSOR_IP=192.168.1.201
 
 set -euo pipefail
 
-IFACE="${1:-eth0}"
+IFACE="${1:-eno1}"
 HOST_IP="${2:-192.168.1.10}"
 SENSOR_IP="${3:-192.168.1.201}"
 SUBNET="24"

@@ -14,6 +14,7 @@ docker run -it --rm \
   -v $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:/tmp/$WAYLAND_DISPLAY \
   -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
   -v ~/autoware_map:/autoware_map \
+  -v ~/av_project:/workspace/av_project \
   -v ~/av_project/autoware:/workspace/autoware \
   -v ~/av_project/vehicle:/workspace/vehicle \
   -v ~/av_project/data:/workspace/data \

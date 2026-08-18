@@ -1,8 +1,22 @@
-#include "autoware_vehicle_bridge/motion_conversion.hpp"
-#include "protocol/generated/cpp/etrike_protocol.hpp"
+// Copyright 2026 E-Trike Dev. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #include <cassert>
 #include <cmath>
+
+#include "autoware_vehicle_bridge/motion_conversion.hpp"
+#include "protocol/generated/cpp/etrike_protocol.hpp"
 
 using autoware_vehicle_bridge::motion::legacy_yaw_mrad_s;
 
@@ -21,12 +35,17 @@ int main()
   assert(legacy_yaw_mrad_s(left_10deg, 0.051, wheel_base, max_angle, threshold) < 0);
   assert(legacy_yaw_mrad_s(left_10deg, -0.051, wheel_base, max_angle, threshold) > 0);
 
-  assert(autoware_vehicle_bridge::motion::to_trike_steering_0_1deg(
-    left_10deg, max_angle) == -100);
-  assert(std::abs(autoware_vehicle_bridge::motion::universe_steering_rad(-100) -
-    left_10deg) < 1e-6);
-  assert(std::abs(autoware_vehicle_bridge::motion::universe_heading_rate(-250) -
-    0.25F) < 1e-6F);
+  assert(
+    autoware_vehicle_bridge::motion::to_trike_steering_0_1deg(
+      left_10deg, max_angle) == -100);
+  assert(
+    std::abs(
+      autoware_vehicle_bridge::motion::universe_steering_rad(-100) -
+      left_10deg) < 1e-6);
+  assert(
+    std::abs(
+      autoware_vehicle_bridge::motion::universe_heading_rate(-250) -
+      0.25F) < 1e-6F);
 
   namespace generated = etrike::protocol::generated;
   generated::HostSteerCmd steer{-100, true, 0, 7};

@@ -13,11 +13,11 @@
 #
 # Usage:
 #   sudo ./scripts/setup_ptp.sh [INTERFACE]
-#   Default INTERFACE: eth0
+#   Default INTERFACE: eno1
 
 set -euo pipefail
 
-IFACE="${1:-eth0}"
+IFACE="${1:-eno1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${SCRIPT_DIR}/../config"
 

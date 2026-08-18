@@ -1,5 +1,16 @@
-// Copyright 2026 E-Trike
-// Licensed under the Apache License, Version 2.0
+// Copyright 2026 E-Trike Dev. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #ifndef AUTOWARE_VEHICLE_BRIDGE__VEHICLE_BRIDGE_NODE_HPP_
 #define AUTOWARE_VEHICLE_BRIDGE__VEHICLE_BRIDGE_NODE_HPP_
@@ -55,8 +66,8 @@ public:
   void close() override;
   bool send(const struct can_frame & frame) override;
   bool receive(struct can_frame & frame, int timeout_ms) override;
-  bool is_open() const override { return fd_ >= 0; }
-  int fd() const { return fd_; }
+  bool is_open() const override {return fd_ >= 0;}
+  int fd() const {return fd_;}
 
 private:
   int fd_{-1};
@@ -92,23 +103,27 @@ public:
   explicit CanEncoder(const VehicleParams & params);
 
   // Returns true if a frame should be sent
-  bool encode_drive(const autoware_control_msgs::msg::Control & cmd,
-                    uint8_t gear_override, bool has_gear_override,
-                    struct can_frame & frame);
+  bool encode_drive(
+    const autoware_control_msgs::msg::Control & cmd,
+    uint8_t gear_override, bool has_gear_override,
+    struct can_frame & frame);
 
-  bool encode_steering(const autoware_control_msgs::msg::Control & cmd,
-                       struct can_frame & frame);
+  bool encode_steering(
+    const autoware_control_msgs::msg::Control & cmd,
+    struct can_frame & frame);
   bool encode_neutral_drive(struct can_frame & frame);
   bool encode_invalid_steering(struct can_frame & frame);
 
-  bool encode_brake(const autoware_control_msgs::msg::Control & cmd,
-                    struct can_frame & frame);
+  bool encode_brake(
+    const autoware_control_msgs::msg::Control & cmd,
+    struct can_frame & frame);
   bool encode_brake_hold(struct can_frame & frame);
 
-  bool encode_lights(const autoware_vehicle_msgs::msg::TurnIndicatorsCommand * turn,
-                     const autoware_vehicle_msgs::msg::HazardLightsCommand * hazard,
-                     bool is_braking,
-                     struct can_frame & frame);
+  bool encode_lights(
+    const autoware_vehicle_msgs::msg::TurnIndicatorsCommand * turn,
+    const autoware_vehicle_msgs::msg::HazardLightsCommand * hazard,
+    bool is_braking,
+    struct can_frame & frame);
 
   bool encode_heartbeat(struct can_frame & frame);
   bool encode_estop(struct can_frame & frame);
@@ -129,22 +144,26 @@ private:
 class CanDecoder
 {
 public:
-  bool decode_velocity(const struct can_frame & frame,
-                       autoware_vehicle_msgs::msg::VelocityReport & msg) const;
+  bool decode_velocity(
+    const struct can_frame & frame,
+    autoware_vehicle_msgs::msg::VelocityReport & msg) const;
 
-  bool decode_motion(const struct can_frame & frame,
-                     autoware_vehicle_msgs::msg::VelocityReport & velocity_msg,
-                     autoware_vehicle_msgs::msg::GearReport & gear_msg);
+  bool decode_motion(
+    const struct can_frame & frame,
+    autoware_vehicle_msgs::msg::VelocityReport & velocity_msg,
+    autoware_vehicle_msgs::msg::GearReport & gear_msg);
 
-  bool decode_state(const struct can_frame & frame,
-                    autoware_vehicle_msgs::msg::ControlModeReport & mode_msg,
-                    autoware_vehicle_msgs::msg::GearReport & gear_msg) const;
+  bool decode_state(
+    const struct can_frame & frame,
+    autoware_vehicle_msgs::msg::ControlModeReport & mode_msg,
+    autoware_vehicle_msgs::msg::GearReport & gear_msg) const;
 
-  bool decode_diagnostics(const struct can_frame & frame,
-                          diagnostic_msgs::msg::DiagnosticArray & msg,
-                          const rclcpp::Time & now) const;
+  bool decode_diagnostics(
+    const struct can_frame & frame,
+    diagnostic_msgs::msg::DiagnosticArray & msg,
+    const rclcpp::Time & now) const;
 
-  uint8_t motion_counter() const { return last_motion_counter_; }
+  uint8_t motion_counter() const {return last_motion_counter_;}
 
 private:
   bool have_motion_counter_{false};
@@ -158,10 +177,10 @@ public:
   void feed(uint8_t counter, const rclcpp::Time & now);
   void observe(const rclcpp::Time & now);
   void reset();
-  bool has_sample() const { std::lock_guard<std::mutex> lk(mutex_); return have_sample_; }
+  bool has_sample() const {std::lock_guard<std::mutex> lk(mutex_); return have_sample_;}
   bool is_alive(const rclcpp::Time & now, int timeout_ms) const;
-  uint8_t counter() const { std::lock_guard<std::mutex> lk(mutex_); return counter_; }
-  rclcpp::Time last_time() const { std::lock_guard<std::mutex> lk(mutex_); return last_time_; }
+  uint8_t counter() const {std::lock_guard<std::mutex> lk(mutex_); return counter_;}
+  rclcpp::Time last_time() const {std::lock_guard<std::mutex> lk(mutex_); return last_time_;}
 
 private:
   mutable std::mutex mutex_;
@@ -203,12 +222,17 @@ private:
   rclcpp::Service<autoware_vehicle_msgs::srv::ControlModeCommand>::SharedPtr srv_control_mode_;
 
   // ---- Publishers ----
-  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::VelocityReport>::SharedPtr pub_velocity_;
-  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::SteeringReport>::SharedPtr pub_steering_;
+  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::VelocityReport>::SharedPtr
+    pub_velocity_;
+  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::SteeringReport>::SharedPtr
+    pub_steering_;
   rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::GearReport>::SharedPtr pub_gear_;
-  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::ControlModeReport>::SharedPtr pub_mode_;
-  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::TurnIndicatorsReport>::SharedPtr pub_turn_status_;
-  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::HazardLightsReport>::SharedPtr pub_hazard_status_;
+  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::ControlModeReport>::SharedPtr
+    pub_mode_;
+  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::TurnIndicatorsReport>::SharedPtr
+    pub_turn_status_;
+  rclcpp_lifecycle::LifecyclePublisher<autoware_vehicle_msgs::msg::HazardLightsReport>::SharedPtr
+    pub_hazard_status_;
   rclcpp_lifecycle::LifecyclePublisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr pub_diag_;
 
   // ---- Timers ----

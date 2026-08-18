@@ -37,7 +37,13 @@ Before any of the sections below, the following must already be in place on the 
    XT32M2X user manual): TCP `9347` (PTC, used by Nebula with
    `setup_sensor:=true`), TCP/HTTP `80` (web control), and UDP `319`/`320`
    (PTP 1588v2). UDP `2368` (point cloud) and UDP `10110` (GNSS time sync)
-   are also received by the host.
+   are also received by the host. **Note:** the stock L4T image on this
+   Jetson runs no active firewall (`ufw` is not installed), so this step is
+   a no-op today — the ports only need opening if you enable one.
+4. **Install `tcpdump` on the host** (`sudo apt install tcpdump`) — the UDP
+   stream check in `lidar_bringup.sh --check-only` depends on it. (The
+   container image ships neither `ping` nor `tcpdump`, which is why the
+   network checks run on the host in Section 1.2.)
 
 ---
 
@@ -53,19 +59,31 @@ To first connect the sensor and retrieve a raw point cloud, you must SSH into th
    cd ~/av_project
    ```
 3. Configure the Jetson's network interface to communicate with the sensor
-   (sensor default IP is `192.168.1.201`):
+   (sensor default IP is `192.168.1.201`). The wired port on this Jetson is
+   **`eno1`** (verify with `ip -br link` — `wlP1p1s0` is WiFi; the sensor must
+   be on a wired port):
    ```bash
-   sudo ./scripts/setup_lidar_network.sh eth0 192.168.1.10 192.168.1.201
+   sudo ./scripts/setup_lidar_network.sh eno1 192.168.1.10 192.168.1.201
    ```
 
 ### 1.2 Bring-up Pipeline
-Use the automated bring-up script to verify UDP packets on port `2368` and
-launch the full sensing stack (Nebula driver + preprocessing). This must be run inside the Autoware container:
-```bash
-./docker/shell.sh
-# Inside the container:
-./scripts/lidar_bringup.sh
-```
+The automated bring-up script verifies UDP packets on port `2368` and
+launches the full sensing stack (Nebula driver + preprocessing). It runs in
+two places — network checks on the host, the ROS stack in the container:
+
+1. **Network checks (host):**
+   ```bash
+   ./scripts/lidar_bringup.sh --check-only
+   ```
+2. **Sensing stack (container):** the repo root is mounted at
+   `/workspace/av_project` inside the container (`docker/shell.sh` mounts
+   it):
+   ```bash
+   ./docker/shell.sh
+   # Inside the container:
+   cd /workspace/av_project
+   ./scripts/lidar_bringup.sh
+   ```
 * **Visualization (Jetson):** RViz2 opens automatically as part of the launch,
   but the default `autoware.rviz` config is a **top-down (TopDownOrtho) 2D view
   and does NOT include the lidar's own point cloud topics**. To actually see
@@ -105,7 +123,7 @@ launch the full sensing stack (Nebula driver + preprocessing). This must be run 
 
 > **Note:** `setup_sensor:=true` (default) makes Nebula configure the sensor
 > over PTC (TCP 9347). Verify the sensor streams with:
-> `tcpdump -i eth0 udp port 2368 -c 10`.
+> `tcpdump -i eno1 udp port 2368 -c 10`.
 
 ---
 
@@ -129,7 +147,7 @@ GNSS/INS-driven switch or card). The script below only **slaves the Jetson**
 to that grandmaster — it does not create one:
 
 ```bash
-sudo ./scripts/setup_ptp.sh eth0
+sudo ./scripts/setup_ptp.sh eno1
 ```
 
 The LiDAR's own PTP role is configured by Nebula when `setup_sensor:=true`
@@ -224,7 +242,7 @@ distortion, which can negatively impact localization.
 The Jetson's internal clock is not accurate enough for a moving vehicle.
 Slave the Jetson and LiDAR to your GNSS-driven PTP grandmaster:
 ```bash
-sudo ./scripts/setup_ptp.sh eth0
+sudo ./scripts/setup_ptp.sh eno1
 ```
 Verify the sync before driving:
 ```bash
@@ -296,7 +314,8 @@ It provides:
 
 Ensure you are inside the container (`./docker/shell.sh`) when running these:
 ```bash
-# Via the bring-up script (recommended):
+# Via the bring-up script (recommended, inside the container):
+cd /workspace/av_project
 ./scripts/lidar_bringup.sh --rviz3d
 
 # Or explicitly with the full stack:

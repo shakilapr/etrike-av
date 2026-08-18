@@ -15,6 +15,7 @@
 #
 # Usage:
 #   ./scripts/lidar_bringup.sh [--check-only] [--no-driver] [--rviz3d]
+#   MAP_PATH=/autoware_map/my-map ./scripts/lidar_bringup.sh --rviz3d
 #
 # Flags:
 #   --check-only   Run network/UDP checks only, don't launch ROS
@@ -29,7 +30,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SENSOR_IP="192.168.1.201"
 HOST_IP="192.168.1.10"
-IFACE="${IFACE:-eth0}"
+IFACE="${IFACE:-eno1}"
 
 CHECK_ONLY=false
 LAUNCH_DRIVER=true
@@ -51,7 +52,10 @@ echo ""
 
 # --- Step 1: Network connectivity ---
 echo "── Step 1: Network connectivity ──"
-if ping -c 3 -W 2 "$SENSOR_IP" &>/dev/null; then
+if ! command -v ping &>/dev/null; then
+    echo "  ⚠ ping not available in this environment"
+    echo "  Run the network checks on the host: $SCRIPT_DIR/lidar_bringup.sh --check-only"
+elif ping -c 3 -W 2 "$SENSOR_IP" &>/dev/null; then
     echo "  ✅ Sensor reachable at $SENSOR_IP"
 else
     echo "  ❌ Sensor not reachable at $SENSOR_IP"
@@ -62,11 +66,16 @@ echo ""
 
 # --- Step 2: UDP packet stream ---
 echo "── Step 2: UDP packet stream (port 2368) ──"
-PACKET_COUNT=$(timeout 5 tcpdump -i "$IFACE" udp port 2368 -c 10 2>/dev/null | wc -l || echo 0)
-if [ "$PACKET_COUNT" -gt 0 ]; then
-    echo "  ✅ UDP packets detected ($PACKET_COUNT packets in 5s)"
+if ! command -v tcpdump &>/dev/null; then
+    echo "  ⚠ tcpdump not available — skipping UDP check"
+    echo "  On the host: sudo apt install tcpdump, then re-run with --check-only"
 else
-    echo "  ⚠ No UDP packets detected — sensor may not be spinning"
+    PACKET_COUNT=$(timeout 5 tcpdump -i "$IFACE" udp port 2368 -c 10 2>/dev/null | wc -l || echo 0)
+    if [ "$PACKET_COUNT" -gt 0 ]; then
+        echo "  ✅ UDP packets detected ($PACKET_COUNT packets in 5s)"
+    else
+        echo "  ⚠ No UDP packets detected — sensor may not be spinning"
+    fi
 fi
 echo ""
 
@@ -81,6 +90,11 @@ echo "── Step 3: Launching sensing pipeline ──"
 # Source ROS 2 and workspace
 source /opt/autoware/setup.bash 2>/dev/null || true
 WORKSPACE="${WORKSPACE:-$HOME/av_project/autoware}"
+if [ ! -f "$WORKSPACE/install/setup.bash" ]; then
+    # Inside the Autoware container the repo root is bind-mounted at
+    # /workspace/av_project (see docker/shell.sh).
+    WORKSPACE="/workspace/av_project/autoware"
+fi
 if [ -f "$WORKSPACE/install/setup.bash" ]; then
     source "$WORKSPACE/install/setup.bash"
     echo "  Workspace sourced: $WORKSPACE"
@@ -88,7 +102,9 @@ else
     echo "  ⚠ Workspace not found at $WORKSPACE"
 fi
 
+MAP_PATH="${MAP_PATH:-/autoware_map/sample-map-planning}"
 LAUNCH_ARGS=(
+    "map_path:=$MAP_PATH"
     "sensor_model:=etrike_sensor_kit"
     "vehicle_model:=etrike_vehicle"
 )

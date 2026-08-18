@@ -93,7 +93,7 @@ The Nebula driver publishes `PointCloud2` with `frame_id: lidar_link`. The senso
 
 On the Jetson, set a static IP on the lidar-facing interface:
 ```bash
-sudo ip addr add 192.168.1.10/24 dev eth0
+sudo ip addr add 192.168.1.10/24 dev eno1
 ```
 
 Verify the sensor is reachable:
@@ -103,7 +103,7 @@ ping 192.168.1.201
 
 Verify UDP packets are arriving:
 ```bash
-sudo tcpdump -i eth0 udp port 2368 -c 10
+sudo tcpdump -i eno1 udp port 2368 -c 10
 ```
 
 ---
@@ -115,7 +115,7 @@ Two device-specific files ship with the sensor (in `docs/XT32M/`):
 | File | Purpose | Deployed to |
 |------|---------|-------------|
 | `XT32M2X_Angle_Correction_File-1.csv` | Per-channel elevation + azimuth offsets | `etrike_common_launch/config/lidar/PandarXT32M.csv` |
-| `XT32M2X_Firetime_Correction_File.csv.csv` | Per-channel firing times | **Not yet integrated** (Phase 3 — see below) |
+| `XT32M2X_Firetime_Correction_File.csv.csv` | Per-channel firing times | Integrated via `firetime_file_path` → `etrike_common_launch/config/lidar/XT32M2X_Firetime.csv` |
 
 The angle calibration is loaded by Nebula via the `calibration_file_path` launch arg (defaults to our package's copy). To fall back to the generic vendored calibration, pass `calibration_file_path:=` (empty string).
 
@@ -206,7 +206,7 @@ to `base_link`, and switch the current view to ThirdPersonFollower/Orbit.
 Before connecting the sensor, configure the Jetson's Ethernet interface:
 ```bash
 sudo ./scripts/setup_lidar_network.sh [INTERFACE] [HOST_IP] [SENSOR_IP]
-# Defaults: eth0, 192.168.1.10, 192.168.1.201
+# Defaults: eno1, 192.168.1.10, 192.168.1.201
 ```
 
 ---
@@ -219,7 +219,7 @@ For production, deploy a PTP grandmaster driven by GNSS/INS:
 2. **XT32M2X:** Nebula configures it as a PTP slave via `setup_sensor: true` (`ptp_profile: 1588v2`, `ptp_domain: 0`, `ptp_transport_type: UDP`).
 3. **Jetson:** Run the PTP setup script:
    ```bash
-   sudo ./scripts/setup_ptp.sh eth0
+   sudo ./scripts/setup_ptp.sh eno1
    ```
    This installs `config/ptp4l.conf` and `config/chrony.conf`, starts `ptp4l` (PTP slave) + `phc2sys` (HW clock sync) + `chrony` (system clock management).
 
