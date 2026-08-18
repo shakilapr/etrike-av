@@ -1,24 +1,29 @@
-# Auto-detect text files, normalize line endings to LF on commit
-* text=auto
+# Auto-normalize line endings to LF on commit
+* text=auto eol=lf
 
-# Shell scripts must use LF
-*.sh text eol=lf
-
-# ROS/colcon files
-*.yaml text
-*.xml text
-*.xacro text
-*.launch.py text
-*.launch.xml text
-*.repos text
-*.cmake text
-CMakeLists.txt text
-package.xml text
-
-# Docs
-*.md text
-
-# Binary
-*.dae binary
-*.jpg binary
+# Preserve binary formats
 *.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.svg binary
+*.webp binary
+*.mp4 binary
+*.mp3 binary
+*.wav binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.rar binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.o binary
+*.obj binary
+*.step binary
+*.stl binary
+*.csv text
