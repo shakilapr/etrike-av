@@ -312,6 +312,12 @@ It provides:
 
 #### 5.3.1 Real sensor (bench / vehicle) — 3D lidar cloud
 
+> **Quickest option — standalone viewer:** if you only want to see the raw
+> point cloud (no Autoware stack), run on the host:
+> `./scripts/lidar_standalone.sh` — starts the Nebula driver (`udp_only`, all
+> params + CSVs wired) and RViz2 in its own container. Details in
+> `shared.md` ("LiDAR standalone viewer") and `etrike_lidar_viewer/`.
+
 Ensure you are inside the container (`./docker/shell.sh`) when running these:
 ```bash
 # Via the bring-up script (recommended, inside the container):
