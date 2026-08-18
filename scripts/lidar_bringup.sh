@@ -25,7 +25,7 @@
 #                  lidar point cloud displays). The stock autoware.rviz is
 #                  top-down (TopDownOrtho) and does NOT show the lidar cloud.
 
-set -euo pipefail
+set -eo pipefail  # NOTE: no -u — /opt/autoware/setup.bash fails under nounset (COLCON_TRACE unbound)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SENSOR_IP="192.168.1.201"
