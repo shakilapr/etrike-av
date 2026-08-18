@@ -1,0 +1,218 @@
+# Hesai XT32M2X LiDAR — Complete Integration Guide
+
+**Date:** 2026-08-18
+**Sensor:** Hesai XT32M2X (32-channel mechanical lidar)
+**Driver:** Nebula (`sensor_model: PandarXT32M` — maps to the `PacketXT32M2X` decoder)
+**Target Platform:** Jetson Orin + Docker (`universe-cuda-humble`)
+
+---
+
+## 0. Prerequisites (first time only)
+
+Before any of the sections below, the following must already be in place on the Jetson:
+
+1. **Apply the Nebula firetime patch** so the driver loads the device-specific
+   firing times (see Section 6). Without it, the decoder uses a hard-coded
+   formula that differs from the device CSV by ~5.6 µs mean:
+   ```bash
+   ./scripts/apply_nebula_firetime_patch.sh
+   ```
+2. **Build the custom packages** (inside the container):
+   ```bash
+   ./docker/shell.sh
+   # Inside the container:
+   source /opt/autoware/setup.bash
+   cd /workspace/autoware
+   colcon build --symlink-install --packages-select \
+     etrike_common_launch etrike_sensor_kit_launch etrike_sensor_kit_description \
+     nebula_hesai_common nebula_hesai_decoders nebula_hesai
+   ```
+3. **Allow the sensor's management ports** on the Jetson firewall (per the
+   XT32M2X user manual): TCP `9347` (PTC, used by Nebula with
+   `setup_sensor:=true`), TCP/HTTP `80` (web control), and UDP `319`/`320`
+   (PTP 1588v2). UDP `2368` (point cloud) and UDP `10110` (GNSS time sync)
+   are also received by the host.
+
+---
+
+## 1. Initial Connection and Visualization
+
+To first connect the sensor and retrieve a raw point cloud:
+
+### 1.1 Network Setup
+1. Connect the LiDAR to the Jetson Orin via Ethernet.
+2. Configure the Jetson's network interface to communicate with the sensor
+   (sensor default IP is `192.168.1.201`):
+   ```bash
+   sudo ./scripts/setup_lidar_network.sh eth0 192.168.1.10 192.168.1.201
+   ```
+
+### 1.2 Bring-up Pipeline
+Use the automated bring-up script to verify UDP packets on port `2368` and
+launch the full sensing stack (Nebula driver + preprocessing):
+```bash
+./scripts/lidar_bringup.sh
+```
+* **Visualization (Jetson):** RViz2 opens automatically as part of the launch.
+  Add a `PointCloud2` display for `/sensing/lidar/top/pointcloud_before_sync`.
+  The cloud itself is published in the **`lidar_link`** sensor frame
+  (`output_as_sensor_frame:=true` in our container launch); set the RViz fixed
+  frame to `base_link` (TF exists once the stack is up) or `lidar_link`.
+* **Visualization (Windows):** Alternatively, connect the LiDAR directly to a
+  Windows PC and use the official **PandarView2** software for quick bench
+  testing (manual is in `docs/XT32M/PandarView2_User_Manual_PV2-en-250810.pdf`).
+
+> **Note:** `setup_sensor:=true` (default) makes Nebula configure the sensor
+> over PTC (TCP 9347). Verify the sensor streams with:
+> `tcpdump -i eth0 udp port 2368 -c 10`.
+
+---
+
+## 2. Environment Mapping
+
+Mapping requires recording the point cloud and feeding it into a SLAM/mapping
+pipeline while driving the vehicle.
+
+### 2.1 Start the Sensor and Time Sync
+Before recording, activate time synchronization so timestamps don't drift
+during movement. The XT32M2X supports **two clock sources** (manual §4.2.3):
+
+* **GNSS** — PPS + NMEA (GPRMC/GPGGA) over the GNSS port (RS232).
+* **PTP (IEEE 1588v2)** — over Ethernet. When PTP is tracking/locked, the
+  full second comes from PTP and the **PPS signal is not required**.
+
+To use PTP, a **PTP grandmaster must exist on the network** (e.g., a
+GNSS/INS-driven switch or card). The script below only **slaves the Jetson**
+to that grandmaster — it does not create one:
+
+```bash
+sudo ./scripts/setup_ptp.sh eth0
+```
+
+The LiDAR's own PTP role is configured by Nebula when `setup_sensor:=true`
+(`ptp_profile:=1588v2`, `ptp_domain:=0`, `ptp_transport_type:=UDP`).
+
+### 2.2 Launch the LiDAR driver
+```bash
+ros2 launch autoware_launch autoware.launch.xml \
+  map_path:=/autoware_map/your-map \
+  vehicle_model:=etrike_vehicle \
+  sensor_model:=etrike_sensor_kit \
+  launch_sensing_driver:=true
+```
+
+### 2.3 Record the Data
+While driving the vehicle, record the sensor topics to a ROS bag:
+```bash
+ros2 bag record \
+  /sensing/lidar/top/pointcloud_raw_ex \
+  /sensing/lidar/top/pointcloud_before_sync \
+  /tf /tf_static \
+  /diagnostics
+```
+* Prefer the **raw** cloud (`pointcloud_raw_ex`) for offline re-processing;
+  `pointcloud_before_sync` is the distortion-corrected output and is what
+  localization consumes live.
+* `/sensing/imu/imu_data` is currently a **stub** (no IMU hardware yet) —
+  recording it produces nothing. Add it to the bag only after a real IMU is
+  integrated (see Section 5).
+* GNSS time-sync packets arrive on UDP `10110` (our `gnss_port` setting) if
+  you later feed a GNSS receiver through the sensor's GNSS port.
+
+### 2.4 Process the Map
+Process the resulting bag using a mapping algorithm (e.g., NDT Mapping or
+LIO-SAM). The integration code sets the `lidar_link` frame at the roof's
+optical center (`z=1.7464` = 1.700 m roof + 0.0464 m optical offset, per
+`etrike_vehicle_description/urdf/vehicle.xacro`), so the map aligns with the
+vehicle footprint.
+
+---
+
+## 3. Simulation Autonomous Driving
+
+In simulation, the real Nebula driver is disabled (`planning_simulator`
+sets `launch_sensing:=false`), but the custom sensor kit configuration is
+still utilized to validate the pipeline and geometry.
+
+Launch the planning simulator natively on the Jetson:
+```bash
+./docker/run.sh
+```
+
+*(This shortcut launches `planning_simulator.launch.xml` with
+`vehicle_model:=etrike_vehicle` and `sensor_model:=etrike_sensor_kit`,
+loading the E-Trike vehicle model and the XT32M2X sensor geometry into RViz.)*
+
+> **Known limitation:** the planning simulator defaults to
+> `localization_sim_mode:=api`, which requires setting the initial pose via
+> the Autoware API — the RViz "2D Pose Estimate" tool (`/initialpose`) is
+> ignored in that mode, so the vehicle may not move. Pass
+> `localization_sim_mode:=pose_topic` to `planning_simulator.launch.xml`
+> (or use the Autoware API) to enable RViz pose input.
+
+---
+
+## 4. Real-World Autonomous Driving
+
+For real driving, timing and calibration are paramount to prevent point cloud
+distortion, which can negatively impact localization.
+
+### 4.1 Hardware Time Sync
+The Jetson's internal clock is not accurate enough for a moving vehicle.
+Slave the Jetson and LiDAR to your GNSS-driven PTP grandmaster:
+```bash
+sudo ./scripts/setup_ptp.sh eth0
+```
+Verify the sync before driving:
+```bash
+chronyc tracking          # host clock offset vs. PTP/NTP source
+# or, for the ptp4l offset itself:
+sudo pmc -u -b 0 'GET CURRENT_DATA_SET'
+```
+With software timestamping, expect offsets in the tens of microseconds;
+sub-microsecond sync requires hardware timestamping (PTP-capable NIC/TSN switch).
+
+### 4.2 Launch Autoware
+Start the full stack with the real driver enabled. This routes the LiDAR data
+through the Nebula driver and the point-cloud preprocessing pipeline
+(cropbox → distortion corrector → ring outlier) into Autoware's localization
+and perception modules.
+```bash
+ros2 launch autoware_launch autoware.launch.xml \
+  map_path:=/autoware_map/your-map \
+  vehicle_model:=etrike_vehicle \
+  sensor_model:=etrike_sensor_kit \
+  launch_sensing_driver:=true
+```
+
+---
+
+## 5. Further Testing Requirements (Phase 3)
+
+To ensure real-world reliability, conduct the following validation tests on
+the physical vehicle:
+
+| Component | Status | Required Validation Test |
+|-----------|--------|--------------------------|
+| **Firetime Patch** | Critical | Confirm the decoder loaded the CSV at startup — the Nebula log must show `Loaded firetime configuration from .../XT32M2X_Firetime.csv (32 channels)`. If it shows a failure message, the patch/CSV path is wrong. (At e-trike speeds the ~5.6 µs error is too small to see as smearing; treat "curved poles" as a PTP/timestamp symptom instead.) |
+| **PTP Clock Sync** | Pending HW | While running `ptp4l` and `chrony`, monitor `chronyc tracking` and `pmc` offsets. With software timestamping, keep the host↔grandmaster offset in the tens-of-µs range; check the LiDAR's PTP state (Free Run / Tracking / Locked / Frozen) in the sensor web control. The lidar timestamp vs. host clock should agree to the same order. |
+| **IMU Integration**| Stubbed | Replace the IMU stub (`etrike_sensor_kit_launch/launch/imu.launch.xml`) with the real driver. The TIER IV reference unit (Tamagawa AU7684) publishes at 100 Hz; verify `/sensing/imu/imu_data` publishes at the IMU's rated rate and that the `imu_link` frame is wired via TF to `lidar_link` for accurate point-cloud de-skewing. |
+
+### 5.1 Automated Integration Tests
+Whenever you change the launch files or configurations, run the built-in unit
+tests. They require the ROS 2 environment, so run them inside the container on
+the Jetson:
+
+```bash
+./docker/shell.sh
+
+# Inside the container:
+source /opt/autoware/setup.bash
+cd /workspace/autoware
+colcon test --packages-select etrike_common_launch etrike_sensor_kit_launch etrike_sensor_kit_description
+colcon test-result --verbose
+```
+
+---
+
+*Keep this file updated as the project evolves.*
