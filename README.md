@@ -67,4 +67,5 @@ the list of patches applied to upstream Autoware.
 | `docs/SYNCTHING_SETUP.md` | Linux-Windows sync |
 | `docs/ETRIKE_AV_GIT_WORKFLOW.md` | Daily Git workflow + FAQ |
 | `docs/RECOVERY.md` | Disaster recovery from GitHub only |
+| `docs/ETRIKE_RUN.md` | Quick start: launch, drive, stop |
 | `UPSTREAM_MODIFICATIONS.md` | Upstream patches registry |
