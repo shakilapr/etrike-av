@@ -87,7 +87,7 @@ This launches the **E-Trike planning simulator** with:
 > ThirdPersonFollower view with the lidar `pointcloud_raw_ex` and
 > `pointcloud_before_sync` displays pre-loaded. In the simulator there is no
 > real point cloud (driver disabled); those displays populate only with the
-> physical sensor. See `docs/RVIZ_VIEWING.md` for details.
+> physical sensor. See `docs/HESAI_GUIDE.md` Section 5 for details.
 
 ### Run tests
 ```bash

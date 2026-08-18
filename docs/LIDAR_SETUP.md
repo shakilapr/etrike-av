@@ -188,7 +188,7 @@ The default `autoware.rviz` used by `autoware.launch.xml` is a 2D top-down
 (`TopDownOrtho`) view and has no display for the lidar's own clouds. Use the
 dedicated 3D config shipped in `etrike_common_launch/rviz/etrike.rviz`, which
 defaults to ThirdPersonFollower and pre-adds the `pointcloud_raw_ex` +
-`pointcloud_before_sync` displays (full guide: `docs/RVIZ_VIEWING.md`):
+`pointcloud_before_sync` displays (full guide: `docs/HESAI_GUIDE.md` Section 5):
 ```bash
 ros2 launch autoware_launch autoware.launch.xml \
   map_path:=/autoware_map/your-map \
