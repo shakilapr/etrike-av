@@ -4,7 +4,9 @@
 # Uses the official Autoware image as the base layer; our workspace builds on
 # top and shadows any packages we've modified.
 #
-# Only builds what we own or patched — never the entire Autoware checkout.
+# Build order:
+#   1. Patched Nebula packages (--packages-select, no transitive deps)
+#   2. Our E-Trike packages (--packages-up-to, picks up just-built Nebula)
 
 set -euo pipefail
 
@@ -26,6 +28,15 @@ docker run -it --rm \
   /bin/bash -c "
     source /opt/autoware/setup.bash && \
     cd /workspace/autoware && \
+    echo '--- Step 1: Rebuilding patched Nebula packages ---' && \
+    colcon build --symlink-install \
+      --cmake-args -DCMAKE_BUILD_TYPE=Release \
+      --packages-select \
+        nebula_hesai_common \
+        nebula_hesai_decoders \
+        nebula_hesai \
+      2>&1 && \
+    echo '--- Step 2: Building E-Trike packages ---' && \
     colcon build --symlink-install \
       --cmake-args -DCMAKE_BUILD_TYPE=Release \
       --packages-up-to \
@@ -37,8 +48,5 @@ docker run -it --rm \
         etrike_sensor_kit_launch \
         etrike_common_launch \
         etrike_stability_guard \
-        nebula_hesai \
-        nebula_hesai_decoders \
-        nebula_hesai_common \
       2>&1
   "
