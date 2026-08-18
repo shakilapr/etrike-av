@@ -17,8 +17,9 @@
 Before any of the sections below, the following must already be in place on the Jetson:
 
 1. **Apply the Nebula firetime patch** so the driver loads the device-specific
-   firing times (see Section 6). Without it, the decoder uses a hard-coded
-   formula that differs from the device CSV by ~5.6 µs mean:
+   firing times. Without it, the decoder uses a hard-coded
+   formula that differs from the device CSV by ~5.6 µs mean (details in
+   `docs/LIDAR_SETUP.md`, Section 9):
    ```bash
    ./scripts/apply_nebula_firetime_patch.sh
    ```
