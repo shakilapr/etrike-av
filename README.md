@@ -36,15 +36,24 @@ The Docker image provides ROS 2, CUDA, and all Autoware pre-built at `/opt/autow
 
 See `docs/HOW_BUILD_WORKS.md` for details.
 
-## Recovery
+## Recovery (fresh clone)
 
 ```bash
 git clone https://github.com/shakilapr/etrike-av.git ~/av_project
-cd ~/av_project/autoware
-vcs import src < ../repositories/our_autoware.repos
-# restore data/ and simulator/AWSIM/ from backup
-./docker/build.sh
+cd ~/av_project
+./scripts/bootstrap_workspace.sh   # imports upstream Autoware + applies patches
+./docker/build.sh                  # builds our packages + patched upstream
+./run_tests.sh                     # runs all E-Trike tests
 ```
+
+`bootstrap_workspace.sh` does:
+1. `vcs import autoware/src < repositories/autoware.repos` (fetches pinned upstream)
+2. Verifies expected upstream revisions
+3. Applies E-Trike patches (Nebula firetime, etc.)
+4. Verifies all patches applied
+
+See `docs/HOW_BUILD_WORKS.md` for details and `UPSTREAM_MODIFICATIONS.md` for
+the list of patches applied to upstream Autoware.
 
 ## Documentation
 
