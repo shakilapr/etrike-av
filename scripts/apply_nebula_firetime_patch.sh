@@ -98,7 +98,11 @@ struct HesaiFiretimeConfiguration
 
 '''
 marker = '/// @brief struct for Hesai correction configuration (for AT)'
+if marker not in content:
+    raise RuntimeError('PATCH FAILED: hesai_common.hpp marker not found — upstream may have changed')
 content = content.replace(marker, firetime_struct + marker, 1)
+# Verify insertion succeeded
+assert 'HesaiFiretimeConfiguration' in content, 'PATCH FAILED: HesaiFiretimeConfiguration not in output'
 with open('$COMMON_HPP', 'w') as f:
     f.write(content)
 "
@@ -123,6 +127,8 @@ old = '''  [[nodiscard]] virtual point_filters::BlockageState get_blockage_type(
     return point_filters::BlockageState::UNSURE;
   }
 };'''
+if old not in content:
+    raise RuntimeError('PATCH FAILED: hesai_sensor.hpp class-closing marker not found — upstream may have changed')
 new = '''  [[nodiscard]] virtual point_filters::BlockageState get_blockage_type(
     uint16_t /* raw_distance */) const
   {
@@ -138,6 +144,7 @@ new = '''  [[nodiscard]] virtual point_filters::BlockageState get_blockage_type(
   }
 };'''
 content = content.replace(old, new, 1)
+assert 'set_firetime_configuration' in content, 'PATCH FAILED: set_firetime_configuration not in output'
 with open('$SENSOR_HPP', 'w') as f:
     f.write(content)
 "
@@ -281,15 +288,18 @@ old = '''    if (sensor_configuration->downsample_mask_path) {
       mask_filter_ = point_filters::DownsampleMaskFilter(
         sensor_configuration->downsample_mask_path.value(), SensorT::fov_mdeg.azimuth,
         SensorT::peak_resolution_mdeg.azimuth, SensorT::packet_t::n_channels,
-        logger_->child(\"Downsample Mask\"), true, sensor_.get_dither_transform());
+        logger_->child("Downsample Mask"), true, sensor_.get_dither_transform());
     }
   }'''
+
+if old not in content:
+    raise RuntimeError('PATCH FAILED: hesai_decoder.hpp downsample_mask_path block not found — upstream may have changed')
 
 new = '''    if (sensor_configuration->downsample_mask_path) {
       mask_filter_ = point_filters::DownsampleMaskFilter(
         sensor_configuration->downsample_mask_path.value(), SensorT::fov_mdeg.azimuth,
         SensorT::peak_resolution_mdeg.azimuth, SensorT::packet_t::n_channels,
-        logger_->child(\"Downsample Mask\"), true, sensor_.get_dither_transform());
+        logger_->child("Downsample Mask"), true, sensor_.get_dither_transform());
     }
 
     if (!sensor_configuration->firetime_path.empty()) {
@@ -299,20 +309,21 @@ new = '''    if (sensor_configuration->downsample_mask_path) {
         sensor_.set_firetime_configuration(firetime_config);
         NEBULA_LOG_STREAM(
           logger_->info,
-          \"Loaded firetime configuration from \" << sensor_configuration->firetime_path
-                                                << \" (\" << firetime_config.firetime_offset_ns_map.size()
-                                                << \" channels)\");
+          "Loaded firetime configuration from " << sensor_configuration->firetime_path
+                                                << " (" << firetime_config.firetime_offset_ns_map.size()
+                                                << " channels)");
       } else {
         NEBULA_LOG_STREAM(
           logger_->warn,
-          \"Failed to load firetime configuration from \"
-            << sensor_configuration->firetime_path << \": \" << util::to_string(status)
-            << \". Falling back to hard-coded firing-time formula.\");
+          "Failed to load firetime configuration from "
+            << sensor_configuration->firetime_path << ": " << util::to_string(status)
+            << ". Falling back to hard-coded firing-time formula.");
       }
     }
   }'''
 
 content = content.replace(old, new, 1)
+assert 'firetime_path' in content, 'PATCH FAILED: firetime_path not in hesai_decoder.hpp output'
 with open('$DECODER_HPP', 'w') as f:
     f.write(content)
 "
@@ -329,19 +340,44 @@ else
 with open('$WRAPPER_CPP', 'r') as f:
     content = f.read()
 old = '''  config.calibration_download_enabled =
-    declare_parameter<bool>(\"calibration_download_enabled\", param_read_only());'''
+    declare_parameter<bool>("calibration_download_enabled", param_read_only());'''
+if old not in content:
+    raise RuntimeError('PATCH FAILED: hesai_ros_wrapper.cpp calibration_download_enabled marker not found — upstream may have changed')
 new = '''  config.calibration_download_enabled =
-    declare_parameter<bool>(\"calibration_download_enabled\", param_read_only());
+    declare_parameter<bool>("calibration_download_enabled", param_read_only());
   config.firetime_path =
-    declare_parameter<std::string>(\"firetime_file_path\", \"\", param_read_only());'''
+    declare_parameter<std::string>("firetime_file_path", "", param_read_only());'''
 content = content.replace(old, new, 1)
+assert 'firetime_file_path' in content, 'PATCH FAILED: firetime_file_path not in hesai_ros_wrapper.cpp output'
 with open('$WRAPPER_CPP', 'w') as f:
     f.write(content)
 "
 fi
 
+# --- 6. Final verification: ensure all expected markers exist ---
 echo ""
-echo "=== Nebula firetime patch applied successfully ==="
+echo "[VERIFY] Checking all patched files..."
+FAIL=0
+for f in "$COMMON_HPP" "$SENSOR_HPP" "$XT32M_HPP" "$DECODER_HPP" "$WRAPPER_CPP"; do
+    if [ ! -f "$f" ]; then
+        echo "  MISSING: $f"
+        FAIL=1
+    fi
+done
+grep -q "HesaiFiretimeConfiguration" "$COMMON_HPP"       || { echo "  FAIL: HesaiFiretimeConfiguration not in hesai_common.hpp"; FAIL=1; }
+grep -q "set_firetime_configuration" "$SENSOR_HPP"       || { echo "  FAIL: set_firetime_configuration not in hesai_sensor.hpp"; FAIL=1; }
+grep -q "firetime_offsets_ns_" "$XT32M_HPP"              || { echo "  FAIL: firetime_offsets_ns_ not in pandar_xt32m.hpp"; FAIL=1; }
+grep -q "firetime_path" "$DECODER_HPP"                   || { echo "  FAIL: firetime_path not in hesai_decoder.hpp"; FAIL=1; }
+grep -q "firetime_file_path" "$WRAPPER_CPP"              || { echo "  FAIL: firetime_file_path not in hesai_ros_wrapper.cpp"; FAIL=1; }
+
+if [ "$FAIL" -ne 0 ]; then
+    echo ""
+    echo "=== PATCH VERIFICATION FAILED — see errors above ==="
+    exit 1
+fi
+
+echo ""
+echo "=== Nebula firetime patch applied and verified ==="
 echo "Modified files:"
 echo "  $COMMON_HPP"
 echo "  $SENSOR_HPP"
