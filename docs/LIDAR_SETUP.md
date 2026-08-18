@@ -188,7 +188,7 @@ The default `autoware.rviz` used by `autoware.launch.xml` is a 2D top-down
 (`TopDownOrtho`) view and has no display for the lidar's own clouds. Use the
 dedicated 3D config shipped in `etrike_common_launch/rviz/etrike.rviz`, which
 defaults to ThirdPersonFollower and pre-adds the `pointcloud_raw_ex` +
-`pointcloud_before_sync` displays:
+`pointcloud_before_sync` displays (full guide: `docs/RVIZ_VIEWING.md`):
 ```bash
 ros2 launch autoware_launch autoware.launch.xml \
   map_path:=/autoware_map/your-map \
@@ -253,12 +253,20 @@ Each package has pytest tests runnable via `colcon test`:
 
 | Package | Test file | Tests |
 |---------|-----------|-------|
-| `etrike_common_launch` | `test/test_calibration_and_configs.py` | 8 — angle CSV (channels, elevation, azimuth), firetime CSV (channels, values, formula diff), YAML loads |
+| `etrike_common_launch` | `test/test_calibration_and_configs.py` | 9 — angle CSV (channels, elevation, azimuth), firetime CSV (channels, values, formula diff), YAML loads, etrike.rviz validation |
 | `etrike_sensor_kit_launch` | `test/test_launch_xml.py` | 7 — XML structure, include wiring (lidar, IMU, velocity), namespace, frame_id |
 | `etrike_sensor_kit_description` | `test/test_description.py` | 5 — xacro XML, no lidar_link re-parenting, calibration YAML schema |
 
-Run all E-Trike sensor tests:
+Run all E-Trike sensor tests (on the Jetson):
 ```bash
+# One-shot in Docker as your user (no ownership conflicts):
+./run_tests.sh
+
+# Or interactively inside the container:
+./docker/shell.sh
+# Inside the container:
+source /opt/autoware/setup.bash
+cd /workspace/autoware
 colcon test --packages-select \
   etrike_common_launch \
   etrike_sensor_kit_launch \
@@ -266,7 +274,7 @@ colcon test --packages-select \
 colcon test-result --verbose
 ```
 
-**Verified on Jetson Orin (2026-08-17):** All 20 pytest tests pass (0 errors, 0 failures). All linters pass. Nebula compiles with firetime patch (3 packages). URDF xacro assembles correctly. TF tree confirmed: `base_footprint → base_link → lidar_link` + `base_link → sensor_kit_base_link`. Planning simulator runs successfully with `vehicle_model:=etrike_vehicle sensor_model:=etrike_sensor_kit`.
+**Verified on Jetson Orin (2026-08-17):** All 21 pytest tests pass (0 errors, 0 failures). All linters pass. Nebula compiles with firetime patch (3 packages). URDF xacro assembles correctly. TF tree confirmed: `base_footprint → base_link → lidar_link` + `base_link → sensor_kit_base_link`. Planning simulator runs successfully with `vehicle_model:=etrike_vehicle sensor_model:=etrike_sensor_kit`.
 
 ---
 

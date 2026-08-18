@@ -63,7 +63,8 @@ launch the full sensing stack (Nebula driver + preprocessing):
   but the default `autoware.rviz` config is a **top-down (TopDownOrtho) 2D view
   and does NOT include the lidar's own point cloud topics**. To actually see
   the XT32M2X cloud, use the dedicated 3D config that ships with our sensor
-  kit, or add the display manually:
+  kit, or add the display manually (see
+  `docs/RVIZ_VIEWING.md` for the full guide):
 
   ```bash
   # Option A — dedicated 3D config (preferred):
@@ -253,6 +254,11 @@ tests. They require the ROS 2 environment, so run them inside the container on
 the Jetson:
 
 ```bash
+# Option A — one-shot (recommended): runs in Docker as your user, so test
+# artifacts stay yours (no root/aw ownership conflicts on rebuild):
+./run_tests.sh
+
+# Option B — interactive:
 ./docker/shell.sh
 
 # Inside the container:
