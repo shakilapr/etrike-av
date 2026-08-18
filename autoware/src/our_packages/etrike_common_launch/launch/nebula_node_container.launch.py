@@ -18,6 +18,10 @@
 # device-specific angle-correction CSV can be used without touching vendored Nebula.
 
 import launch
+import os
+import yaml
+
+from ament_index_python.packages import get_package_share_directory
 from launch.actions import DeclareLaunchArgument
 from launch.actions import OpaqueFunction
 from launch.actions import SetLaunchConfiguration
@@ -46,6 +50,16 @@ def get_vehicle_info(context):
     gp = context.launch_configurations.get("ros_params", {})
     if not gp:
         gp = dict(context.launch_configurations.get("global_params", {}))
+    if not gp:
+        # Standalone launch (not under autoware.launch, which injects the
+        # global vehicle params): read the E-Trike dimensions from the
+        # vehicle description package.
+        vehicle_info_file = os.path.join(
+            get_package_share_directory("etrike_vehicle_description"),
+            "config", "vehicle_info.param.yaml",
+        )
+        with open(vehicle_info_file, "r") as f:
+            gp = yaml.safe_load(f)["/**"]["ros__parameters"]
     p = {}
     p["vehicle_length"] = gp["front_overhang"] + gp["wheel_base"] + gp["rear_overhang"]
     p["vehicle_width"] = gp["wheel_tread"] + gp["left_overhang"] + gp["right_overhang"]
