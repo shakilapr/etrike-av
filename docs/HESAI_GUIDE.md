@@ -41,13 +41,18 @@ Before any of the sections below, the following must already be in place on the 
 
 ---
 
-## 1. Initial Connection and Visualization
+## 1. Initial Connection and Visualization (Quick Start)
 
-To first connect the sensor and retrieve a raw point cloud:
+To first connect the sensor and retrieve a raw point cloud, you must SSH into the Jetson, navigate to the project workspace, configure the network, and run the bring-up script. 
 
 ### 1.1 Network Setup
 1. Connect the LiDAR to the Jetson Orin via Ethernet.
-2. Configure the Jetson's network interface to communicate with the sensor
+2. Open your terminal and SSH into the Jetson, then navigate to the workspace:
+   ```bash
+   ssh med1@172.16.25.56
+   cd ~/av_project
+   ```
+3. Configure the Jetson's network interface to communicate with the sensor
    (sensor default IP is `192.168.1.201`):
    ```bash
    sudo ./scripts/setup_lidar_network.sh eth0 192.168.1.10 192.168.1.201
@@ -55,8 +60,10 @@ To first connect the sensor and retrieve a raw point cloud:
 
 ### 1.2 Bring-up Pipeline
 Use the automated bring-up script to verify UDP packets on port `2368` and
-launch the full sensing stack (Nebula driver + preprocessing):
+launch the full sensing stack (Nebula driver + preprocessing). This must be run inside the Autoware container:
 ```bash
+./docker/shell.sh
+# Inside the container:
 ./scripts/lidar_bringup.sh
 ```
 * **Visualization (Jetson):** RViz2 opens automatically as part of the launch,
@@ -67,6 +74,8 @@ launch the full sensing stack (Nebula driver + preprocessing):
 
   ```bash
   # Option A — dedicated 3D config (preferred):
+  ./docker/shell.sh
+  # Inside the container:
   ros2 launch autoware_launch autoware.launch.xml \
     map_path:=/autoware_map/your-map \
     vehicle_model:=etrike_vehicle \
@@ -127,7 +136,10 @@ The LiDAR's own PTP role is configured by Nebula when `setup_sensor:=true`
 (`ptp_profile:=1588v2`, `ptp_domain:=0`, `ptp_transport_type:=UDP`).
 
 ### 2.2 Launch the LiDAR driver
+Ensure you are inside the Docker container before launching:
 ```bash
+./docker/shell.sh
+# Inside the container:
 ros2 launch autoware_launch autoware.launch.xml \
   map_path:=/autoware_map/your-map \
   vehicle_model:=etrike_vehicle \
@@ -136,8 +148,10 @@ ros2 launch autoware_launch autoware.launch.xml \
 ```
 
 ### 2.3 Record the Data
-While driving the vehicle, record the sensor topics to a ROS bag:
+While driving the vehicle, record the sensor topics to a ROS bag (from inside the container):
 ```bash
+./docker/shell.sh
+# Inside the container:
 ros2 bag record \
   /sensing/lidar/top/pointcloud_raw_ex \
   /sensing/lidar/top/pointcloud_before_sync \
@@ -225,8 +239,10 @@ sub-microsecond sync requires hardware timestamping (PTP-capable NIC/TSN switch)
 Start the full stack with the real driver enabled. This routes the LiDAR data
 through the Nebula driver and the point-cloud preprocessing pipeline
 (cropbox → distortion corrector → ring outlier) into Autoware's localization
-and perception modules.
+and perception modules. Remember to run this inside the container:
 ```bash
+./docker/shell.sh
+# Inside the container:
 ros2 launch autoware_launch autoware.launch.xml \
   map_path:=/autoware_map/your-map \
   vehicle_model:=etrike_vehicle \
@@ -278,6 +294,7 @@ It provides:
 
 #### 5.3.1 Real sensor (bench / vehicle) — 3D lidar cloud
 
+Ensure you are inside the container (`./docker/shell.sh`) when running these:
 ```bash
 # Via the bring-up script (recommended):
 ./scripts/lidar_bringup.sh --rviz3d
