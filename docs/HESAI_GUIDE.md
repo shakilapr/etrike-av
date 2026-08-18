@@ -5,6 +5,11 @@
 **Driver:** Nebula (`sensor_model: PandarXT32M` — maps to the `PacketXT32M2X` decoder)
 **Target Platform:** Jetson Orin + Docker (`universe-cuda-humble`)
 
+> **Note:** The XT32M2X contains **no IMU**. It measures only distance,
+> azimuth, and reflectivity; the GNSS/PTP interfaces are for time
+> synchronization only. An IMU (e.g., Tamagawa AU7684) is a separate sensor
+> and is planned as future work (see Section 5).
+
 ---
 
 ## 0. Prerequisites (first time only)
@@ -77,7 +82,9 @@ pipeline while driving the vehicle.
 Before recording, activate time synchronization so timestamps don't drift
 during movement. The XT32M2X supports **two clock sources** (manual §4.2.3):
 
-* **GNSS** — PPS + NMEA (GPRMC/GPGGA) over the GNSS port (RS232).
+* **GNSS** — PPS + NMEA (GPRMC/GPGGA) connected **into the lidar's GNSS
+  port** (RS232). The lidar locks its clock to the PPS edge and forwards the
+  NMEA data to the host on UDP `10110` (our `gnss_port` setting).
 * **PTP (IEEE 1588v2)** — over Ethernet. When PTP is tracking/locked, the
   full second comes from PTP and the **PPS signal is not required**.
 
@@ -113,9 +120,9 @@ ros2 bag record \
 * Prefer the **raw** cloud (`pointcloud_raw_ex`) for offline re-processing;
   `pointcloud_before_sync` is the distortion-corrected output and is what
   localization consumes live.
-* `/sensing/imu/imu_data` is currently a **stub** (no IMU hardware yet) —
-  recording it produces nothing. Add it to the bag only after a real IMU is
-  integrated (see Section 5).
+* `/sensing/imu/imu_data` is currently a **stub** (no IMU hardware yet — the
+  XT32M2X has no IMU built in) — recording it produces nothing. Add it to the
+  bag only after a real IMU is integrated (see Section 5).
 * GNSS time-sync packets arrive on UDP `10110` (our `gnss_port` setting) if
   you later feed a GNSS receiver through the sensor's GNSS port.
 
@@ -196,7 +203,7 @@ the physical vehicle:
 |-----------|--------|--------------------------|
 | **Firetime Patch** | Critical | Confirm the decoder loaded the CSV at startup — the Nebula log must show `Loaded firetime configuration from .../XT32M2X_Firetime.csv (32 channels)`. If it shows a failure message, the patch/CSV path is wrong. (At e-trike speeds the ~5.6 µs error is too small to see as smearing; treat "curved poles" as a PTP/timestamp symptom instead.) |
 | **PTP Clock Sync** | Pending HW | While running `ptp4l` and `chrony`, monitor `chronyc tracking` and `pmc` offsets. With software timestamping, keep the host↔grandmaster offset in the tens-of-µs range; check the LiDAR's PTP state (Free Run / Tracking / Locked / Frozen) in the sensor web control. The lidar timestamp vs. host clock should agree to the same order. |
-| **IMU Integration**| Stubbed | Replace the IMU stub (`etrike_sensor_kit_launch/launch/imu.launch.xml`) with the real driver. The TIER IV reference unit (Tamagawa AU7684) publishes at 100 Hz; verify `/sensing/imu/imu_data` publishes at the IMU's rated rate and that the `imu_link` frame is wired via TF to `lidar_link` for accurate point-cloud de-skewing. |
+| **IMU Integration**| Future work | **The XT32M2X does NOT contain an IMU** — it measures only distance, azimuth, and reflectivity (manual §1.5); its GNSS/PTP interfaces are for time synchronization only. An IMU must be sourced and installed as a separate sensor. Replace the IMU stub (`etrike_sensor_kit_launch/launch/imu.launch.xml`) with the real driver. The TIER IV reference unit (Tamagawa AU7684) publishes at 100 Hz; verify `/sensing/imu/imu_data` publishes at the IMU's rated rate and that the `imu_link` frame is wired via TF to `lidar_link` for accurate point-cloud de-skewing. |
 
 ### 5.1 Automated Integration Tests
 Whenever you change the launch files or configurations, run the built-in unit

@@ -259,3 +259,8 @@ colcon test-result --verbose
 | 1 | Done | Create `etrike_sensor_kit_launch` (3 packages), wire `docker/run.sh`, build + test on Jetson, verify planning_simulator |
 | 2 | Ready | Bench bring-up with real XT32M2X — scripts ready (`lidar_bringup.sh`, `setup_lidar_network.sh`), just connect sensor |
 | 3 | Partial | Firetime-CSV patch done, PTP config done, IMU stub done. Remaining: PTP grandmaster hardware, real IMU driver, full `autoware.launch.xml` testing |
+
+> **IMU note:** The Hesai XT32M2X contains **no IMU** (it measures only
+> distance, azimuth, and reflectivity). The IMU is a separate sensor that
+> must be sourced and integrated — the current `imu.launch.xml` is only a
+> placeholder stub for future work.

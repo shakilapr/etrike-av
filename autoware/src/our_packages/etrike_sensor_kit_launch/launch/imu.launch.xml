@@ -1,5 +1,8 @@
 <launch>
   <!-- IMU launch stub for the E-Trike.
+       NOTE: The Hesai XT32M2X lidar does NOT contain an IMU (it measures
+       only distance/azimuth/reflectivity). The IMU is a separate sensor to
+       be sourced and installed later.
        When a physical IMU is connected, replace this with the actual IMU
        driver launch (e.g., tamagawa_imu, xsens, etc.) publishing to
        /sensing/imu/imu_data.
