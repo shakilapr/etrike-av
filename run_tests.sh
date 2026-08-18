@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run the E-Trike lidar package tests inside the Autoware container.
+# Run E-Trike package tests inside the Autoware container.
 #
 # Unlike ./docker/shell.sh (interactive), this is a one-shot command:
 #   ./run_tests.sh
@@ -9,10 +9,34 @@
 # the container's default user ('aw'). This avoids permission conflicts when
 # rebuilding/retesting afterwards.
 #
-# Covers: etrike_common_launch, etrike_sensor_kit_launch,
-# etrike_sensor_kit_description (pytest + linters).
+# Covers all eight E-Trike packages (pytest + linters).
 
-docker run --rm -u $(id -u):$(id -g) \
-  -v ~/av_project/autoware:/workspace/autoware \
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AUTOWARE_DIR="${SCRIPT_DIR}/autoware"
+
+if [ ! -d "$AUTOWARE_DIR/src/our_packages" ]; then
+    echo "ERROR: autoware workspace not found at $AUTOWARE_DIR"
+    exit 1
+fi
+
+echo "Running tests from: $AUTOWARE_DIR"
+
+docker run --rm -u "$(id -u):$(id -g)" \
+  -v "$AUTOWARE_DIR":/workspace/autoware \
   ghcr.io/autowarefoundation/autoware:universe-cuda-humble \
-  /bin/bash -c "source /opt/autoware/setup.bash && cd /workspace/autoware && colcon test --packages-select etrike_common_launch etrike_sensor_kit_launch etrike_sensor_kit_description && colcon test-result --verbose"
+  /bin/bash -c "
+    source /opt/autoware/setup.bash && \
+    cd /workspace/autoware && \
+    colcon test --packages-select \
+        autoware_vehicle_bridge \
+        etrike_protocol \
+        etrike_vehicle_description \
+        etrike_vehicle_launch \
+        etrike_sensor_kit_description \
+        etrike_sensor_kit_launch \
+        etrike_common_launch \
+        etrike_stability_guard && \
+    colcon test-result --verbose
+  "
