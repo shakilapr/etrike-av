@@ -6,7 +6,7 @@
 #
 # Build order:
 #   1. Patched Nebula packages (--packages-select, no transitive deps)
-#   2. Our E-Trike packages (--packages-up-to, picks up just-built Nebula)
+#   2. Our E-Trike packages (--packages-select, deps from Docker image)
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ docker run -it --rm \
     echo '--- Step 2: Building E-Trike packages ---' && \
     colcon build --symlink-install \
       --cmake-args -DCMAKE_BUILD_TYPE=Release \
-      --packages-up-to \
+      --packages-select \
         autoware_vehicle_bridge \
         etrike_protocol \
         etrike_vehicle_description \
