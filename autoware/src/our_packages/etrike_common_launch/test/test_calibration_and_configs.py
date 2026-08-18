@@ -142,3 +142,33 @@ def test_firetime_differs_from_nebula_hardcoded_formula() -> None:
         f"mean firetime difference {mean_diff:.3f} us is too small — "
         "the device CSV should differ meaningfully from Nebula's hard-coded formula"
     )
+
+
+def test_etrike_rviz_config_exists_and_is_valid() -> None:
+    """etrike.rviz is the dedicated 3D config for viewing the lidar cloud.
+
+    The stock autoware.rviz used by the planning simulator is top-down
+    (TopDownOrtho) and does not include the lidar's own point cloud topics,
+    so this config exists to actually see the XT32M2X cloud in 3D.
+    """
+    p = _pkg_share() / "rviz" / "etrike.rviz"
+    assert p.is_file(), f"missing rviz config: {p}"
+    data = yaml.safe_load(p.read_text())
+
+    fixed_frame = data["Visualization Manager"]["Global Options"]["Fixed Frame"]
+    assert fixed_frame == "base_link", f"fixed frame should be base_link, got {fixed_frame}"
+
+    displays = data["Visualization Manager"]["Displays"]
+    topics = [d["Topic"]["Value"] for d in displays if "Topic" in d]
+    assert "/sensing/lidar/top/pointcloud_before_sync" in topics, (
+        "etrike.rviz must include the preprocessed lidar cloud display"
+    )
+    assert "/sensing/lidar/top/pointcloud_raw_ex" in topics, (
+        "etrike.rviz must include the raw lidar cloud display"
+    )
+
+    # Default view must be a 3D view (not TopDownOrtho) so the cloud is visible.
+    views = data["Visualization Manager"]["Views"]
+    assert views["Current"] == "ThirdPersonFollower", (
+        "etrike.rviz should default to a 3D view; got " + str(views["Current"])
+    )

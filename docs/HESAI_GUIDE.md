@@ -59,11 +59,37 @@ launch the full sensing stack (Nebula driver + preprocessing):
 ```bash
 ./scripts/lidar_bringup.sh
 ```
-* **Visualization (Jetson):** RViz2 opens automatically as part of the launch.
-  Add a `PointCloud2` display for `/sensing/lidar/top/pointcloud_before_sync`.
+* **Visualization (Jetson):** RViz2 opens automatically as part of the launch,
+  but the default `autoware.rviz` config is a **top-down (TopDownOrtho) 2D view
+  and does NOT include the lidar's own point cloud topics**. To actually see
+  the XT32M2X cloud, use the dedicated 3D config that ships with our sensor
+  kit, or add the display manually:
+
+  ```bash
+  # Option A — dedicated 3D config (preferred):
+  ros2 launch autoware_launch autoware.launch.xml \
+    map_path:=/autoware_map/your-map \
+    vehicle_model:=etrike_vehicle \
+    sensor_model:=etrike_sensor_kit \
+    launch_sensing_driver:=true \
+    rviz_config:=$(ros2 pkg prefix etrike_common_launch)/share/etrike_common_launch/rviz/etrike.rviz
+  # Or, when using the bring-up script:
+  ./scripts/lidar_bringup.sh --rviz3d
+  ```
+  `etrike.rviz` (in `etrike_common_launch/rviz/`) defaults to a
+  ThirdPersonFollower 3D view with `PointCloud2` displays for
+  `/sensing/lidar/top/pointcloud_raw_ex` and `pointcloud_before_sync`.
+
+  ```text
+  # Option B — manual setup in the stock RViz:
+  1. Panels → Add → By topic → /sensing/lidar/top/pointcloud_before_sync (PointCloud2)
+  2. Set Global Options → Fixed Frame to base_link
+  3. Switch the view: View panel → Current View → ThirdPersonFollower (or Orbit)
+  ```
+
   The cloud itself is published in the **`lidar_link`** sensor frame
-  (`output_as_sensor_frame:=true` in our container launch); set the RViz fixed
-  frame to `base_link` (TF exists once the stack is up) or `lidar_link`.
+  (`output_as_sensor_frame:=true` in our container launch); TF
+  `lidar_link` ↔ `base_link` exists once the stack is up.
 * **Visualization (Windows):** Alternatively, connect the LiDAR directly to a
   Windows PC and use the official **PandarView2** software for quick bench
   testing (manual is in `docs/XT32M/PandarView2_User_Manual_PV2-en-250810.pdf`).
@@ -150,6 +176,21 @@ Launch the planning simulator natively on the Jetson:
 *(This shortcut launches `planning_simulator.launch.xml` with
 `vehicle_model:=etrike_vehicle` and `sensor_model:=etrike_sensor_kit`,
 loading the E-Trike vehicle model and the XT32M2X sensor geometry into RViz.)*
+
+> **About the RViz view:** the simulator's default `autoware.rviz` (top-down
+> view) is intentional — it is optimized for planning/mission planning in 2D
+> (map, routes, path), and in the simulator there is **no real point cloud**
+> (the driver is disabled; perception is dummy). To inspect the E-Trike model
+> or the lidar geometry in 3D, pass the dedicated config:
+> ```bash
+> ros2 launch autoware_launch planning_simulator.launch.xml \
+>   map_path:=/autoware_map/sample-map-planning \
+>   vehicle_model:=etrike_vehicle \
+>   sensor_model:=etrike_sensor_kit \
+>   rviz_config:=$(ros2 pkg prefix etrike_common_launch)/share/etrike_common_launch/rviz/etrike.rviz
+> ```
+> (The lidar cloud displays will be empty in simulation — they light up only
+> when the real sensor is streaming.)
 
 > **Known limitation:** the planning simulator defaults to
 > `localization_sim_mode:=api`, which requires setting the initial pose via

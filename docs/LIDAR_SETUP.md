@@ -173,14 +173,33 @@ ros2 launch autoware_launch autoware.launch.xml \
 Or use the automated bring-up script:
 ```bash
 ./scripts/lidar_bringup.sh          # full bring-up
+./scripts/lidar_bringup.sh --rviz3d # full bring-up with the 3D lidar RViz config
 ./scripts/lidar_bringup.sh --check-only  # network/UDP check only
 ./scripts/lidar_bringup.sh --no-driver   # pipeline without sensor
 ```
 
-Verify the point cloud in RViz:
+Verify the point cloud in RViz (**the stock view is top-down and does not show
+the lidar cloud** — use `etrike.rviz` for a 3D view, see below):
 - Topic: `/sensing/lidar/top/pointcloud_raw_ex` → ... → `/sensing/lidar/top/pointcloud_before_sync`
 - Fixed frame: `base_link`
 - The cloud should appear in the `lidar_link` frame at the roof position.
+
+The default `autoware.rviz` used by `autoware.launch.xml` is a 2D top-down
+(`TopDownOrtho`) view and has no display for the lidar's own clouds. Use the
+dedicated 3D config shipped in `etrike_common_launch/rviz/etrike.rviz`, which
+defaults to ThirdPersonFollower and pre-adds the `pointcloud_raw_ex` +
+`pointcloud_before_sync` displays:
+```bash
+ros2 launch autoware_launch autoware.launch.xml \
+  map_path:=/autoware_map/your-map \
+  vehicle_model:=etrike_vehicle \
+  sensor_model:=etrike_sensor_kit \
+  launch_sensing_driver:=true \
+  rviz_config:=$(ros2 pkg prefix etrike_common_launch)/share/etrike_common_launch/rviz/etrike.rviz
+```
+To add it manually instead: Panels → Add → By topic →
+`/sensing/lidar/top/pointcloud_before_sync` (PointCloud2), set the fixed frame
+to `base_link`, and switch the current view to ThirdPersonFollower/Orbit.
 
 ### 7.3 Network setup
 

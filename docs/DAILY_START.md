@@ -76,8 +76,18 @@ This launches the **E-Trike planning simulator** with:
 ### What you'll see in RViz2
 - The E-Trike vehicle model (blue Bajaj body + wheels + roof-mounted lidar cylinder)
 - TF frames: `base_footprint -> base_link -> lidar_link` + `sensor_kit_base_link`
-- Map view with lanelet2 roads
+- Map view with lanelet2 roads (the stock `autoware.rviz` is a **top-down 2D
+  view**)
 - Once you set an initial pose (2D Pose Estimate), you can plan routes and engage autonomous driving
+
+> **3D view / point cloud:** to inspect the model in 3D (and later the live
+> lidar cloud), add `rviz_config:=$(ros2 pkg prefix etrike_common_launch)/share/
+> etrike_common_launch/rviz/etrike.rviz` to the launch args, or use
+> `./scripts/lidar_bringup.sh --rviz3d`. `etrike.rviz` starts in
+> ThirdPersonFollower view with the lidar `pointcloud_raw_ex` and
+> `pointcloud_before_sync` displays pre-loaded. In the simulator there is no
+> real point cloud (driver disabled); those displays populate only with the
+> physical sensor.
 
 ### Run tests
 ```bash

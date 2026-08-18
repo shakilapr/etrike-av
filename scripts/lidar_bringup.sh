@@ -14,12 +14,15 @@
 #   - Sensor connected and powered
 #
 # Usage:
-#   ./scripts/lidar_bringup.sh [--check-only] [--no-driver]
+#   ./scripts/lidar_bringup.sh [--check-only] [--no-driver] [--rviz3d]
 #
 # Flags:
 #   --check-only   Run network/UDP checks only, don't launch ROS
 #   --no-driver    Launch sensing pipeline with launch_driver:=false
 #                  (for testing preprocessor pipeline without the sensor)
+#   --rviz3d       Use etrike_common_launch/rviz/etrike.rviz (3D view with the
+#                  lidar point cloud displays). The stock autoware.rviz is
+#                  top-down (TopDownOrtho) and does NOT show the lidar cloud.
 
 set -euo pipefail
 
@@ -30,11 +33,13 @@ IFACE="${IFACE:-eth0}"
 
 CHECK_ONLY=false
 LAUNCH_DRIVER=true
+RVIZ3D=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --check-only) CHECK_ONLY=true; shift ;;
         --no-driver)  LAUNCH_DRIVER=false; shift ;;
+        --rviz3d)     RVIZ3D=true; shift ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -94,6 +99,16 @@ if [ "$LAUNCH_DRIVER" = true ]; then
 else
     echo "  Launching without driver (launch_driver:=false)..."
     LAUNCH_ARGS+=("launch_sensing_driver:=false")
+fi
+
+if [ "$RVIZ3D" = true ]; then
+    RVIZ_CONFIG="$(ros2 pkg prefix etrike_common_launch)/share/etrike_common_launch/rviz/etrike.rviz"
+    if [ -f "$RVIZ_CONFIG" ]; then
+        echo "  Using 3D RViz config: $RVIZ_CONFIG"
+        LAUNCH_ARGS+=("rviz_config:=$RVIZ_CONFIG")
+    else
+        echo "  ⚠ etrike.rviz not found at $RVIZ_CONFIG — using default RViz config"
+    fi
 fi
 
 echo "  ros2 launch autoware_launch autoware.launch.xml ${LAUNCH_ARGS[*]}"

@@ -1,0 +1,134 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 70
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /PointCloud21
+        - /PointCloud22
+        - /RobotModel1
+      Splitter Ratio: 0.5
+    Tree Height: 550
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Plane Cell Count: 60
+      Plane Cell Size: 1
+      Plane: XY
+      Reference Frame: <Fixed Frame>
+    - Class: rviz_default_plugins/RobotModel
+      Enabled: true
+      Name: RobotModel
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+    - Class: rviz_default_plugins/PointCloud2
+      Enabled: true
+      Name: pointcloud_raw_ex
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /sensing/lidar/top/pointcloud_raw_ex
+      Style: Points
+      Size (Pixels): 2
+      Size (m): 0.02
+      Color Transformer: AxisColor
+      Use Fixed Frame: true
+      Decay Time: 0
+    - Class: rviz_default_plugins/PointCloud2
+      Enabled: true
+      Name: pointcloud_before_sync
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /sensing/lidar/top/pointcloud_before_sync
+      Style: Points
+      Size (Pixels): 3
+      Size (m): 0.02
+      Color Transformer: AxisColor
+      Use Fixed Frame: true
+      Decay Time: 0
+    - Class: rviz_default_plugins/Map
+      Enabled: false
+      Name: PointCloudMap
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map/pointcloud_map
+      Color Scheme: map
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+      Show Names: true
+      Frame Timeout: 15
+  Global Options:
+    Background Color: 15; 20; 23
+    Default Light: true
+    Fixed Frame: base_link
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+    - Class: rviz_default_plugins/SetInitialPose
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+  Views:
+    Current: ThirdPersonFollower
+    Saved:
+      - Class: rviz_default_plugins/ThirdPersonFollower
+        Distance: 15
+        Focal Point:
+          X: 0
+          Y: 0
+          Z: 0
+        Focal Shape Fixed Size: true
+        Focal Shape Size: 0.05
+        Invert Z Axis: false
+        Name: ThirdPersonFollower
+        Near Clip Distance: 0.01
+        Pitch: 0.35
+        Target Frame: base_link
+        Value: ThirdPersonFollower (rviz)
+        Yaw: 0.8
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: TopDownOrtho
+        Scale: 10
+        Target Frame: map
+        Value: TopDownOrtho (rviz)
+        X: 0
+        Y: 0
+  Window Geometry:
+    Height: 800
+    Width: 1200
