@@ -89,7 +89,8 @@ class StabilityGuardNode(Node):
 
         self._velocity = 0.0
         self._steer = 0.0
-        self._lateral_accel = 0.0
+        self._lateral_accel = 0.0  # signed (positive = right turn)
+        self._lateral_accel_abs = 0.0  # magnitude — used for threshold logic
         self._emergency_asserted = False
 
         self.sub_velocity = self.create_subscription(
@@ -123,18 +124,20 @@ class StabilityGuardNode(Node):
         # a_y = v^2 * tan(steer) / L  (kinematic bicycle model, planar)
         wheel_base = self.get_wheel_base()
         self._lateral_accel = speed * speed * math.tan(self._steer) / wheel_base
+        # Threshold logic uses magnitude — tip-over risk is direction-agnostic.
+        self._lateral_accel_abs = abs(self._lateral_accel)
 
         if not self.enable_emergency:
             return
 
-        if self._lateral_accel > self.error_threshold and not self._emergency_asserted:
+        if self._lateral_accel_abs > self.error_threshold and not self._emergency_asserted:
             self._emergency_asserted = True
             self.publish_emergency(True)
             self.get_logger().error(
-                f"TIP-OVER RISK: a_y={self._lateral_accel:.2f} > "
+                f"TIP-OVER RISK: |a_y|={self._lateral_accel_abs:.2f} > "
                 f"{self.error_threshold:.2f} m/s^2 -- asserting emergency stop"
             )
-        elif self._emergency_asserted and self._lateral_accel < self.warn_threshold:
+        elif self._emergency_asserted and self._lateral_accel_abs < self.warn_threshold:
             self._emergency_asserted = False
             self.publish_emergency(False)
             self.get_logger().info("lateral acceleration back in band -- releasing emergency stop")
@@ -156,10 +159,10 @@ class StabilityGuardNode(Node):
         status.name = "etrike_stability/lateral_acceleration"
         status.hardware_id = "etrike"
 
-        if self._lateral_accel >= self.error_threshold:
+        if self._lateral_accel_abs >= self.error_threshold:
             status.level = DiagnosticStatus.ERROR
             status.message = "above tip-over error threshold"
-        elif self._lateral_accel >= self.warn_threshold:
+        elif self._lateral_accel_abs >= self.warn_threshold:
             status.level = DiagnosticStatus.WARN
             status.message = "approaching tip-over threshold"
         else:
@@ -173,6 +176,7 @@ class StabilityGuardNode(Node):
             status.values.append(item)
 
         kv("lateral_accel_mps2", f"{self._lateral_accel:.3f}")
+        kv("lateral_accel_magnitude_mps2", f"{self._lateral_accel_abs:.3f}")
         kv("threshold_mps2", f"{self.threshold:.3f}")
         kv("warn_mps2", f"{self.warn_threshold:.3f}")
         kv("error_mps2", f"{self.error_threshold:.3f}")
