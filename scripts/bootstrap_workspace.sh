@@ -69,7 +69,7 @@ echo "  All expected upstream components present"
 echo ""
 echo "[STEP 3] Applying E-Trike patches ..."
 
-PATCH_SCRIPT="$SCRIPT_DIR/apply_nebula_firetime_patch.sh"
+PATCH_SCRIPT="$SCRIPT_DIR/../patches/apply_nebula_firetime_patch.sh"
 if [ -f "$PATCH_SCRIPT" ]; then
     bash "$PATCH_SCRIPT"
 else

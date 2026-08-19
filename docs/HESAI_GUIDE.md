@@ -21,7 +21,7 @@ Before any of the sections below, the following must already be in place on the 
    formula that differs from the device CSV by ~5.6 µs mean (details in
    `docs/LIDAR_SETUP.md`, Section 9):
    ```bash
-   ./scripts/apply_nebula_firetime_patch.sh
+   ./patches/apply_nebula_firetime_patch.sh
    ```
 2. **Build the custom packages** (inside the container):
    ```bash

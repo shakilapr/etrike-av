@@ -82,3 +82,14 @@ vcs import src < ../repositories/our_autoware.repos
 | Untouched upstream | ~28 | No | No |
 | Modified upstream | 2–5 | Yes | Yes |
 | Our packages | 2–5 | N/A (our repo) | No |
+
+## Auditing Repositories
+
+Because we use cs import and Syncthing (which strips .git directories on Windows), it can be difficult to verify if any of the 29 upstream repositories have been accidentally modified. 
+
+To solve this, use the audit script:
+`ash
+pwsh -File scripts/audit_repo_sync.ps1
+`
+
+This script uses the GitHub API to perform a purely local validation of the file states against the expected upstream state, without needing full clones or local .git directories for the upstream repos. See [AUDIT_STRATEGY.md](AUDIT_STRATEGY.md) for more details.

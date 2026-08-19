@@ -9,7 +9,7 @@
 # timestamp errors affecting distortion correction and localization.
 #
 # Usage:
-#   ./scripts/apply_nebula_firetime_patch.sh [NEBULA_SRC_DIR]
+#   ./patches/apply_nebula_firetime_patch.sh [NEBULA_SRC_DIR]
 #
 # If NEBULA_SRC_DIR is not given, it defaults to:
 #   autoware/src/sensor_component/external/nebula/src

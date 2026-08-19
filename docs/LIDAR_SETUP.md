@@ -239,7 +239,7 @@ Nebula's `PandarXT32M` decoder originally used a hard-coded firing-time formula 
 
 **Applying the patch:** Since vendored Nebula is gitignored, use the idempotent apply script:
 ```bash
-./scripts/apply_nebula_firetime_patch.sh
+./patches/apply_nebula_firetime_patch.sh
 colcon build --symlink-install --packages-select nebula_hesai_common nebula_hesai_decoders nebula_hesai
 ```
 

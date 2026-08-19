@@ -9,7 +9,7 @@ Every deviation from upstream Autoware is documented here. If you're wondering
 |-------|-------|
 | **Component** | `sensor_component/external/nebula` |
 | **Base** | `tier4/nebula` v1.1.0 (pinned in `repositories/autoware.repos`) |
-| **Patch** | `scripts/apply_nebula_firetime_patch.sh` |
+| **Patch** | `patches/apply_nebula_firetime_patch.sh` |
 | **Files modified** | `hesai_common.hpp`, `hesai_sensor.hpp`, `pandar_xt32m.hpp`, `hesai_decoder.hpp`, `hesai_ros_wrapper.cpp` |
 | **Reason** | The hard-coded firetime formula `368 + 2888 * channel_id` differs from our XT32M2X device CSV by ~5.6 µs mean, causing timestamp errors that affect distortion correction and localization |
 | **Owner** | Sensor integration |
@@ -28,6 +28,6 @@ Every deviation from upstream Autoware is documented here. If you're wondering
 ### How to verify after reload
 
 ```bash
-./scripts/apply_nebula_firetime_patch.sh
+./patches/apply_nebula_firetime_patch.sh
 # Should print "PATCH VERIFIED" — if any marker is missing, upstream changed
 ```

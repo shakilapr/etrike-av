@@ -127,6 +127,6 @@ Sets up ptp4l (PTP slave) + phc2sys + chrony for IEEE 1588v2 time synchronizatio
 
 ### Nebula firetime patch (first time only)
 ```bash
-./scripts/apply_nebula_firetime_patch.sh
+./patches/apply_nebula_firetime_patch.sh
 colcon build --symlink-install --packages-select nebula_hesai_common nebula_hesai_decoders nebula_hesai
 ```

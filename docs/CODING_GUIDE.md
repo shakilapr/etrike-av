@@ -8,14 +8,14 @@ Rules for contributing to `etrike-av`. Read before writing code.
 |------|----------|----------|
 | Our ROS packages | `autoware/src/our_packages/` | Yes (subtree) |
 | Upstream Autoware | `autoware/src/` (everything else) | No (gitignored) |
-| Patches to upstream | `scripts/apply_*_patch.sh` + `patches/` | Yes |
+| Patches to upstream | `patches/` | Yes |
 | Build/test scripts | `scripts/`, `docker/`, `run_tests.sh` | Yes |
 | Docs | `docs/` | Yes |
 
 **Rule:** Never edit files under `autoware/src/` outside `our_packages/` without
 a committed patch script. If you need upstream changes, either:
 1. Implement in a new `our_packages/` package (preferred), or
-2. Create a versioned patch script under `scripts/` (for small upstream deltas),
+2. Create a versioned patch script under `patches/` (for small upstream deltas),
    or
 3. Fork the upstream repo and pin by SHA (for large/long-term changes).
 
@@ -127,3 +127,4 @@ When Autoware upstream is updated (new version tag):
 - [ ] `./scripts/bootstrap_workspace.sh` succeeds (fresh-clone test)
 - [ ] No secrets or credentials committed
 - [ ] `UPSTREAM_MODIFICATIONS.md` updated if upstream patches changed
+- [ ] `pwsh -File scripts/audit_repo_sync.ps1` reports no drift

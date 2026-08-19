@@ -9,7 +9,7 @@
 #   5. Verify TF tree
 #
 # Prerequisites:
-#   - Nebula firetime patch applied (scripts/apply_nebula_firetime_patch.sh)
+#   - Nebula firetime patch applied (patches/apply_nebula_firetime_patch.sh)
 #   - etrike_*_launch/description packages built
 #   - Sensor connected and powered
 #

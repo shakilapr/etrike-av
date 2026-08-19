@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify Nebula patch script syntax
-        run: bash -n scripts/apply_nebula_firetime_patch.sh
+        run: bash -n patches/apply_nebula_firetime_patch.sh
       - name: Verify bootstrap script syntax
         run: bash -n scripts/bootstrap_workspace.sh
       - name: Verify build script syntax
