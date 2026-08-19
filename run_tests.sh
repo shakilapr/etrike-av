@@ -37,6 +37,7 @@ docker run --rm \
         etrike_sensor_kit_description \
         etrike_sensor_kit_launch \
         etrike_common_launch \
-        etrike_stability_guard && \
+        etrike_stability_guard \
+        etrike_kinect2 && \
     colcon test-result --verbose
   "

@@ -3,6 +3,7 @@
   <arg name="vehicle_mirror_param_file" description="path to the file of vehicle mirror position yaml"/>
   <arg name="pointcloud_container_name" default="pointcloud_container"/>
   <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
+  <arg name="launch_kinect" default="false" description="launch Kinect v2 cameras (requires libfreenect2)"/>
 
   <group>
     <!-- LiDAR Driver -->
@@ -21,6 +22,11 @@
     <include file="$(find-pkg-share autoware_vehicle_velocity_converter)/launch/vehicle_velocity_converter.launch.xml">
       <arg name="input_vehicle_velocity_topic" value="/vehicle/status/velocity_status"/>
       <arg name="output_twist_with_covariance" value="/sensing/vehicle_velocity_converter/twist_with_covariance"/>
+    </include>
+
+    <!-- Kinect v2 cameras (disabled by default) -->
+    <include file="$(find-pkg-share etrike_kinect2)/launch/dual_kinect.launch.py"
+             if="$(var launch_kinect)">
     </include>
   </group>
 </launch>

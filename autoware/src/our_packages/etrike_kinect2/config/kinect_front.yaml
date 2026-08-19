@@ -1,0 +1,16 @@
+# Kinect v2 FRONT — E-Trike
+# Find serial with: ./run.sh discover
+kinect_front:
+  ros__parameters:
+    serial: ""  # fill after running: ros2 run etrike_kinect2 kinect2_node_exec --discover
+    color_enabled: true
+    depth_enabled: true
+    ir_enabled: false
+    registration_enabled: true
+    frame_id_color: "kinect_front_rgb_optical_frame"
+    frame_id_depth: "kinect_front_depth_optical_frame"
+    frame_id_ir: "kinect_front_ir_optical_frame"
+    depth_min_m: 0.5
+    depth_max_m: 4.5
+    reconnect_attempts: 3
+    reconnect_delay_s: 2.0

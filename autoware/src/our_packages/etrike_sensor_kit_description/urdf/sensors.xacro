@@ -5,6 +5,33 @@
 
   <!-- sensor kit -->
   <xacro:include filename="sensor_kit.xacro"/>
+
+  <!-- Kinect v2 cameras -->
+  <xacro:include filename="$(find etrike_kinect2)/urdf/kinect_v2.xacro"/>
+
+  <!-- FRONT Kinect: windshield area, facing forward -->
+  <xacro:kinect_v2_macro
+    name="kinect_front"
+    parent="base_link"
+    x="${calibration['base_link']['kinect_front']['x']}"
+    y="${calibration['base_link']['kinect_front']['y']}"
+    z="${calibration['base_link']['kinect_front']['z']}"
+    roll="${calibration['base_link']['kinect_front']['roll']}"
+    pitch="${calibration['base_link']['kinect_front']['pitch']}"
+    yaw="${calibration['base_link']['kinect_front']['yaw']}"
+  />
+
+  <!-- REAR Kinect: behind cabin, facing backward -->
+  <xacro:kinect_v2_macro
+    name="kinect_rear"
+    parent="base_link"
+    x="${calibration['base_link']['kinect_rear']['x']}"
+    y="${calibration['base_link']['kinect_rear']['y']}"
+    z="${calibration['base_link']['kinect_rear']['z']}"
+    roll="${calibration['base_link']['kinect_rear']['roll']}"
+    pitch="${calibration['base_link']['kinect_rear']['pitch']}"
+    yaw="${calibration['base_link']['kinect_rear']['yaw']}"
+  />
   <xacro:sensor_kit_macro
     parent="base_link"
     x="${calibration['base_link']['sensor_kit_base_link']['x']}"

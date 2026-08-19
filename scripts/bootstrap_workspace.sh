@@ -89,6 +89,7 @@ EXPECTED_PACKAGES=(
     etrike_sensor_kit_launch
     etrike_common_launch
     etrike_stability_guard
+    etrike_kinect2
 )
 MISSING=0
 for pkg in "${EXPECTED_PACKAGES[@]}"; do

@@ -6,3 +6,17 @@ base_link:
     roll: 0.0
     pitch: 0.0
     yaw: 0.0
+  kinect_front:
+    x: 1.2
+    y: 0.0
+    z: 1.0
+    roll: 0.0
+    pitch: 0.0
+    yaw: 0.0
+  kinect_rear:
+    x: -0.8
+    y: 0.0
+    z: 1.0
+    roll: 0.0
+    pitch: 0.0
+    yaw: 3.14159
