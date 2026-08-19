@@ -27,6 +27,76 @@ Kinect2Node (rclcpp_lifecycle::LifecycleNode, one per camera)
 - TF is owned by URDF, not the driver
 - No PointCloud2 from driver — use `depth_image_proc` downstream
 
+## Logic
+
+```
+Kinect2Node (LifecycleNode)
+  on_configure():
+      load params (serial, frame_ids, enable flags)
+      if serial == "": return FAILURE
+      device_.open(serial)         # libfreenect2 enumerate → openDevice
+      create publishers + camera_info_managers
+      return SUCCESS
+
+  on_activate():
+      device_.start()              # streaming begins
+      spawn capture_thread_ = capture_loop()
+
+  capture_loop():                  # dedicated thread, NOT ros callback
+      while running_:
+          frames = wait_for_frames(timeout=5000)
+          if !frames:
+              timeouts_++
+              if timeouts_ > reconnect_attempts_:
+                  device_.stop(); device_.close()
+                  sleep(reconnect_delay_s_)
+                  if device_.open(serial) && device_.start():
+                      reconnects_++; timeouts_ = 0
+                  else:
+                      device_ok_ = false; break
+              continue
+          device_ok_ = true
+          stamp = now()
+          if color_enabled: publish color/image_raw + color/camera_info
+          if depth_enabled: publish depth/image_raw + depth/camera_info
+          if ir_enabled:    publish ir/image_raw
+          release_frames(frames)
+          # 1 Hz diagnostics
+          if (now - diag_timer) >= 1s:
+              publish /diagnostics (fps, drops, timeouts, reconnects)
+
+  on_deactivate(): stop streaming, join thread, stop device
+  on_cleanup():     reset device + publishers
+  on_error():       close device, reset
+```
+
+## Topics
+
+### Subscribed
+| Topic | Type | QoS | Purpose |
+|---|---|---|---|
+| — | — | — | No subscriptions (pure publisher; serial via param) |
+
+### Published (per camera, under `/kinect/{front,rear}/`)
+| Topic | Type | QoS | Purpose |
+|---|---|---|---|
+| `color/image_raw` | `sensor_msgs/Image` (bgr8, 1920×1080) | SensorData | RGB |
+| `color/camera_info` | `sensor_msgs/CameraInfo` | SensorData | RGB intrinsics |
+| `depth/image_raw` | `sensor_msgs/Image` (32FC1, 512×424, meters) | SensorData | Depth |
+| `depth/camera_info` | `sensor_msgs/CameraInfo` | SensorData | Depth intrinsics |
+| `ir/image_raw` | `sensor_msgs/Image` (mono8) | SensorData | IR (if `ir_enabled`) |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | SensorData | FPS, drops, timeouts, reconnects, device health |
+
+> `frame_id` of each image = `frame_id_color` / `frame_id_depth` / `frame_id_ir`
+> (default `kinect_front_rgb_optical_frame`, etc., defined in URDF).
+
+## Inter-package wiring
+- `etrike_sensor_kit_description/urdf/kinect_v2.xacro` defines the optical frames.
+- `sensing.launch.xml` (etrike_sensor_kit_launch) includes `dual_kinect.launch.py`
+  guarded by `launch_kinect:=true`.
+- Downstream `depth_image_proc` consumes `depth/image_raw` + `depth/camera_info`
+  to produce PointCloud2 (not done in this package).
+
 ## Prerequisites
 
 ### libfreenect2
