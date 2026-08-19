@@ -32,8 +32,8 @@ int main(int argc, char ** argv)
                 return 1;
             }
             std::cout << "Found " << devices.size() << " Kinect v2 device(s):" << std::endl;
-            for (size_t i = 0; i < devices.size(); ++i) {
-                std::cout << "  [" << i << "] serial=" << devices[i].serial << std::endl;
+            for (size_t idx = 0; idx < devices.size(); ++idx) {
+                std::cout << "  [" << idx << "] serial=" << devices[idx].serial << std::endl;
             }
             return 0;
         }

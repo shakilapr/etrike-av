@@ -199,7 +199,6 @@ CallbackReturn Kinect2Node::on_error(const rclcpp_lifecycle::State &)
 void Kinect2Node::capture_loop()
 {
     auto diag_timer = this->now();
-    const auto diag_interval = std::chrono::seconds(1);
 
     while (running_) {
         FrameSet frames;
