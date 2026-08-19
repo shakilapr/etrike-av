@@ -1,0 +1,17 @@
+<launch>
+  <!-- E-Trike LiDAR-only Mapping using lidarslam_ros2 -->
+  <!-- Designed to be run against a recorded bag file -->
+  
+  <arg name="input_cloud" default="/sensing/lidar/top/pointcloud_before_sync" description="Input cloud from the ROS bag"/>
+  <arg name="use_sim_time" default="true" description="Must be true when playing a ROS bag"/>
+  <arg name="save_dir" default="/workspace/data" description="Directory to save the resulting map.pcd and pose_graph.g2o"/>
+
+  <include file="$(find-pkg-share lidarslam)/launch/lidarslam.launch.py">
+    <arg name="input_cloud" value="$(var input_cloud)"/>
+    <arg name="use_sim_time" value="$(var use_sim_time)"/>
+    <arg name="robot_frame_id" value="base_link"/>
+    <arg name="publish_static_tf" value="false"/> <!-- TF is already published from the bag (tf_static) -->
+    <arg name="save_dir" value="$(var save_dir)"/>
+    <arg name="use_rviz" value="true"/>
+  </include>
+</launch>

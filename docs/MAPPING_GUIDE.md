@@ -40,23 +40,42 @@ Drive the environment smoothly in loops to ensure good coverage. When finished, 
 
 ## 2. Build the Map (Offline)
 
-Autoware Universe does not map live. You must process the bag offline to generate the map. Because mapping is computationally heavy, it is highly recommended to transfer the bag file to a powerful desktop PC rather than mapping on the Jetson.
+Autoware Universe does not map live. You must process the bag offline to generate the map. We have integrated **`lidarslam_ros2`** directly into your workspace. It uses NDT/GICP scan matching and graph optimization, which works beautifully without an IMU.
 
-The most common SLAM (Simultaneous Localization and Mapping) tools used with Autoware and Hesai LiDARs are:
-1. **LIO-SAM / FAST-LIO2:** Excellent open-source algorithms for mechanical LiDARs.
-2. **TIER IV's Mapping Tools:** `autoware_map_builder` / `ndt_mapping`.
-
-**General Workflow:**
-You will launch your chosen mapping node, then "play back" the recorded bag file into it. The mapping node will stitch the scans together and output a `.pcd` (Point Cloud Data) file.
-
-*(Example conceptual workflow using a 3rd-party mapping tool)*:
+### 2.1 Compile the Mapping Software
+Before your first mapping session, ensure the system libraries are installed and compile the new mapping nodes inside the Autoware container:
 ```bash
-# Launch the mapping software (requires installing the tool first)
-ros2 launch my_mapping_tool mapper.launch.py
-
-# In a separate terminal, play your bag file into the mapper
-ros2 bag play my_recorded_bag_directory
+cd ~/av_project
+./docker/shell.sh
+# Inside the container:
+sudo apt update && sudo apt install -y libgtsam-dev ros-humble-pcl-ros
+cd /workspace/autoware
+colcon build --symlink-install --packages-select ndt_omp lidarslam etrike_common_launch
+source install/setup.bash
 ```
+
+### 2.2 Run the Mapper
+Once compiled, you can run the mapping node in one terminal, and play back your recorded ROS bag in a second terminal.
+
+**Terminal 1 (Mapper):**
+```bash
+cd ~/av_project
+./docker/shell.sh
+# Inside the container:
+ros2 launch etrike_common_launch etrike_mapping.launch.xml save_dir:=/workspace/data
+```
+*(This will launch the SLAM node and RViz2 so you can watch the map being built).*
+
+**Terminal 2 (Play Bag):**
+```bash
+cd ~/av_project
+./docker/shell.sh
+# Inside the container:
+ros2 bag play <path_to_your_bag_folder> --clock
+```
+*Note: The `--clock` flag is critical so the mapper uses the bag's recorded time.*
+
+Once the bag finishes playing, go to Terminal 1 and press `Ctrl+C`. The mapping node will optimize the final graph and save `map.pcd` to your `~/av_project/data/` folder.
 
 ---
 
