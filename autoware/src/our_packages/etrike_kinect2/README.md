@@ -11,19 +11,22 @@ Kinect2Device (no ROS)
      │
 Kinect2Node (rclcpp_lifecycle::LifecycleNode, one per camera)
      │
-     ├── /kinect/{front,rear}/color/image_raw  (sensor_msgs/Image, bgr8)
-     ├── /kinect/{front,rear}/color/camera_info
-     ├── /kinect/{front,rear}/depth/image_raw  (sensor_msgs/Image, 32FC1 meters)
-     ├── /kinect/{front,rear}/depth/camera_info
-     ├── /kinect/{front,rear}/ir/image_raw     (optional)
+     ├── /kinect_front/color/image_raw  (sensor_msgs/Image, bgr8)
+     ├── /kinect_front/color/camera_info
+     ├── /kinect_front/depth/image_raw  (sensor_msgs/Image, 32FC1 meters)
+     ├── /kinect_front/depth/camera_info
+     ├── /kinect_front/ir/image_raw     (optional)
      └── /diagnostics
 ```
 
 - One ROS node = one physical Kinect = one serial number
 - Each node is a LifecycleNode: UNCONFIGURED → INACTIVE → ACTIVE
-- The launch files **auto-configure and auto-activate** the node (via
-  `OnProcessStart` → configure → `OnStateTransition(inactive)` → activate),
-  so `./run.sh dual` streams immediately without manual `ros2 lifecycle` calls.
+- The launch files **auto-configure and auto-activate** the node deterministically:
+  `RegisterEventHandler(OnStateTransition(inactive))` is registered BEFORE the
+  node, then `ChangeState(CONFIGURE)` is emitted explicitly (no `OnProcessStart`
+  — that is racy). See `docs/KINECT2_BRINGUP.md` §4.3.
+- Topics are remapped to `/kinect_{front,rear}/...` while the node keeps a root
+  name so the param-file key `kinect_front:` still matches (§4.4 of the doc).
 - **Hotplug-aware**: the device does NOT need to be connected at configure/launch
   time. The node starts, waits, and connects automatically when the target
   serial appears on USB. Unplug → clean disconnect; replug → auto-reconnect.
@@ -92,15 +95,17 @@ Kinect2Node (LifecycleNode)
 |---|---|---|---|
 | — | — | — | No subscriptions (pure publisher; serial via param) |
 
-### Published (per camera, under `/kinect/{front,rear}/`)
+### Published (per camera, under `/kinect_front/` / `/kinect_rear/`)
 | Topic | Type | QoS | Purpose |
 |---|---|---|---|
-| `color/image_raw` | `sensor_msgs/Image` (bgr8, 1920×1080) | SensorData | RGB |
-| `color/camera_info` | `sensor_msgs/CameraInfo` | SensorData | RGB intrinsics |
-| `depth/image_raw` | `sensor_msgs/Image` (32FC1, 512×424, meters) | SensorData | Depth |
-| `depth/camera_info` | `sensor_msgs/CameraInfo` | SensorData | Depth intrinsics |
-| `ir/image_raw` | `sensor_msgs/Image` (mono8) | SensorData | IR (if `ir_enabled`) |
-| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | SensorData | FPS, drops, timeouts, reconnects, device health |
+| `color/image_raw` | `sensor_msgs/Image` (bgr8, 1920×1080) | SensorData (Best Effort) | RGB |
+| `color/camera_info` | `sensor_msgs/CameraInfo` | SensorData (Best Effort) | RGB intrinsics |
+| `depth/image_raw` | `sensor_msgs/Image` (32FC1, 512×424, meters) | SensorData (Best Effort) | Depth |
+| `depth/camera_info` | `sensor_msgs/CameraInfo` | SensorData (Best Effort) | Depth intrinsics |
+| `ir/image_raw` | `sensor_msgs/Image` (mono8) | SensorData (Best Effort) | IR (if `ir_enabled`) |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | SensorData (Best Effort) | FPS, drops, timeouts, reconnects, device health |
+
+> RViz Image displays must use **Best Effort** QoS to receive these streams.
 
 > `frame_id` of each image = `frame_id_color` / `frame_id_depth` / `frame_id_ir`
 > (default `kinect_front_rgb_optical_frame`, etc., defined in URDF).
@@ -187,9 +192,9 @@ vi config/kinect_rear.yaml    # set serial: "109876543210"
 ### Launch
 
 ```bash
-./run.sh front    # front only
-./run.sh rear     # rear only
-./run.sh dual     # both
+ros2 launch etrike_kinect2 single_kinect.launch.py camera:=front   # front only
+ros2 launch etrike_kinect2 single_kinect.launch.py camera:=rear    # rear only
+ros2 launch etrike_kinect2 dual_kinect.launch.py                   # both (no RViz)
 ```
 
 ### View RGB + Depth on the Jetson monitor
