@@ -4,6 +4,33 @@ Generated, zero-dependency **CAN codec library** for the E-Trike vehicle bus. De
 
 > **Do not edit by hand.** This header is generated from the protocol definition (`protocol.tools`). The source of truth is the protocol schema in the `etrike` repo.
 
+## How to Update
+
+This package is kept in sync with the `etrike` hardware repository (`https://github.com/shakilapr/etrike.git`). The YAML protocol contracts in that repo are the source of truth.
+
+To fetch the latest protocol definitions and regenerate the C++ headers in this workspace, run the update script from the root of the `etrike-av` workspace:
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\update-protocol.ps1 [branch_name]
+```
+
+**Linux (Bash):**
+```bash
+./scripts/update-protocol.sh [branch_name]
+```
+*(If no branch is specified, it defaults to `main`.)*
+
+These scripts automate the process of:
+1. Cloning the `etrike` repository into a temporary directory.
+2. Running the Python code generator (`python -m tools.protocol generate`) from the `etrike` repo against the YAML contracts.
+3. Copying the newly generated `etrike_protocol.hpp` and testing vectors into this `etrike_protocol` package.
+
+Once the script finishes, commit the changes using the provided message format:
+```bash
+git add autoware/src/our_packages/etrike_protocol/
+git commit -m "sync(etrike_protocol): regenerate from etrike@<hash>"
+```
 ## Structure
 
 ```
