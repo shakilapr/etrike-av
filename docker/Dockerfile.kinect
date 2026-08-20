@@ -1,0 +1,51 @@
+# E-Trike Kinect build image.
+#
+# Extends the official Autoware (Humble) image with libfreenect2, which the
+# etrike_kinect2 driver links against (pkg-config module: freenect2).
+# Built once on the Jetson and reused for builds/shell.
+#
+# Build:
+#   ./docker/make_image.sh
+#
+# The build arg lets the same Dockerfile track a specific Autoware base tag.
+ARG AUTOWARE_BASE=ghcr.io/autowarefoundation/autoware:universe-cuda-humble
+FROM ${AUTOWARE_BASE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# libfreenect2 build dependencies (CPU-only pipeline; no OpenCL/CUDA/OpenGL).
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        pkg-config \
+        libusb-1.0-0-dev \
+        libturbojpeg0-dev \
+        libglfw3-dev \
+        libssl-dev \
+        ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Build libfreenect2 from source (CPU pipeline) and install to /usr.
+# Installs the pkg-config file as `freenect2.pc`.
+RUN git clone --depth 1 https://github.com/OpenKinect/libfreenect2.git /tmp/libfreenect2 && \
+    cd /tmp/libfreenect2 && \
+    mkdir -p build && cd build && \
+    cmake .. \
+        -DENABLE_OPENCL=OFF \
+        -DENABLE_CUDA=OFF \
+        -DENABLE_OPENGL=OFF \
+        -DENABLE_VAAPI=OFF \
+        -DENABLE_TEGRAJPEG=OFF \
+        -DBUILD_OPENNI2_DRIVER=OFF \
+        -DCMAKE_INSTALL_PREFIX=/usr && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig && \
+    mkdir -p /etc/udev/rules.d && \
+    cp platform/linux/udev/90-kinect2.rules /etc/udev/rules.d/ 2>/dev/null || true && \
+    rm -rf /tmp/libfreenect2
+
+# Sanity check available to the build.
+RUN pkg-config --exists freenect2 && echo "libfreenect2 (freenect2.pc) present"

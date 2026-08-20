@@ -117,8 +117,17 @@ Kinect2Node (LifecycleNode)
 ### libfreenect2
 
 The package links against libfreenect2 via pkg-config (module name
-`freenect2`). Build and install it CPU-only (no OpenCL/CUDA/OpenGL needed on
-the Jetson):
+`freenect2`). The recommended path is to build the derived image that layers
+libfreenect2 on top of the Autoware base (so builds are reproducible and
+survive container recreation):
+
+```bash
+./docker/make_image.sh          # tags etrike-kinect-build:latest
+./docker/build.sh               # builds E-Trike packages in that image
+```
+
+To install libfreenect2 manually into a running container instead, build and
+install it CPU-only (no OpenCL/CUDA/OpenGL needed on the Jetson):
 
 ```bash
 sudo apt install -y build-essential cmake pkg-config \

@@ -10,11 +10,15 @@
 # root. Do NOT pass -u: the entrypoint needs root to switch to 'aw'.
 #
 # Covers all eight E-Trike packages (pytest + linters).
+#
+# Uses the etrike-kinect-build image (Autoware base + libfreenect2) so
+# etrike_kinect2 can build/test. Build it first: ./docker/make_image.sh
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOWARE_DIR="${SCRIPT_DIR}/autoware"
+IMAGE="${IMAGE:-etrike-kinect-build:latest}"
 
 if [ ! -d "$AUTOWARE_DIR/src/our_packages" ]; then
     echo "ERROR: autoware workspace not found at $AUTOWARE_DIR"
@@ -22,13 +26,16 @@ if [ ! -d "$AUTOWARE_DIR/src/our_packages" ]; then
 fi
 
 echo "Running tests from: $AUTOWARE_DIR"
+echo "Image: $IMAGE"
 
 docker run --rm \
   -v "$AUTOWARE_DIR":/workspace/autoware \
-  ghcr.io/autowarefoundation/autoware:universe-cuda-humble \
+  "$IMAGE" \
   /bin/bash -c "
     source /opt/autoware/setup.bash && \
     cd /workspace/autoware && \
+    echo '--- Building etrike_kinect2 (needs libfreenect2) ---' && \
+    colcon build --symlink-install --packages-select etrike_kinect2 2>&1 | tail -5 && \
     colcon test --packages-select \
         autoware_vehicle_bridge \
         etrike_protocol \

@@ -5,6 +5,9 @@
 
 xhost +local:docker
 
+# Image with libfreenect2 preinstalled (see docker/make_image.sh).
+IMAGE="${IMAGE:-etrike-kinect-build:latest}"
+
 docker run -it --rm \
   --privileged --runtime=nvidia --gpus all \
   --net=host --ipc=host \
@@ -18,5 +21,5 @@ docker run -it --rm \
   -v ~/av_project/autoware:/workspace/autoware \
   -v ~/av_project/vehicle:/workspace/vehicle \
   -v ~/av_project/data:/workspace/data \
-  ghcr.io/autowarefoundation/autoware:universe-cuda-humble \
+  "$IMAGE" \
   /bin/bash

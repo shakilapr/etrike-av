@@ -13,18 +13,22 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOWARE_DIR="${SCRIPT_DIR}/../autoware"
 
+# Image with libfreenect2 preinstalled (see docker/make_image.sh).
+IMAGE="${IMAGE:-etrike-kinect-build:latest}"
+
 if [ ! -d "$AUTOWARE_DIR/src/our_packages" ]; then
     echo "ERROR: autoware workspace not found at $AUTOWARE_DIR"
     exit 1
 fi
 
 echo "Building E-Trike packages from: $AUTOWARE_DIR"
+echo "Image: $IMAGE"
 
 docker run -it --rm \
   --privileged --runtime=nvidia --gpus all \
   --net=host --ipc=host \
   -v "$AUTOWARE_DIR":/workspace/autoware \
-  ghcr.io/autowarefoundation/autoware:universe-cuda-humble \
+  "$IMAGE" \
   /bin/bash -c "
     source /opt/autoware/setup.bash && \
     cd /workspace/autoware && \
@@ -48,5 +52,6 @@ docker run -it --rm \
         etrike_sensor_kit_launch \
         etrike_common_launch \
         etrike_stability_guard \
+        etrike_kinect2 \
       2>&1
   "
