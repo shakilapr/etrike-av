@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Standalone Kinect v2 viewer (RGB + depth) for the E-Trike.
+"""
+Standalone Kinect v2 viewer (RGB + depth) for the E-Trike.
 
 Launches the etrike_kinect2 driver and an RViz2 window showing the
 color and depth image streams. Intended for quick bring-up / debugging
-on the Jetson — independent of the full Autoware stack.
+on the Jetson - independent of the full Autoware stack.
 
 Usage (on the Jetson, inside the Autoware container):
 
@@ -37,27 +38,58 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, EmitEvent, GroupAction, RegisterEventHandler
+from launch.event_handlers import OnProcessStart
+from launch.events import matches_action
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node, GroupAction, PushRosNamespace
+from launch_ros.actions import LifecycleNode, Node, PushRosNamespace
+from launch_ros.event_handlers import OnStateTransition
+from launch_ros.events.lifecycle import ChangeState
 from launch_ros.substitutions import FindPackageShare
+from lifecycle_msgs.msg import Transition
 
 
 def _camera_node(camera: str) -> GroupAction:
+    node = LifecycleNode(
+        package="etrike_kinect2",
+        executable="kinect2_node_exec",
+        name=f"kinect_{camera}",
+        namespace=f"kinect_{camera}",
+        parameters=[
+            PathJoinSubstitution([
+                FindPackageShare("etrike_kinect2"),
+                "config",
+                f"kinect_{camera}.yaml",
+            ]),
+        ],
+        output="screen",
+    )
+
+    configure = EmitEvent(
+        event=ChangeState(
+            lifecycle_node_matcher=matches_action(node),
+            transition_id=Transition.TRANSITION_CONFIGURE,
+        )
+    )
+    activate = EmitEvent(
+        event=ChangeState(
+            lifecycle_node_matcher=matches_action(node),
+            transition_id=Transition.TRANSITION_ACTIVATE,
+        )
+    )
+
     return GroupAction([
         PushRosNamespace(f"kinect_{camera}"),
-        Node(
-            package="etrike_kinect2",
-            executable="kinect2_node_exec",
-            name=f"kinect_{camera}",
-            parameters=[
-                PathJoinSubstitution([
-                    FindPackageShare("etrike_kinect2"),
-                    "config",
-                    f"kinect_{camera}.yaml",
-                ]),
-            ],
-            output="screen",
+        node,
+        RegisterEventHandler(
+            OnProcessStart(target_action=node, on_start=[configure])
+        ),
+        RegisterEventHandler(
+            OnStateTransition(
+                target_lifecycle_node=node,
+                goal_state="inactive",
+                entities=[activate],
+            )
         ),
     ])
 

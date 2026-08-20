@@ -21,11 +21,19 @@ Kinect2Node (rclcpp_lifecycle::LifecycleNode, one per camera)
 
 - One ROS node = one physical Kinect = one serial number
 - Each node is a LifecycleNode: UNCONFIGURED → INACTIVE → ACTIVE
+- The launch files **auto-configure and auto-activate** the node (via
+  `OnProcessStart` → configure → `OnStateTransition(inactive)` → activate),
+  so `./run.sh dual` streams immediately without manual `ros2 lifecycle` calls.
 - **Hotplug-aware**: the device does NOT need to be connected at configure/launch
   time. The node starts, waits, and connects automatically when the target
   serial appears on USB. Unplug → clean disconnect; replug → auto-reconnect.
+- While disconnected (no USB, or empty serial) the node stays ACTIVE and
+  publishes `waiting for USB` / `waiting for config` diagnostics — it never
+  crashes waiting for hardware.
 - Two processes (not one container) so one crash doesn't kill both
 - TF is owned by URDF, not the driver
+- CameraInfo is a placeholder (uncalibrated); dimensions are correct
+  (1920×1080 color, 512×424 depth). Fill real intrinsics from URDF later.
 - No PointCloud2 from driver — use `depth_image_proc` downstream
 
 ## Logic
@@ -34,7 +42,8 @@ Kinect2Node (rclcpp_lifecycle::LifecycleNode, one per camera)
 Kinect2Node (LifecycleNode)
   on_configure():
       load params (serial, frame_ids, enable flags)
-      create publishers + camera_info_managers
+      build placeholder CameraInfo (uncalibrated)
+      create publishers
       return SUCCESS        # device NOT required to be connected yet
 
   on_activate():
@@ -107,6 +116,10 @@ Kinect2Node (LifecycleNode)
 
 ### libfreenect2
 
+The package links against libfreenect2 via pkg-config (module name
+`freenect2`). Build and install it CPU-only (no OpenCL/CUDA/OpenGL needed on
+the Jetson):
+
 ```bash
 sudo apt install -y build-essential cmake pkg-config \
     libusb-1.0-0-dev libturbojpeg0-dev libglfw3-dev
@@ -119,6 +132,9 @@ cmake .. -DENABLE_OPENCL=OFF -DENABLE_CUDA=OFF -DENABLE_OPENGL=OFF \
     -DCMAKE_INSTALL_PREFIX=/usr
 make -j$(nproc)
 sudo make install
+sudo ldconfig
+# verify:
+pkg-config --exists freenect2 && echo "libfreenect2 OK"
 ```
 
 ### udev rules
@@ -251,8 +267,8 @@ RViz2 Image panel (on DISPLAY=:1)  ← you see RGB + depth live
 | `depth_enabled` | bool | `true` | Publish depth |
 | `ir_enabled` | bool | `false` | Publish IR |
 | `registration_enabled` | bool | `true` | libfreenect2 depth↔RGB registration |
-| `frame_id_color` | string | `kinect_color_optical_frame` | TF frame for RGB |
-| `frame_id_depth` | string | `kinect_depth_optical_frame` | TF frame for depth |
+| `frame_id_color` | string | `kinect_front_rgb_optical_frame` | TF frame for RGB |
+| `frame_id_depth` | string | `kinect_front_depth_optical_frame` | TF frame for depth |
 | `depth_min_m` | double | `0.5` | Min depth range |
 | `depth_max_m` | double | `4.5` | Max depth range |
 | `reconnect_attempts` | int | `3` | Max timeouts before treating device as gone |

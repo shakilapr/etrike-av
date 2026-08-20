@@ -21,54 +21,56 @@ namespace etrike_kinect2
 {
 
 sensor_msgs::msg::Image::SharedPtr FrameConverter::to_color_image(
-    const libfreenect2::Frame & frame,
-    const std::string & frame_id,
-    const rclcpp::Time & stamp)
+  const libfreenect2::Frame & frame,
+  const std::string & frame_id,
+  const rclcpp::Time & stamp)
 {
-    cv::Mat bgra(frame.height, frame.width, CV_8UC4, frame.data);
-    cv::Mat bgr;
-    cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
+  cv::Mat bgra(frame.height, frame.width, CV_8UC4, frame.data);
+  cv::Mat bgr;
+  cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
 
-    auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr).toImageMsg();
-    msg->header.frame_id = frame_id;
-    msg->header.stamp = stamp;
-    return msg;
+  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr).toImageMsg();
+  msg->header.frame_id = frame_id;
+  msg->header.stamp = stamp;
+  return msg;
 }
 
 sensor_msgs::msg::Image::SharedPtr FrameConverter::to_depth_image(
-    const libfreenect2::Frame & frame,
-    const std::string & frame_id,
-    const rclcpp::Time & stamp)
+  const libfreenect2::Frame & frame,
+  const std::string & frame_id,
+  const rclcpp::Time & stamp)
 {
-    cv::Mat raw(frame.height, frame.width, CV_32FC1, frame.data);
-    cv::Mat depth_meters;
-    raw.convertTo(depth_meters, CV_32FC1, 1.0 / 1000.0);
+  cv::Mat raw(frame.height, frame.width, CV_32FC1, frame.data);
+  cv::Mat depth_meters;
+  raw.convertTo(depth_meters, CV_32FC1, 1.0 / 1000.0);
 
-    auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", depth_meters).toImageMsg();
-    msg->header.frame_id = frame_id;
-    msg->header.stamp = stamp;
-    return msg;
+  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", depth_meters).toImageMsg();
+  msg->header.frame_id = frame_id;
+  msg->header.stamp = stamp;
+  return msg;
 }
 
 sensor_msgs::msg::Image::SharedPtr FrameConverter::to_ir_image(
-    const libfreenect2::Frame & frame,
-    const std::string & frame_id,
-    const rclcpp::Time & stamp)
+  const libfreenect2::Frame & frame,
+  const std::string & frame_id,
+  const rclcpp::Time & stamp)
 {
-    cv::Mat raw(frame.height, frame.width, CV_32FC1, frame.data);
-    cv::Mat ir_8bit;
-    double min_val, max_val;
-    cv::minMaxLoc(raw, &min_val, &max_val);
-    if (max_val > min_val) {
-        raw.convertTo(ir_8bit, CV_8UC1, 255.0 / (max_val - min_val), -min_val * 255.0 / (max_val - min_val));
-    } else {
-        ir_8bit = cv::Mat::zeros(raw.size(), CV_8UC1);
-    }
+  cv::Mat raw(frame.height, frame.width, CV_32FC1, frame.data);
+  cv::Mat ir_8bit;
+  double min_val, max_val;
+  cv::minMaxLoc(raw, &min_val, &max_val);
+  if (max_val > min_val) {
+    raw.convertTo(
+      ir_8bit, CV_8UC1, 255.0 / (max_val - min_val),
+      -min_val * 255.0 / (max_val - min_val));
+  } else {
+    ir_8bit = cv::Mat::zeros(raw.size(), CV_8UC1);
+  }
 
-    auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "mono8", ir_8bit).toImageMsg();
-    msg->header.frame_id = frame_id;
-    msg->header.stamp = stamp;
-    return msg;
+  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "mono8", ir_8bit).toImageMsg();
+  msg->header.frame_id = frame_id;
+  msg->header.stamp = stamp;
+  return msg;
 }
 
 }  // namespace etrike_kinect2

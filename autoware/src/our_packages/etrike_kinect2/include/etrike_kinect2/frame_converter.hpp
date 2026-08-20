@@ -16,10 +16,12 @@
 #define ETRIKE_KINECT2__FRAME_CONVERTER_HPP_
 
 #include <libfreenect2/frame_listener_impl.h>
-#include <sensor_msgs/msg/image.hpp>
 
 #include <memory>
 #include <string>
+
+#include <rclcpp/time.hpp>
+#include <sensor_msgs/msg/image.hpp>
 
 namespace etrike_kinect2
 {
@@ -27,20 +29,20 @@ namespace etrike_kinect2
 class FrameConverter
 {
 public:
-    static sensor_msgs::msg::Image::SharedPtr to_color_image(
-        const libfreenect2::Frame & frame,
-        const std::string & frame_id,
-        const rclcpp::Time & stamp);
+  static sensor_msgs::msg::Image::SharedPtr to_color_image(
+    const libfreenect2::Frame & frame,
+    const std::string & frame_id,
+    const rclcpp::Time & stamp);
 
-    static sensor_msgs::msg::Image::SharedPtr to_depth_image(
-        const libfreenect2::Frame & frame,
-        const std::string & frame_id,
-        const rclcpp::Time & stamp);
+  static sensor_msgs::msg::Image::SharedPtr to_depth_image(
+    const libfreenect2::Frame & frame,
+    const std::string & frame_id,
+    const rclcpp::Time & stamp);
 
-    static sensor_msgs::msg::Image::SharedPtr to_ir_image(
-        const libfreenect2::Frame & frame,
-        const std::string & frame_id,
-        const rclcpp::Time & stamp);
+  static sensor_msgs::msg::Image::SharedPtr to_ir_image(
+    const libfreenect2::Frame & frame,
+    const std::string & frame_id,
+    const rclcpp::Time & stamp);
 };
 
 }  // namespace etrike_kinect2
