@@ -38,23 +38,24 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, GroupAction, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
 from launch.event_handlers import OnProcessStart
 from launch.events import matches_action
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import LifecycleNode, Node, PushRosNamespace
+from launch_ros.actions import LifecycleNode, Node
 from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
 from launch_ros.substitutions import FindPackageShare
 from lifecycle_msgs.msg import Transition
 
 
-def _camera_node(camera: str) -> GroupAction:
+def _camera_node(camera: str):
+    # Node is named "kinect_<camera>" (no ROS namespace) so the param file key
+    # "kinect_<camera>" matches — namespacing would hide params.
     node = LifecycleNode(
         package="etrike_kinect2",
         executable="kinect2_node_exec",
         name=f"kinect_{camera}",
-        namespace=f"kinect_{camera}",
         parameters=[
             PathJoinSubstitution([
                 FindPackageShare("etrike_kinect2"),
@@ -78,8 +79,7 @@ def _camera_node(camera: str) -> GroupAction:
         )
     )
 
-    return GroupAction([
-        PushRosNamespace(f"kinect_{camera}"),
+    return LaunchDescription([
         node,
         RegisterEventHandler(
             OnProcessStart(target_action=node, on_start=[configure])

@@ -13,25 +13,27 @@
 # limitations under the License.
 
 from launch import LaunchDescription
-from launch.actions import EmitEvent, GroupAction, RegisterEventHandler
+from launch.actions import EmitEvent, RegisterEventHandler
 from launch.event_handlers import OnProcessStart
 from launch.events import matches_action
 from launch.substitutions import PathJoinSubstitution
-from launch_ros.actions import LifecycleNode, PushRosNamespace
+from launch_ros.actions import LifecycleNode
 from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
 from launch_ros.substitutions import FindPackageShare
 from lifecycle_msgs.msg import Transition
 
 
-def _camera_group(camera: str) -> GroupAction:
+def _camera_group(camera: str):
     # Serial numbers are read from config YAML files.
     # Edit config/kinect_front.yaml and config/kinect_rear.yaml before launching.
+    # NOTE: the node is named "kinect_<camera>" (no ROS namespace) so the
+    # param file key "kinect_<camera>" matches — namespacing would hide the
+    # params and the driver would never load the serial.
     node = LifecycleNode(
         package="etrike_kinect2",
         executable="kinect2_node_exec",
         name=f"kinect_{camera}",
-        namespace=f"kinect_{camera}",
         parameters=[
             PathJoinSubstitution([
                 FindPackageShare("etrike_kinect2"), "config", f"kinect_{camera}.yaml"
@@ -55,8 +57,7 @@ def _camera_group(camera: str) -> GroupAction:
 
     # Each node is a LifecycleNode: configure then activate so it starts
     # streaming (and hotplug-polling) as soon as the process is up.
-    return GroupAction([
-        PushRosNamespace(f"kinect_{camera}"),
+    return LaunchDescription([
         node,
         RegisterEventHandler(
             OnProcessStart(target_action=node, on_start=[configure])

@@ -36,14 +36,14 @@ def generate_launch_description():
     config_file = PathJoinSubstitution([
         FindPackageShare("etrike_kinect2"),
         "config",
-        [camera, ".yaml"],
+        ["kinect_", camera, ".yaml"],
     ])
 
     kinect_node = LifecycleNode(
         package="etrike_kinect2",
         executable="kinect2_node_exec",
         name=["kinect_", camera],
-        namespace=["kinect_", camera],
+        namespace="",
         parameters=[config_file],
         output="screen",
     )
