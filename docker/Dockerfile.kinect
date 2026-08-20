@@ -13,7 +13,8 @@ FROM ${AUTOWARE_BASE}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# libfreenect2 build dependencies (CPU-only pipeline; no OpenCL/CUDA/OpenGL).
+# libfreenect2 build dependencies (CUDA pipeline for depth decode on the Orin
+# GPU; TurboJPEG for color).
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         build-essential \
@@ -24,28 +25,39 @@ RUN apt-get update -qq && \
         libturbojpeg0-dev \
         libglfw3-dev \
         libssl-dev \
-        ca-certificates && \
+        ca-certificates \
+        curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Build libfreenect2 from source (CPU pipeline) and install to /usr.
-# Installs the pkg-config file as `freenect2.pc`.
+# Build libfreenect2 from source (CUDA pipeline for depth decode) and install
+# to /usr. The Autoware base image already ships CUDA 12.8 + nvcc, so the
+# CudaPacketPipeline builds and runs on the Jetson AGX Orin.
+#
+# CUDA 12 removed helper_math.h from the toolkit (it moved to cuda-samples),
+# but libfreenect2's cuda_*_packet_processor.cu still #includes it — fetch the
+# canonical copy from NVIDIA's cuda-samples and put it on the nvcc include path.
 RUN git clone --depth 1 https://github.com/OpenKinect/libfreenect2.git /tmp/libfreenect2 && \
+    mkdir -p /tmp/cuda-helper && \
+    curl -fsSL \
+        https://raw.githubusercontent.com/NVIDIA/cuda-samples/master/Common/helper_math.h \
+        -o /tmp/cuda-helper/helper_math.h && \
     cd /tmp/libfreenect2 && \
     mkdir -p build && cd build && \
     cmake .. \
         -DENABLE_OPENCL=OFF \
-        -DENABLE_CUDA=OFF \
+        -DENABLE_CUDA=ON \
         -DENABLE_OPENGL=OFF \
         -DENABLE_VAAPI=OFF \
         -DENABLE_TEGRAJPEG=OFF \
         -DBUILD_OPENNI2_DRIVER=OFF \
-        -DCMAKE_INSTALL_PREFIX=/usr && \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCUDA_NVCC_FLAGS="-I/tmp/cuda-helper -gencode arch=compute_87,code=sm_87 -gencode arch=compute_87,code=compute_87" && \
     make -j"$(nproc)" && \
     make install && \
     ldconfig && \
     mkdir -p /etc/udev/rules.d && \
     cp platform/linux/udev/90-kinect2.rules /etc/udev/rules.d/ 2>/dev/null || true && \
-    rm -rf /tmp/libfreenect2
+    rm -rf /tmp/libfreenect2 /tmp/cuda-helper
 
 # Sanity check available to the build.
 RUN pkg-config --exists freenect2 && echo "libfreenect2 (freenect2.pc) present"

@@ -15,6 +15,10 @@
 #include "etrike_kinect2/kinect2_device.hpp"
 
 #include <libfreenect2/logger.h>
+#include <libfreenect2/packet_pipeline.h>
+
+#include <cstdio>
+#include <exception>
 
 namespace etrike_kinect2
 {
@@ -57,7 +61,21 @@ bool Kinect2Device::open(
     return false;
   }
 
+  // Prefer the CUDA depth pipeline (built in the etrike-kinect-build image);
+  // it offloads the expensive depth decode to the Orin GPU. Fall back to CPU
+  // if the CUDA pipeline is unavailable (e.g. older image without CUDA).
+#ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
+  try {
+    pipeline_.reset(new libfreenect2::CudaPacketPipeline());
+  } catch (const std::exception & e) {
+    fprintf(
+      stderr, "[kinect2_device] CUDA pipeline unavailable (%s) — falling back to CPU\n",
+      e.what());
+    pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+  }
+#else
   pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+#endif
 
   device_ = freenect2_->openDevice(serial, pipeline_.get());
   if (!device_) {
