@@ -229,6 +229,7 @@ void Kinect2Node::capture_loop()
   rclcpp::Time last_discover = this->now() - std::chrono::seconds(10);
 
   while (running_) {
+    // -- Connection management (only runs while the device is NOT open). --
     {
       std::lock_guard<std::mutex> lock(device_mutex_);
 
@@ -257,6 +258,7 @@ void Kinect2Node::capture_loop()
       }
     }
 
+    // -- Streaming: block on the device listener (event-driven, ~30 Hz). --
     if (device_ && device_->isOpen() && device_->isStreaming()) {
       FrameSet frames{};
       bool got_frame = false;
@@ -287,8 +289,18 @@ void Kinect2Node::capture_loop()
           }
         }
       }
+
+      // While streaming, only check diagnostics periodically; do NOT sleep a
+      // fixed interval (that would throttle the camera to < 30 Hz).
+      auto now = this->now();
+      if ((now - last_diag_time_).seconds() >= 1.0) {
+        last_diag_time_ = now;
+        publish_diagnostics();
+      }
+      continue;
     }
 
+    // -- Not streaming (device absent / not yet open): poll at low rate. --
     auto now = this->now();
     if ((now - last_diag_time_).seconds() >= 1.0) {
       last_diag_time_ = now;
