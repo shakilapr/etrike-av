@@ -99,12 +99,17 @@ Kinect2Node (LifecycleNode)
 | Topic | Type | QoS | Purpose |
 |---|---|---|---|
 | `color/image_raw` | `sensor_msgs/Image` (bgr8, 1920×1080) | SensorData (Best Effort) | RGB |
-| `color/camera_info` | `sensor_msgs/CameraInfo` | SensorData (Best Effort) | RGB intrinsics |
+| `color/camera_info` | `sensor_msgs/CameraInfo` | SensorData (Best Effort) | RGB intrinsics (factory) |
 | `depth/image_raw` | `sensor_msgs/Image` (32FC1, 512×424, meters) | SensorData (Best Effort) | Depth |
-| `depth/camera_info` | `sensor_msgs/CameraInfo` | SensorData (Best Effort) | Depth intrinsics |
+| `depth/camera_info` | `sensor_msgs/CameraInfo` | SensorData (Best Effort) | Depth intrinsics (factory) |
+| `depth_registered/image_raw` | `sensor_msgs/Image` (bgr8, 512×424) | SensorData (Best Effort) | Color-aligned RGB (if `registration_enabled`) |
 | `ir/image_raw` | `sensor_msgs/Image` (mono8) | SensorData (Best Effort) | IR (if `ir_enabled`) |
-| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | SensorData (Best Effort) | FPS, drops, timeouts, reconnects, device health |
+| `/diagnostics` | `diagnostic_msgs/DiagnosticArray` | SensorData (Best Effort) | FPS, drops, timeouts, reconnects, device health (per-camera name) |
 
+> CameraInfo intrinsics come from libfreenect2's factory calibration
+> (`getColorCameraParams` / `getIrCameraParams`), not placeholders — safe for
+> `depth_image_proc` / point-cloud generation.
+>
 > RViz Image displays must use **Best Effort** QoS to receive these streams.
 
 > `frame_id` of each image = `frame_id_color` / `frame_id_depth` / `frame_id_ir`
