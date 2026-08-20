@@ -6,6 +6,7 @@
 #   ./run.sh front            Launch front Kinect only
 #   ./run.sh rear             Launch rear Kinect only
 #   ./run.sh dual             Launch both Kinects (separate processes)
+#   ./run.sh view [dual|front|rear]   Open RViz window on Jetson monitor (DISPLAY=:1)
 #   ./run.sh test             Run launch test
 #
 # Prerequisites:
@@ -49,8 +50,16 @@ case "${1:-dual}" in
         colcon test --packages-select etrike_kinect2 --event-handlers console_cohesion+
         colcon test-result --verbose
         ;;
+    view)
+        # Open an RViz2 window on the Jetson's monitor (DISPLAY=:1).
+        # The camera is physically on the Jetson; the monitor is :1.
+        CAMERA="${2:-dual}"
+        export DISPLAY="${DISPLAY:-:1}"
+        echo "Opening Kinect viewer on DISPLAY=$DISPLAY (camera=$CAMERA)..."
+        ros2 launch etrike_kinect2 kinect_view.launch.py camera:="$CAMERA"
+        ;;
     *)
-        echo "Usage: $0 [discover|front|rear|dual|test]"
+        echo "Usage: $0 [discover|front|rear|dual|view|test]"
         exit 1
         ;;
 esac

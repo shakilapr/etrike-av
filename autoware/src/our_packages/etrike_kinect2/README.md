@@ -161,32 +161,52 @@ vi config/kinect_rear.yaml    # set serial: "109876543210"
 ./run.sh dual     # both
 ```
 
-### View RGB + Depth (open a window)
+### View RGB + Depth on the Jetson monitor
 
-Once both Kinects stream, open an RViz2 window on the **Jetson** (the camera is
-physically connected there, not on Windows):
+The Kinect is physically plugged into the Jetson. The monitor attached to the
+Jetson is `DISPLAY=:1` (inside the Docker container, X11 is passed through
+`/tmp/.X11-unix`). So you open the window **from inside the container**, not
+from Windows.
+
+**One command (after the container is up):**
 
 ```bash
-# Both cameras side-by-side (front + rear color & depth):
+# On the Jetson (SSH into it, then enter the container):
+./docker/shell.sh
+# inside container:
 ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual
-
-# Or a single camera:
-ros2 launch etrike_kinect2 kinect_view.launch.py camera:=front
-ros2 launch etrike_kinect2 kinect_view.launch.py camera:=rear
 ```
 
-The RViz config (`rviz/kinect_view.rviz`) shows four `Image` panels:
-`/kinect/front/color/image_raw`, `/kinect/front/depth/image_raw`,
-`/kinect/rear/color/image_raw`, `/kinect/rear/depth/image_raw`.
+This opens an RViz2 window on the Jetson's monitor showing four `Image` panels:
+front color, front depth, rear color, rear depth.
 
-Quick check **without RViz** (terminal-only):
+If the container is not running yet, start it with the display passthrough
+(one-time, from the Jetson host):
+
 ```bash
-ros2 run rqt_image_view rqt_image_view \
-    /kinect/front/color/image_raw
-# or for depth (grayscale, meters in 32FC1):
-ros2 run rqt_image_view rqt_image_view \
-    /kinect/front/depth/image_raw
+DISPLAY=:1 xhost +local:docker
+docker run -d --name autoware_test --privileged --runtime=nvidia --gpus all \
+  --net=host --ipc=host \
+  -e DISPLAY=:1 -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+  -v ~/av_project/autoware:/workspace/autoware \
+  ghcr.io/autowarefoundation/autoware:universe-cuda-humble \
+  bash -c 'while true; do sleep 1000; done'
 ```
+
+Then, from the Jetson host:
+
+```bash
+docker exec -it autoware_test bash -c \
+  'export DISPLAY=:1; source /opt/autoware/setup.bash; \
+   source /workspace/autoware/install/setup.bash; \
+   colcon build --symlink-install --packages-select etrike_kinect2; \
+   ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual'
+```
+
+> If you prefer a bare image view (lighter than RViz) on the same monitor:
+> ```bash
+> ros2 run rqt_image_view rqt_image_view /kinect/front/color/image_raw
+> ```
 
 **Data flow when you plug a Kinect into USB:**
 ```
@@ -202,7 +222,7 @@ Kinect2Node (LifecycleNode)
 /kinect/{front,rear}/{color,depth}/image_raw   (bgr8 / 32FC1-meters)
    │
    ▼
-RViz2 Image panel  ← you see RGB + depth live
+RViz2 Image panel (on DISPLAY=:1)  ← you see RGB + depth live
 ```
 
 > Depth is published as `32FC1` **meters** (not mm, not encoded). In RViz the
