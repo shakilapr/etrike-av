@@ -4,11 +4,72 @@ Generated, zero-dependency **CAN codec library** for the E-Trike vehicle bus. De
 
 > **Do not edit by hand.** This header is generated from the protocol definition (`protocol.tools`). The source of truth is the protocol schema in the `etrike` repo.
 
-## How to Update
+## How things are connected
 
-This package is kept in sync with the `etrike` hardware repository (`https://github.com/shakilapr/etrike.git`). The YAML protocol contracts in that repo are the source of truth.
+`etrike_protocol` is **not** a standalone repo — it is a subtree of the
+`etrike` hardware repository, synced into this workspace. The full picture:
 
-To fetch the latest protocol definitions and regenerate the C++ headers in this workspace, run the update script from the root of the `etrike-av` workspace:
+```
+github.com/shakilapr/etrike          (source of truth — CAN YAML contracts
+   └── protocol/                         + generated headers + tools)
+        ├── protocol/core/*.hpp          (hand-written helpers: bits/codec/...)
+        ├── generated/cpp/etrike_protocol.hpp   (GENERATED from YAML)
+        └── tools/protocol               (Python code generator)
+
+        │  git subtree  (prefix = autoware/src/our_packages)
+        ▼
+
+github.com/shakilapr/etrike-av       (this workspace)
+   └── autoware/src/our_packages/etrike_protocol/
+        ├── protocol/core/*.hpp          (copied verbatim)
+        ├── generated/cpp/etrike_protocol.hpp
+        └── README.md
+
+        │  #include
+        ▼
+
+autoware_vehicle_bridge              (consumes encode()/decode() to talk CAN)
+```
+
+So three layers matter:
+1. **etrike repo `protocol/`** — the canonical copy + generator.
+2. **this subtree** — a snapshot pulled via `git subtree` (see below).
+3. **`update-protocol.ps1`/`.sh`** — regenerates the header from a *fresh* clone
+   of the etrike repo (used when you want the newest YAML without a full subtree
+   pull, or to verify the generated output).
+
+## Syncing via git subtree (the primary mechanism)
+
+The `our_packages/` subtree is shared across `autoware_vehicle_bridge`,
+`etrike_protocol`, `etrike_vehicle_launch`, and `etrike_vehicle_description`.
+To pull the latest from the etrike repo (full subtree, preserves history):
+
+```bash
+cd ~/av_project
+
+# First time only: register the remote (it is local config, not committed)
+git remote add etrike https://github.com/shakilapr/etrike.git
+
+# Pull latest into our_packages/
+git fetch etrike
+git subtree pull --prefix=autoware/src/our_packages etrike/main \
+    -m "sync: pull updates from etrike"
+```
+
+To push local edits back to the etrike repo:
+
+```bash
+git subtree push --prefix=autoware/src/our_packages etrike main
+```
+
+> See `docs/ETRIKE_AV_GIT_WORKFLOW.md` for the canonical subtree workflow.
+
+## Regenerating the header (when only the protocol changed)
+
+If you only need the newest generated `etrike_protocol.hpp` (no other package
+changes), run the update script from the workspace root. It clones etrike
+temporarily, runs `python -m tools.protocol generate`, and copies the result
+here.
 
 **Windows (PowerShell):**
 ```powershell
@@ -21,7 +82,7 @@ To fetch the latest protocol definitions and regenerate the C++ headers in this 
 ```
 *(If no branch is specified, it defaults to `main`.)*
 
-These scripts automate the process of:
+These scripts automate:
 1. Cloning the `etrike` repository into a temporary directory.
 2. Running the Python code generator (`python -m tools.protocol generate`) from the `etrike` repo against the YAML contracts.
 3. Copying the newly generated `etrike_protocol.hpp` and testing vectors into this `etrike_protocol` package.

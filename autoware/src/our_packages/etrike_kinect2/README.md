@@ -161,6 +161,54 @@ vi config/kinect_rear.yaml    # set serial: "109876543210"
 ./run.sh dual     # both
 ```
 
+### View RGB + Depth (open a window)
+
+Once both Kinects stream, open an RViz2 window on the **Jetson** (the camera is
+physically connected there, not on Windows):
+
+```bash
+# Both cameras side-by-side (front + rear color & depth):
+ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual
+
+# Or a single camera:
+ros2 launch etrike_kinect2 kinect_view.launch.py camera:=front
+ros2 launch etrike_kinect2 kinect_view.launch.py camera:=rear
+```
+
+The RViz config (`rviz/kinect_view.rviz`) shows four `Image` panels:
+`/kinect/front/color/image_raw`, `/kinect/front/depth/image_raw`,
+`/kinect/rear/color/image_raw`, `/kinect/rear/depth/image_raw`.
+
+Quick check **without RViz** (terminal-only):
+```bash
+ros2 run rqt_image_view rqt_image_view \
+    /kinect/front/color/image_raw
+# or for depth (grayscale, meters in 32FC1):
+ros2 run rqt_image_view rqt_image_view \
+    /kinect/front/depth/image_raw
+```
+
+**Data flow when you plug a Kinect into USB:**
+```
+USB 3.0 port (SuperSpeed)
+   │ libfreenect2 (kernel usb + libusb)
+   ▼
+Kinect2Device (enumerate by serial → openDevice)
+   │ wait_for_frames() in capture thread
+   ▼
+Kinect2Node (LifecycleNode)
+   │ frame_converter (libfreenect2 Frame → sensor_msgs/Image)
+   ▼
+/kinect/{front,rear}/{color,depth}/image_raw   (bgr8 / 32FC1-meters)
+   │
+   ▼
+RViz2 Image panel  ← you see RGB + depth live
+```
+
+> Depth is published as `32FC1` **meters** (not mm, not encoded). In RViz the
+> depth panel renders it as a grayscale heightmap; for a colored point cloud,
+> pipe `depth/image_raw` + `depth/camera_info` into `depth_image_proc`.
+
 ## Parameters
 
 | Parameter | Type | Default | Description |

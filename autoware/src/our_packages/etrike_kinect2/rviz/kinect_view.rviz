@@ -1,0 +1,94 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Displays1
+        - /Displays1/Group (Kinect Front)1
+        - /Displays1/Group (Kinect Rear)1
+      Splitter Ratio: 0.5
+    Tree Height: 421
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Tool Properties
+    Name: Tool Properties
+  - Class: rviz_common/Views
+    Name: Views
+  - Class: rviz_common/Time
+    Name: Time
+    SyncMode: 0
+    SyncSource: ""
+
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 160
+      Enabled: false
+      Name: Grid
+      Plane Cell Count: 10
+    - Class: rviz_default_plugins/Group
+      Displays:
+        - Class: rviz_default_plugins/Image
+          Enabled: true
+          Name: Front Color
+          Queue Size: 10
+          Topic:
+            FilterString: "sensor_msgs/msg/Image"
+            Topic: /kinect/front/color/image_raw
+        - Class: rviz_default_plugins/Image
+          Enabled: true
+          Name: Front Depth
+          Queue Size: 10
+          Topic:
+            FilterString: "sensor_msgs/msg/Image"
+            Topic: /kinect/front/depth/image_raw
+      Enabled: true
+      Name: Group (Kinect Front)
+    - Class: rviz_default_plugins/Group
+      Displays:
+        - Class: rviz_default_plugins/Image
+          Enabled: true
+          Name: Rear Color
+          Queue Size: 10
+          Topic:
+            FilterString: "sensor_msgs/msg/Image"
+            Topic: /kinect/rear/color/image_raw
+        - Class: rviz_default_plugins/Image
+          Enabled: true
+          Name: Rear Depth
+          Queue Size: 10
+          Topic:
+            FilterString: "sensor_msgs/msg/Image"
+            Topic: /kinect/rear/depth/image_raw
+      Enabled: true
+      Name: Group (Kinect Rear)
+  Enabled: true
+  Global Options:
+    Fixed Frame: kinect_front_rgb_optical_frame
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Name: Interact
+    - Class: rviz_default_plugins/Select
+      Name: Select
+    - Class: rviz_default_plugins/FocusCamera
+      Name: Focus Camera
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Target Frame: <Fixed Frame>
+      Value: true
+
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 900
+  Width: 1400
+  X: 100
+  Y: 100

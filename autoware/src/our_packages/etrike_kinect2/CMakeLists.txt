@@ -56,7 +56,7 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-install(DIRECTORY launch config urdf
+install(DIRECTORY launch config urdf rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
