@@ -34,6 +34,7 @@ def _camera_group(camera: str):
         package="etrike_kinect2",
         executable="kinect2_node_exec",
         name=f"kinect_{camera}",
+        namespace="",
         parameters=[
             PathJoinSubstitution([
                 FindPackageShare("etrike_kinect2"), "config", f"kinect_{camera}.yaml"

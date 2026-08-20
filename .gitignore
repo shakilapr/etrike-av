@@ -54,3 +54,6 @@ download/
 
 # Repository-owned runtime mesh generated from etrike_body.scad
 !/autoware/src/our_packages/etrike_vehicle_description/meshes/etrike_body.obj
+
+# References directory
+/references/

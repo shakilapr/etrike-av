@@ -47,7 +47,7 @@ bool Kinect2Device::open(const std::string & serial)
 {
   freenect2_ = std::make_unique<libfreenect2::Freenect2>();
 
-  libfreenect2::setGlobalLogger(libfreenect2::createConsoleLogger(libfreenect2::Logger::Info));
+  libfreenect2::setGlobalLogger(libfreenect2::createConsoleLogger(libfreenect2::Logger::Warning));
 
   if (freenect2_->enumerateDevices() == 0) {
     return false;

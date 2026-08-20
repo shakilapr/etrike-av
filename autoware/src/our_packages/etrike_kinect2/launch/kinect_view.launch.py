@@ -38,7 +38,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, EmitEvent, OpaqueFunction, RegisterEventHandler
 from launch.event_handlers import OnProcessStart
 from launch.events import matches_action
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -56,6 +56,7 @@ def _camera_node(camera: str):
         package="etrike_kinect2",
         executable="kinect2_node_exec",
         name=f"kinect_{camera}",
+        namespace="",
         parameters=[
             PathJoinSubstitution([
                 FindPackageShare("etrike_kinect2"),
@@ -79,7 +80,7 @@ def _camera_node(camera: str):
         )
     )
 
-    return LaunchDescription([
+    return [
         node,
         RegisterEventHandler(
             OnProcessStart(target_action=node, on_start=[configure])
@@ -91,7 +92,7 @@ def _camera_node(camera: str):
                 entities=[activate],
             )
         ),
-    ])
+    ]
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -103,14 +104,14 @@ def generate_launch_description() -> LaunchDescription:
     )
     camera = LaunchConfiguration("camera")
 
-    nodes = []
-    if str(camera.perform(None)) == "front":
-        nodes.append(_camera_node("front"))
-    elif str(camera.perform(None)) == "rear":
-        nodes.append(_camera_node("rear"))
-    else:
-        nodes.append(_camera_node("front"))
-        nodes.append(_camera_node("rear"))
+    def _spawn(context):
+        value = context.launch_configurations.get("camera", "dual")
+        chosen = []
+        if value in ("front", "dual"):
+            chosen.extend(_camera_node("front"))
+        if value in ("rear", "dual"):
+            chosen.extend(_camera_node("rear"))
+        return chosen
 
     rviz = Node(
         package="rviz2",
@@ -118,9 +119,17 @@ def generate_launch_description() -> LaunchDescription:
         name="rviz2",
         # Always render on the Jetson's physical monitor (:1), whether this
         # launch is triggered from a local terminal or over SSH.
-        env=[("DISPLAY", ":1")],
+        env={
+            "DISPLAY": ":1",
+            "XDG_RUNTIME_DIR": "/tmp/runtime-root",
+            "QT_QPA_PLATFORM": "xcb",
+        },
         arguments=["-d", os.path.join(share, "rviz", "kinect_view.rviz")],
         output="screen",
     )
 
-    return LaunchDescription([camera_arg] + nodes + [rviz])
+    return LaunchDescription([
+        camera_arg,
+        OpaqueFunction(function=_spawn),
+        rviz,
+    ])

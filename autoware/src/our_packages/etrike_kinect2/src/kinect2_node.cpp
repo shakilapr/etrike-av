@@ -232,30 +232,27 @@ void Kinect2Node::capture_loop()
     {
       std::lock_guard<std::mutex> lock(device_mutex_);
 
-      auto now = this->now();
-      bool need_discover = (now - last_discover).seconds() >= discover_interval_s_;
-      bool present = !serial_.empty();
-      if (present && need_discover) {
-        last_discover = now;
-        auto devices = Kinect2Device::enumerateDevices();
-        present = std::any_of(
-          devices.begin(), devices.end(),
-          [this](const DeviceInfo & d) {return d.serial == serial_;});
-      }
-
-      if (device_ && device_->isOpen() && !present) {
-        RCLCPP_WARN(
-          get_logger(),
-          "serial=%s no longer present on USB — disconnecting", serial_.c_str());
-        disconnect_device();
-      }
-
-      if (!device_ && present) {
-        try_connect();
-        if (!device_) {
-          RCLCPP_DEBUG(
-            get_logger(),
-            "serial=%s present but open failed — retry later", serial_.c_str());
+      // Only enumerate the USB bus while the device is NOT already open.
+      // Re-enumerating a live, streaming Kinect disrupts its transfers and
+      // corrupts the depth stream (libfreenect2 re-claims the control
+      // interface). When streaming, we trust the frame loop to detect unplug.
+      if (!device_ && !serial_.empty()) {
+        auto now = this->now();
+        bool need_discover = (now - last_discover).seconds() >= discover_interval_s_;
+        if (need_discover) {
+          last_discover = now;
+          auto devices = Kinect2Device::enumerateDevices();
+          bool present = std::any_of(
+            devices.begin(), devices.end(),
+            [this](const DeviceInfo & d) {return d.serial == serial_;});
+          if (present) {
+            try_connect();
+          }
+          if (!device_) {
+            RCLCPP_DEBUG(
+              get_logger(),
+              "serial=%s not yet available on USB — retrying", serial_.c_str());
+          }
         }
       }
     }
