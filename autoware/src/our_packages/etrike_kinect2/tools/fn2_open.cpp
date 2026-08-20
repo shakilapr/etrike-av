@@ -19,6 +19,7 @@
 
 #include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/packet_pipeline.h>
+
 #include <cstdio>
 
 int main()

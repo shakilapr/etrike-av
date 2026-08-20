@@ -16,6 +16,7 @@
 #define ETRIKE_KINECT2__FRAME_CONVERTER_HPP_
 
 #include <libfreenect2/frame_listener_impl.h>
+#include <libfreenect2/registration.h>
 
 #include <memory>
 #include <string>
@@ -41,6 +42,16 @@ public:
 
   static sensor_msgs::msg::Image::SharedPtr to_ir_image(
     const libfreenect2::Frame & frame,
+    const std::string & frame_id,
+    const rclcpp::Time & stamp);
+
+  // Depth registered to the RGB camera via libfreenect2 factory calibration.
+  // rgb is the *color* frame (BGRX/RGBX, native libfreenect2 output). Output
+  // is a BGR8 image aligned to the color camera.
+  static sensor_msgs::msg::Image::SharedPtr to_registered_depth_image(
+    const libfreenect2::Frame & depth,
+    const libfreenect2::Frame & rgb,
+    libfreenect2::Registration & registration,
     const std::string & frame_id,
     const rclcpp::Time & stamp);
 };

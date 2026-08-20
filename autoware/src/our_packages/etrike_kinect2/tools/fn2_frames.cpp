@@ -22,12 +22,20 @@
 // dropping packets (classic Jetson tegra-xusb issue) — fix USB / kernel /
 // usbfs_memory_mb rather than the ROS driver.
 
-#include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/frame_listener_impl.h>
+#include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/packet_pipeline.h>
-#include <cstdio>
 
-using namespace libfreenect2;
+#include <cstdio>
+#include <cstdlib>
+
+using libfreenect2::CpuPacketPipeline;
+using libfreenect2::Freenect2;
+using libfreenect2::Freenect2Device;
+using libfreenect2::Frame;
+using libfreenect2::FrameMap;
+using libfreenect2::PacketPipeline;
+using libfreenect2::SyncMultiFrameListener;
 
 int main(int argc, char ** argv)
 {
@@ -58,12 +66,14 @@ int main(int argc, char ** argv)
     if (listener.waitForNewFrame(fm, 2000)) {
       ++got;
       if (fm[Frame::Color]) {
-        printf("frame %d color=%dx%d\n", got, fm[Frame::Color]->width,
-               fm[Frame::Color]->height);
+        printf(
+          "frame %d color=%dx%d\n", got, fm[Frame::Color]->width,
+          fm[Frame::Color]->height);
       }
       if (fm[Frame::Depth]) {
-        printf("  depth=%dx%d\n", fm[Frame::Depth]->width,
-               fm[Frame::Depth]->height);
+        printf(
+          "  depth=%dx%d\n", fm[Frame::Depth]->width,
+          fm[Frame::Depth]->height);
       }
       listener.release(fm);
     } else {

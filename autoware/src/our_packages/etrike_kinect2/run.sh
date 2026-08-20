@@ -43,7 +43,9 @@ case "${1:-dual}" in
         ;;
     dual)
         echo "Launching dual Kinect (front + rear)..."
-        ros2 launch etrike_kinect2 dual_kinect.launch.py "$@"
+        # Note: do NOT forward "$@" here — the first arg is "dual" itself
+        # and would be passed to the launch file as a stray positional arg.
+        ros2 launch etrike_kinect2 dual_kinect.launch.py
         ;;
     test)
         echo "Running launch tests..."

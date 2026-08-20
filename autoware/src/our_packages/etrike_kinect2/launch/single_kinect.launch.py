@@ -85,6 +85,10 @@ def _create_camera(context):
                 f"{topic_prefix}/depth/camera_info",
             ),
             (
+                "depth_registered/image_raw",
+                f"{topic_prefix}/depth_registered/image_raw",
+            ),
+            (
                 "ir/image_raw",
                 f"{topic_prefix}/ir/image_raw",
             ),

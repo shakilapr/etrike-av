@@ -24,7 +24,6 @@ import lifecycle_msgs.msg
 from launch.events import matches_action
 from launch_ros.actions import LifecycleNode
 from launch.actions import EmitEvent, RegisterEventHandler
-from launch.event_handlers import OnProcessStart
 from launch_ros.event_handlers import OnStateTransition
 from rclpy.node import Node
 from diagnostic_msgs.msg import DiagnosticArray
@@ -57,18 +56,23 @@ def generate_test_description():
         )
     )
 
+    # Same deterministic pattern as the production launch file
+    # (single_kinect.launch.py): register the "inactive -> activate" handler
+    # BEFORE the node, then explicitly emit CONFIGURE. Deliberately NOT using
+    # OnProcessStart (that is racy — the process can signal before the handler
+    # is registered).
+    activate_when_inactive = RegisterEventHandler(
+        OnStateTransition(
+            target_lifecycle_node=kinect_node,
+            goal_state="inactive",
+            entities=[activate],
+        )
+    )
+
     return launch.LaunchDescription([
+        activate_when_inactive,
         kinect_node,
-        RegisterEventHandler(
-            OnProcessStart(target_action=kinect_node, on_start=[configure])
-        ),
-        RegisterEventHandler(
-            OnStateTransition(
-                target_lifecycle_node=kinect_node,
-                goal_state="inactive",
-                entities=[activate],
-            )
-        ),
+        configure,
         launch_testing.actions.ReadyToTest(),
     ])
 

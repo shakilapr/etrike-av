@@ -15,6 +15,7 @@
 #ifndef ETRIKE_KINECT2__KINECT2_NODE_HPP_
 #define ETRIKE_KINECT2__KINECT2_NODE_HPP_
 
+#include <chrono>
 #include <memory>
 #include <string>
 #include <thread>
@@ -53,7 +54,12 @@ private:
   void disconnect_device();
   void publish_frame(FrameSet & frames, const rclcpp::Time & stamp);
   void publish_diagnostics();
-  sensor_msgs::msg::CameraInfo build_camera_info(const std::string & frame_id) const;
+  sensor_msgs::msg::CameraInfo build_camera_info(
+    const std::string & frame_id,
+    unsigned int width,
+    unsigned int height,
+    const libfreenect2::Freenect2Device::ColorCameraParams * color_params = nullptr,
+    const libfreenect2::Freenect2Device::IrCameraParams * ir_params = nullptr) const;
 
   // Parameters
   std::string serial_;
@@ -64,8 +70,6 @@ private:
   std::string frame_id_color_;
   std::string frame_id_depth_;
   std::string frame_id_ir_;
-  double depth_min_m_;
-  double depth_max_m_;
   int reconnect_attempts_;
   double reconnect_delay_s_;
   double discover_interval_s_;
@@ -78,6 +82,7 @@ private:
   // Publishers
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr color_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_registered_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr ir_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr color_info_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr depth_info_pub_;
@@ -85,7 +90,7 @@ private:
   // Diagnostics
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
 
-  // Camera info (placeholder, uncalibrated — fill from URDF once available)
+  // Camera info (intrinsics from libfreenect2 factory params)
   sensor_msgs::msg::CameraInfo color_info_;
   sensor_msgs::msg::CameraInfo depth_info_;
 
@@ -95,7 +100,8 @@ private:
   std::atomic<bool> device_ok_;
   std::mutex device_mutex_;
 
-  // Stats
+  // Stats (steady clock for internal hardware timing; ROS time only for
+  // message stamps)
   uint64_t color_frames_delivered_;
   uint64_t depth_frames_delivered_;
   uint64_t ir_frames_delivered_;
@@ -103,9 +109,12 @@ private:
   uint64_t timeouts_;
   uint64_t connects_;
   uint64_t disconnects_;
-  rclcpp::Time last_frame_time_;
-  rclcpp::Time last_diag_time_;
-  rclcpp::Time last_connect_time_;
+  std::chrono::steady_clock::time_point last_diag_time_;
+  std::chrono::steady_clock::time_point last_discover_time_;
+  std::chrono::steady_clock::time_point diag_window_start_;
+  uint64_t color_frames_in_window_;
+  uint64_t depth_frames_in_window_;
+  uint64_t ir_frames_in_window_;
 };
 
 }  // namespace etrike_kinect2

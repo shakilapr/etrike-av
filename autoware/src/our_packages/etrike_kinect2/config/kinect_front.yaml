@@ -10,10 +10,8 @@ kinect_front:
     frame_id_color: "kinect_front_rgb_optical_frame"
     frame_id_depth: "kinect_front_depth_optical_frame"
     frame_id_ir: "kinect_front_ir_optical_frame"
-    depth_min_m: 0.5
-    depth_max_m: 4.5
     reconnect_attempts: 3
     reconnect_delay_s: 2.0
     discover_interval_s: 1.0
-    frame_timeout_ms: 5000
+    frame_timeout_ms: 1000
     poll_interval_ms: 100

@@ -1,7 +1,8 @@
 # Copyright 2026 E-Trike Dev.
 # Licensed under the Apache License, Version 2.0
 
-"""Dual Kinect v2 driver launcher.
+"""
+Launch both Kinect v2 driver nodes (front + rear).
 
 Equivalent to: ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual
 but WITHOUT the RViz viewer — just both camera driver nodes.

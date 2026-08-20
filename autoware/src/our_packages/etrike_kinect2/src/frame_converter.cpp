@@ -73,4 +73,31 @@ sensor_msgs::msg::Image::SharedPtr FrameConverter::to_ir_image(
   return msg;
 }
 
+sensor_msgs::msg::Image::SharedPtr FrameConverter::to_registered_depth_image(
+  const libfreenect2::Frame & depth,
+  const libfreenect2::Frame & rgb,
+  libfreenect2::Registration & registration,
+  const std::string & frame_id,
+  const rclcpp::Time & stamp)
+{
+  // Undistorted depth (depth-camera resolution) and color registered onto the
+  // depth camera's grid, produced by libfreenect2's factory-calibrated
+  // Registration::apply(). The color frame must be in BGRX/RGBX format
+  // (libfreenect2 native color output) — matching how the raw color stream is
+  // produced, so the registered result is a BGR8 image at depth resolution.
+  libfreenect2::Frame undistorted(depth.width, depth.height, 4);
+  libfreenect2::Frame registered(depth.width, depth.height, 4);
+
+  registration.apply(&rgb, &depth, &undistorted, &registered);
+
+  cv::Mat registered_mat(depth.height, depth.width, CV_8UC4, registered.data);
+  cv::Mat bgr;
+  cv::cvtColor(registered_mat, bgr, cv::COLOR_BGRA2BGR);
+
+  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr).toImageMsg();
+  msg->header.frame_id = frame_id;
+  msg->header.stamp = stamp;
+  return msg;
+}
+
 }  // namespace etrike_kinect2

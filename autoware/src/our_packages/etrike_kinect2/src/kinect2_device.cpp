@@ -43,7 +43,11 @@ std::vector<DeviceInfo> Kinect2Device::enumerateDevices()
   return devices;
 }
 
-bool Kinect2Device::open(const std::string & serial)
+bool Kinect2Device::open(
+  const std::string & serial,
+  bool enable_color,
+  bool enable_depth,
+  bool enable_ir)
 {
   freenect2_ = std::make_unique<libfreenect2::Freenect2>();
 
@@ -61,16 +65,25 @@ bool Kinect2Device::open(const std::string & serial)
   }
 
   serial_ = serial;
+  enable_color_ = enable_color;
+  enable_depth_ = enable_depth;
+  enable_ir_ = enable_ir;
+
   registration_.reset(
     new libfreenect2::Registration(
       device_->getIrCameraParams(), device_->getColorCameraParams()));
 
-  listener_.reset(
+  // Separate listeners for RGB and IR+depth (the proven kinect2_bridge
+  // design): each returns at its own cadence instead of forcing all three
+  // streams to synchronize.
+  listener_color_.reset(
+    new libfreenect2::SyncMultiFrameListener(libfreenect2::Frame::Color));
+  listener_irdepth_.reset(
     new libfreenect2::SyncMultiFrameListener(
-      libfreenect2::Frame::Color | libfreenect2::Frame::Ir | libfreenect2::Frame::Depth));
+      libfreenect2::Frame::Ir | libfreenect2::Frame::Depth));
 
-  device_->setColorFrameListener(listener_.get());
-  device_->setIrAndDepthFrameListener(listener_.get());
+  device_->setColorFrameListener(listener_color_.get());
+  device_->setIrAndDepthFrameListener(listener_irdepth_.get());
 
   return true;
 }
@@ -83,7 +96,9 @@ bool Kinect2Device::start()
   if (streaming_) {
     return true;
   }
-  bool ok = device_->start();
+  // Start only the requested hardware streams. Disabled streams are not
+  // acquired at all, saving USB bandwidth and CPU on a dual-camera setup.
+  bool ok = device_->startStreams(enable_color_, enable_depth_);
   streaming_ = ok;
   return ok;
 }
@@ -99,7 +114,8 @@ void Kinect2Device::stop()
 void Kinect2Device::close()
 {
   stop();
-  listener_.reset();
+  listener_color_.reset();
+  listener_irdepth_.reset();
   registration_.reset();
   if (device_) {
     device_->close();
@@ -127,28 +143,49 @@ std::string Kinect2Device::serial() const
 
 bool Kinect2Device::wait_for_frames(FrameSet & frames, unsigned int timeout_ms)
 {
-  if (!listener_ || !streaming_) {
-    return false;
+  if (streaming_ && enable_depth_) {
+    libfreenect2::FrameMap frame_map;
+    if (!listener_irdepth_->waitForNewFrame(frame_map, timeout_ms)) {
+      return false;
+    }
+    frames.ir = frame_map[libfreenect2::Frame::Ir];
+    frames.depth = frame_map[libfreenect2::Frame::Depth];
+  } else {
+    frames.ir = nullptr;
+    frames.depth = nullptr;
   }
-  libfreenect2::FrameMap frame_map;
-  if (!listener_->waitForNewFrame(frame_map, timeout_ms)) {
-    return false;
+
+  if (streaming_ && enable_color_) {
+    libfreenect2::FrameMap frame_map;
+    if (!listener_color_->waitForNewFrame(frame_map, timeout_ms)) {
+      // If color is enabled but we time out, drop the depth pair already
+      // pulled so the caller's release path stays consistent.
+      if (frames.depth) {
+        release_frames(frames);
+      }
+      return false;
+    }
+    frames.color = frame_map[libfreenect2::Frame::Color];
+  } else {
+    frames.color = nullptr;
   }
-  frames.color = frame_map[libfreenect2::Frame::Color];
-  frames.ir = frame_map[libfreenect2::Frame::Ir];
-  frames.depth = frame_map[libfreenect2::Frame::Depth];
-  return true;
+
+  return frames.color != nullptr || frames.depth != nullptr;
 }
 
 void Kinect2Device::release_frames(FrameSet & frames)
 {
-  if (listener_ && frames.color) {
+  if (frames.color) {
     libfreenect2::FrameMap frame_map;
     frame_map[libfreenect2::Frame::Color] = frames.color;
+    listener_color_->release(frame_map);
+    frames.color = nullptr;
+  }
+  if (frames.ir || frames.depth) {
+    libfreenect2::FrameMap frame_map;
     frame_map[libfreenect2::Frame::Ir] = frames.ir;
     frame_map[libfreenect2::Frame::Depth] = frames.depth;
-    listener_->release(frame_map);
-    frames.color = nullptr;
+    listener_irdepth_->release(frame_map);
     frames.ir = nullptr;
     frames.depth = nullptr;
   }
@@ -157,6 +194,22 @@ void Kinect2Device::release_frames(FrameSet & frames)
 libfreenect2::Registration * Kinect2Device::registration() const
 {
   return registration_.get();
+}
+
+libfreenect2::Freenect2Device::ColorCameraParams Kinect2Device::color_params() const
+{
+  if (!device_) {
+    return libfreenect2::Freenect2Device::ColorCameraParams{};
+  }
+  return device_->getColorCameraParams();
+}
+
+libfreenect2::Freenect2Device::IrCameraParams Kinect2Device::ir_params() const
+{
+  if (!device_) {
+    return libfreenect2::Freenect2Device::IrCameraParams{};
+  }
+  return device_->getIrCameraParams();
 }
 
 }  // namespace etrike_kinect2

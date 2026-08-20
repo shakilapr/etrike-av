@@ -51,7 +51,11 @@ public:
 
   static std::vector<DeviceInfo> enumerateDevices();
 
-  bool open(const std::string & serial);
+  bool open(
+    const std::string & serial,
+    bool enable_color = true,
+    bool enable_depth = true,
+    bool enable_ir = false);
   bool start();
   void stop();
   void close();
@@ -64,16 +68,22 @@ public:
   void release_frames(FrameSet & frames);
 
   libfreenect2::Registration * registration() const;
+  libfreenect2::Freenect2Device::ColorCameraParams color_params() const;
+  libfreenect2::Freenect2Device::IrCameraParams ir_params() const;
 
 private:
   std::unique_ptr<libfreenect2::Freenect2> freenect2_;
   libfreenect2::Freenect2Device * device_;
   std::unique_ptr<libfreenect2::PacketPipeline> pipeline_;
-  std::unique_ptr<libfreenect2::SyncMultiFrameListener> listener_;
+  std::unique_ptr<libfreenect2::SyncMultiFrameListener> listener_color_;
+  std::unique_ptr<libfreenect2::SyncMultiFrameListener> listener_irdepth_;
   std::unique_ptr<libfreenect2::Registration> registration_;
 
   std::string serial_;
   bool streaming_;
+  bool enable_color_;
+  bool enable_depth_;
+  bool enable_ir_;
 };
 
 }  // namespace etrike_kinect2

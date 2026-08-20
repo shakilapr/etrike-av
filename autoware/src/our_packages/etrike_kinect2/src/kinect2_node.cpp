@@ -40,7 +40,12 @@ Kinect2Node::Kinect2Node(const rclcpp::NodeOptions & options)
   timeouts_(0),
   connects_(0),
   disconnects_(0),
-  last_diag_time_(this->now())
+  last_diag_time_(std::chrono::steady_clock::now()),
+  last_discover_time_(std::chrono::steady_clock::now()),
+  diag_window_start_(std::chrono::steady_clock::now()),
+  color_frames_in_window_(0),
+  depth_frames_in_window_(0),
+  ir_frames_in_window_(0)
 {
   declare_parameter<std::string>("serial", "");
   declare_parameter<bool>("color_enabled", true);
@@ -50,12 +55,10 @@ Kinect2Node::Kinect2Node(const rclcpp::NodeOptions & options)
   declare_parameter<std::string>("frame_id_color", "kinect_color_optical_frame");
   declare_parameter<std::string>("frame_id_depth", "kinect_depth_optical_frame");
   declare_parameter<std::string>("frame_id_ir", "kinect_ir_optical_frame");
-  declare_parameter<double>("depth_min_m", 0.5);
-  declare_parameter<double>("depth_max_m", 4.5);
   declare_parameter<int>("reconnect_attempts", 3);
   declare_parameter<double>("reconnect_delay_s", 2.0);
   declare_parameter<double>("discover_interval_s", 1.0);
-  declare_parameter<int>("frame_timeout_ms", 5000);
+  declare_parameter<int>("frame_timeout_ms", 1000);
   declare_parameter<int>("poll_interval_ms", 100);
 }
 
@@ -77,8 +80,6 @@ CallbackReturn Kinect2Node::on_configure(const rclcpp_lifecycle::State & /*state
   frame_id_color_ = get_parameter("frame_id_color").as_string();
   frame_id_depth_ = get_parameter("frame_id_depth").as_string();
   frame_id_ir_ = get_parameter("frame_id_ir").as_string();
-  depth_min_m_ = get_parameter("depth_min_m").as_double();
-  depth_max_m_ = get_parameter("depth_max_m").as_double();
   reconnect_attempts_ = get_parameter("reconnect_attempts").as_int();
   reconnect_delay_s_ = get_parameter("reconnect_delay_s").as_double();
   discover_interval_s_ = get_parameter("discover_interval_s").as_double();
@@ -102,8 +103,14 @@ CallbackReturn Kinect2Node::on_configure(const rclcpp_lifecycle::State & /*state
     create_publisher<sensor_msgs::msg::Image>("depth/image_raw", rclcpp::SensorDataQoS());
   ir_pub_ = create_publisher<sensor_msgs::msg::Image>("ir/image_raw", rclcpp::SensorDataQoS());
 
-  color_info_ = build_camera_info(frame_id_color_);
-  depth_info_ = build_camera_info(frame_id_depth_);
+  // Registered depth (color-aligned) is only published when requested.
+  depth_registered_pub_ = create_publisher<sensor_msgs::msg::Image>(
+    "depth_registered/image_raw", rclcpp::SensorDataQoS());
+
+  // Factory intrinsics are only available once the device is open; fill in
+  // correct dimensions now and refresh the matrices after open() succeeds.
+  color_info_ = build_camera_info(frame_id_color_, 1920, 1080);
+  depth_info_ = build_camera_info(frame_id_depth_, 512, 424);
 
   RCLCPP_INFO(
     get_logger(),
@@ -124,8 +131,12 @@ CallbackReturn Kinect2Node::on_activate(const rclcpp_lifecycle::State &)
   timeouts_ = 0;
   connects_ = 0;
   disconnects_ = 0;
-  last_frame_time_ = this->now();
-  last_diag_time_ = this->now();
+  last_diag_time_ = std::chrono::steady_clock::now();
+  last_discover_time_ = std::chrono::steady_clock::now();
+  diag_window_start_ = std::chrono::steady_clock::now();
+  color_frames_in_window_ = 0;
+  depth_frames_in_window_ = 0;
+  ir_frames_in_window_ = 0;
 
   capture_thread_ = std::thread(&Kinect2Node::capture_loop, this);
 
@@ -157,6 +168,10 @@ CallbackReturn Kinect2Node::on_cleanup(const rclcpp_lifecycle::State &)
   }
 
   device_.reset();
+  color_pub_.reset();
+  depth_pub_.reset();
+  depth_registered_pub_.reset();
+  ir_pub_.reset();
   color_info_pub_.reset();
   depth_info_pub_.reset();
   diag_pub_.reset();
@@ -193,7 +208,7 @@ void Kinect2Node::try_connect()
   }
 
   device_ = std::make_unique<Kinect2Device>();
-  if (!device_->open(serial_)) {
+  if (!device_->open(serial_, color_enabled_, depth_enabled_, ir_enabled_)) {
     device_.reset();
     return;
   }
@@ -205,10 +220,16 @@ void Kinect2Node::try_connect()
     return;
   }
 
+  // Refresh CameraInfo with the factory-calibrated intrinsics now that the
+  // device is open (dimensions were set at configure time; matrices were
+  // placeholder-1.0 until here).
+  auto color_params = device_->color_params();
+  auto ir_params = device_->ir_params();
+  color_info_ = build_camera_info(frame_id_color_, 1920, 1080, &color_params, nullptr);
+  depth_info_ = build_camera_info(frame_id_depth_, 512, 424, nullptr, &ir_params);
+
   connects_++;
   device_ok_ = true;
-  last_connect_time_ = this->now();
-  last_frame_time_ = this->now();
   RCLCPP_INFO(get_logger(), "Kinect connected: serial=%s", device_->serial().c_str());
 }
 
@@ -226,8 +247,6 @@ void Kinect2Node::disconnect_device()
 
 void Kinect2Node::capture_loop()
 {
-  rclcpp::Time last_discover = this->now() - std::chrono::seconds(10);
-
   while (running_) {
     // -- Connection management (only runs while the device is NOT open). --
     {
@@ -238,10 +257,10 @@ void Kinect2Node::capture_loop()
       // corrupts the depth stream (libfreenect2 re-claims the control
       // interface). When streaming, we trust the frame loop to detect unplug.
       if (!device_ && !serial_.empty()) {
-        auto now = this->now();
-        bool need_discover = (now - last_discover).seconds() >= discover_interval_s_;
-        if (need_discover) {
-          last_discover = now;
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration<double>(now - last_discover_time_).count();
+        if (elapsed >= discover_interval_s_) {
+          last_discover_time_ = now;
           auto devices = Kinect2Device::enumerateDevices();
           bool present = std::any_of(
             devices.begin(), devices.end(),
@@ -268,6 +287,7 @@ void Kinect2Node::capture_loop()
       }
       if (!got_frame) {
         timeouts_++;
+        frames_dropped_++;
         if (timeouts_ > static_cast<uint64_t>(reconnect_attempts_)) {
           RCLCPP_ERROR(
             get_logger(),
@@ -280,7 +300,6 @@ void Kinect2Node::capture_loop()
         timeouts_ = 0;
         device_ok_ = true;
         auto stamp = this->now();
-        last_frame_time_ = stamp;
         publish_frame(frames, stamp);
         {
           std::lock_guard<std::mutex> lock(device_mutex_);
@@ -292,8 +311,8 @@ void Kinect2Node::capture_loop()
 
       // While streaming, only check diagnostics periodically; do NOT sleep a
       // fixed interval (that would throttle the camera to < 30 Hz).
-      auto now = this->now();
-      if ((now - last_diag_time_).seconds() >= 1.0) {
+      auto now = std::chrono::steady_clock::now();
+      if (std::chrono::duration<double>(now - last_diag_time_).count() >= 1.0) {
         last_diag_time_ = now;
         publish_diagnostics();
       }
@@ -301,8 +320,8 @@ void Kinect2Node::capture_loop()
     }
 
     // -- Not streaming (device absent / not yet open): poll at low rate. --
-    auto now = this->now();
-    if ((now - last_diag_time_).seconds() >= 1.0) {
+    auto now = std::chrono::steady_clock::now();
+    if (std::chrono::duration<double>(now - last_diag_time_).count() >= 1.0) {
       last_diag_time_ = now;
       publish_diagnostics();
     }
@@ -327,6 +346,7 @@ void Kinect2Node::publish_frame(FrameSet & frames, const rclcpp::Time & stamp)
     color_info_pub_->publish(ci);
 
     color_frames_delivered_++;
+    color_frames_in_window_++;
   }
 
   if (depth_enabled_ && frames.depth) {
@@ -339,36 +359,77 @@ void Kinect2Node::publish_frame(FrameSet & frames, const rclcpp::Time & stamp)
     depth_info_pub_->publish(ci);
 
     depth_frames_delivered_++;
+    depth_frames_in_window_++;
+  }
+
+  if (registration_enabled_ && frames.depth && frames.color && depth_registered_pub_) {
+    // Color-aligned depth using libfreenect2's factory-calibrated
+    // registration (see frame_converter for the algorithm).
+    auto msg = FrameConverter::to_registered_depth_image(
+      *frames.depth, *frames.color, *device_->registration(),
+      frame_id_depth_, stamp);
+    depth_registered_pub_->publish(*msg);
   }
 
   if (ir_enabled_ && frames.ir) {
     auto msg = FrameConverter::to_ir_image(*frames.ir, frame_id_ir_, stamp);
     ir_pub_->publish(*msg);
     ir_frames_delivered_++;
+    ir_frames_in_window_++;
   }
 }
 
-sensor_msgs::msg::CameraInfo Kinect2Node::build_camera_info(const std::string & frame_id) const
+sensor_msgs::msg::CameraInfo Kinect2Node::build_camera_info(
+  const std::string & frame_id,
+  unsigned int width,
+  unsigned int height,
+  const libfreenect2::Freenect2Device::ColorCameraParams * color_params,
+  const libfreenect2::Freenect2Device::IrCameraParams * ir_params) const
 {
-  // Placeholder intrinsics — replace with real calibration (URDF/calibration
-  // files) when available. Correct dimensions matter for downstream nodes.
   sensor_msgs::msg::CameraInfo ci;
   ci.header.frame_id = frame_id;
-  ci.width = 1920;
-  ci.height = 1080;
+  ci.width = width;
+  ci.height = height;
   ci.distortion_model = "plumb_bob";
+
+  double fx = 1.0, fy = 1.0, cx = width / 2.0, cy = height / 2.0;
   ci.d = {0.0, 0.0, 0.0, 0.0, 0.0};
-  ci.k = {1.0, 0.0, 960.0, 0.0, 1.0, 540.0, 0.0, 0.0, 1.0};
+
+  if (color_params) {
+    fx = color_params->fx;
+    fy = color_params->fy;
+    cx = color_params->cx;
+    cy = color_params->cy;
+  } else if (ir_params) {
+    fx = ir_params->fx;
+    fy = ir_params->fy;
+    cx = ir_params->cx;
+    cy = ir_params->cy;
+    ci.d = {ir_params->k1, ir_params->k2, ir_params->p1, ir_params->p2, ir_params->k3};
+  }
+
+  ci.k = {fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0};
   ci.r = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
-  ci.p = {1.0, 0.0, 960.0, 0.0, 0.0, 1.0, 540.0, 0.0, 0.0, 0.0, 1.0, 0.0};
+  ci.p = {fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0};
   return ci;
 }
 
 void Kinect2Node::publish_diagnostics()
 {
+  auto now = std::chrono::steady_clock::now();
+  double window_s = std::chrono::duration<double>(now - diag_window_start_).count();
+  if (window_s <= 0.0) {
+    window_s = 1.0;
+  }
+  diag_window_start_ = now;
+
+  double color_fps = static_cast<double>(color_frames_in_window_) / window_s;
+  double depth_fps = static_cast<double>(depth_frames_in_window_) / window_s;
+  double ir_fps = static_cast<double>(ir_frames_in_window_) / window_s;
+
   diagnostic_msgs::msg::DiagnosticArray diag;
   diagnostic_msgs::msg::DiagnosticStatus status;
-  status.name = "kinect2_driver";
+  status.name = std::string(get_name()) + "/driver";
   status.hardware_id = serial_;
 
   if (device_ok_ && device_ && device_->isOpen()) {
@@ -386,11 +447,15 @@ void Kinect2Node::publish_diagnostics()
   kv.key = "serial"; kv.value = serial_; status.values.push_back(kv);
   kv.key = "connected"; kv.value = (device_ && device_->isOpen()) ? "true" : "false";
   status.values.push_back(kv);
-  kv.key = "color_fps"; kv.value = std::to_string(color_frames_delivered_); status.values.push_back(
-    kv);
-  kv.key = "depth_fps"; kv.value = std::to_string(depth_frames_delivered_); status.values.push_back(
-    kv);
-  kv.key = "ir_fps"; kv.value = std::to_string(ir_frames_delivered_); status.values.push_back(kv);
+  kv.key = "color_fps";
+  kv.value = std::to_string(static_cast<int>(color_fps + 0.5));
+  status.values.push_back(kv);
+  kv.key = "depth_fps";
+  kv.value = std::to_string(static_cast<int>(depth_fps + 0.5));
+  status.values.push_back(kv);
+  kv.key = "ir_fps";
+  kv.value = std::to_string(static_cast<int>(ir_fps + 0.5));
+  status.values.push_back(kv);
   kv.key = "frames_dropped"; kv.value = std::to_string(frames_dropped_);
   status.values.push_back(kv);
   kv.key = "timeouts"; kv.value = std::to_string(timeouts_); status.values.push_back(kv);
@@ -401,9 +466,9 @@ void Kinect2Node::publish_diagnostics()
   diag.header.stamp = this->now();
   diag_pub_->publish(diag);
 
-  color_frames_delivered_ = 0;
-  depth_frames_delivered_ = 0;
-  ir_frames_delivered_ = 0;
+  color_frames_in_window_ = 0;
+  depth_frames_in_window_ = 0;
+  ir_frames_in_window_ = 0;
 }
 
 }  // namespace etrike_kinect2
