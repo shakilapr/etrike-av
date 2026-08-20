@@ -14,3 +14,6 @@ kinect_front:
     depth_max_m: 4.5
     reconnect_attempts: 3
     reconnect_delay_s: 2.0
+    discover_interval_s: 1.0
+    frame_timeout_ms: 5000
+    poll_interval_ms: 100

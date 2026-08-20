@@ -21,8 +21,9 @@ Kinect2Node (rclcpp_lifecycle::LifecycleNode, one per camera)
 
 - One ROS node = one physical Kinect = one serial number
 - Each node is a LifecycleNode: UNCONFIGURED → INACTIVE → ACTIVE
-- Fail-closed: if configure fails, stays UNCONFIGURED
-- Automatic recovery on USB timeout (bounded retries → lifecycle ERROR)
+- **Hotplug-aware**: the device does NOT need to be connected at configure/launch
+  time. The node starts, waits, and connects automatically when the target
+  serial appears on USB. Unplug → clean disconnect; replug → auto-reconnect.
 - Two processes (not one container) so one crash doesn't kill both
 - TF is owned by URDF, not the driver
 - No PointCloud2 from driver — use `depth_image_proc` downstream
@@ -33,39 +34,44 @@ Kinect2Node (rclcpp_lifecycle::LifecycleNode, one per camera)
 Kinect2Node (LifecycleNode)
   on_configure():
       load params (serial, frame_ids, enable flags)
-      if serial == "": return FAILURE
-      device_.open(serial)         # libfreenect2 enumerate → openDevice
       create publishers + camera_info_managers
-      return SUCCESS
+      return SUCCESS        # device NOT required to be connected yet
 
   on_activate():
-      device_.start()              # streaming begins
+      running_ = true
       spawn capture_thread_ = capture_loop()
 
   capture_loop():                  # dedicated thread, NOT ros callback
       while running_:
-          frames = wait_for_frames(timeout=5000)
-          if !frames:
-              timeouts_++
-              if timeouts_ > reconnect_attempts_:
-                  device_.stop(); device_.close()
-                  sleep(reconnect_delay_s_)
-                  if device_.open(serial) && device_.start():
-                      reconnects_++; timeouts_ = 0
-                  else:
-                      device_ok_ = false; break
-              continue
-          device_ok_ = true
-          stamp = now()
-          if color_enabled: publish color/image_raw + color/camera_info
-          if depth_enabled: publish depth/image_raw + depth/camera_info
-          if ir_enabled:    publish ir/image_raw
-          release_frames(frames)
-          # 1 Hz diagnostics
-          if (now - diag_timer) >= 1s:
-              publish /diagnostics (fps, drops, timeouts, reconnects)
+          # --- hotplug discovery (every discover_interval_s) ---
+          devices = enumerateDevices()
+          present = serial in devices
+          if device open AND !present:
+              disconnect_device()          # unplugged
+          if !device AND present:
+              try_connect()                # plugged in → open + start
+          # --- streaming (if connected) ---
+          if device connected and streaming:
+              frames = wait_for_frames(timeout=frame_timeout_ms)
+              if !frames:
+                  timeouts_++
+                  if timeouts_ > reconnect_attempts_:
+                      disconnect_device()  # likely unplugged
+              else:
+                  device_ok_ = true
+                  stamp = now()
+                  if color_enabled: publish color/image_raw + color/camera_info
+                  if depth_enabled: publish depth/image_raw + depth/camera_info
+                  if ir_enabled:    publish ir/image_raw
+                  release_frames(frames)
+          # 1 Hz diagnostics (published even while disconnected)
+          if (now - last_diag_time) >= 1s:
+              publish /diagnostics (connected bool, fps, timeouts, connects, disconnects)
+          sleep(poll_interval_ms)
 
-  on_deactivate(): stop streaming, join thread, stop device
+  try_connect():   open(serial) → start(); on success connects_++
+  disconnect_device():  stop(); close(); reset(); disconnects_++
+  on_deactivate(): running_=false, join thread, disconnect_device()
   on_cleanup():     reset device + publishers
   on_error():       close device, reset
 ```
@@ -242,8 +248,11 @@ RViz2 Image panel (on DISPLAY=:1)  ← you see RGB + depth live
 | `frame_id_depth` | string | `kinect_depth_optical_frame` | TF frame for depth |
 | `depth_min_m` | double | `0.5` | Min depth range |
 | `depth_max_m` | double | `4.5` | Max depth range |
-| `reconnect_attempts` | int | `3` | Max reconnect retries |
-| `reconnect_delay_s` | double | `2.0` | Delay between reconnects |
+| `reconnect_attempts` | int | `3` | Max timeouts before treating device as gone |
+| `reconnect_delay_s` | double | `2.0` | (reserved) delay between reconnects |
+| `discover_interval_s` | double | `1.0` | USB re-enumeration period while disconnected |
+| `frame_timeout_ms` | int | `5000` | Per-frame wait timeout |
+| `poll_interval_ms` | int | `100` | Idle loop sleep between discovery/stream polls |
 
 ## USB Topology
 

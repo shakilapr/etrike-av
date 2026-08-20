@@ -50,6 +50,10 @@ protected:
 
 private:
     void capture_loop();
+    void try_connect();
+    void disconnect_device();
+    void publish_frame(FrameSet & frames, const rclcpp::Time & stamp);
+    void publish_diagnostics();
 
     // Parameters
     std::string serial_;
@@ -64,9 +68,13 @@ private:
     double depth_max_m_;
     int reconnect_attempts_;
     double reconnect_delay_s_;
+    double discover_interval_s_;
+    int frame_timeout_ms_;
+    int poll_interval_ms_;
 
     // Device
     std::unique_ptr<Kinect2Device> device_;
+    rclcpp::Time last_connect_time_;
 
     // Publishers
     image_transport::Publisher color_pub_;
@@ -94,9 +102,11 @@ private:
     uint64_t ir_frames_delivered_;
     uint64_t frames_dropped_;
     uint64_t timeouts_;
-    uint64_t reconnects_;
+    uint64_t connects_;
+    uint64_t disconnects_;
     rclcpp::Time last_frame_time_;
     rclcpp::Time last_diag_time_;
+    rclcpp::Time last_connect_time_;
 };
 
 }  // namespace etrike_kinect2
