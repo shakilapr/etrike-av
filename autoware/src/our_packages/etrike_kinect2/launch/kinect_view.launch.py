@@ -15,7 +15,7 @@
 """
 Standalone Kinect v2 viewer (RGB + depth) for the E-Trike.
 
-Launches the etrike_kinect2 driver and an RViz2 window showing the
+Launches the etrike_kinect2 driver nodes and an RViz2 window showing the
 color and depth image streams. Intended for quick bring-up / debugging
 on the Jetson - independent of the full Autoware stack.
 
@@ -28,6 +28,11 @@ Usage (on the Jetson, inside the Autoware container):
     ros2 launch etrike_kinect2 kinect_view.launch.py camera:=front
     ros2 launch etrike_kinect2 kinect_view.launch.py camera:=rear
 
+The driver nodes start unconfigured. Bring them to active with:
+
+    ros2 lifecycle set /kinect_front configure
+    ros2 lifecycle set /kinect_front activate
+
 Prereqs:
     - libfreenect2 installed, udev rules, USB 3.0
     - serial numbers filled into config/kinect_{front,rear}.yaml
@@ -38,11 +43,38 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PythonExpression
-from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch_ros.actions import LifecycleNode, Node
+from launch_ros.substitutions import FindPackageShare
+
+
+def _camera_node(camera: str, enabled: IfCondition):
+    # Node is named "kinect_<camera>" (no ROS namespace) so the param file key
+    # "kinect_<camera>" matches. Topics are remapped under /kinect_<camera>/.
+    return LifecycleNode(
+        package="etrike_kinect2",
+        executable="kinect2_node_exec",
+        name=f"kinect_{camera}",
+        namespace="",
+        condition=enabled,
+        parameters=[
+            PathJoinSubstitution([
+                FindPackageShare("etrike_kinect2"),
+                "config",
+                f"kinect_{camera}.yaml",
+            ]),
+        ],
+        remappings=[
+            ("color/image_raw", f"/kinect_{camera}/color/image_raw"),
+            ("color/camera_info", f"/kinect_{camera}/color/camera_info"),
+            ("depth/image_raw", f"/kinect_{camera}/depth/image_raw"),
+            ("depth/camera_info", f"/kinect_{camera}/depth/camera_info"),
+            ("ir/image_raw", f"/kinect_{camera}/ir/image_raw"),
+        ],
+        output="screen",
+    )
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -54,27 +86,15 @@ def generate_launch_description() -> LaunchDescription:
     )
     camera = LaunchConfiguration("camera")
 
-    single = PythonLaunchDescriptionSource(
-        os.path.join(share, "launch", "single_kinect.launch.py")
+    show_front = IfCondition(
+        PythonExpression(
+            ["'", camera, "' == 'front' or '", camera, "' == 'dual'"]
+        )
     )
-
-    front_launch = IncludeLaunchDescription(
-        single,
-        launch_arguments={"camera": "front"}.items(),
-        condition=IfCondition(
-            PythonExpression(
-                ["'", camera, "' == 'front' or '", camera, "' == 'dual'"]
-            )
-        ),
-    )
-    rear_launch = IncludeLaunchDescription(
-        single,
-        launch_arguments={"camera": "rear"}.items(),
-        condition=IfCondition(
-            PythonExpression(
-                ["'", camera, "' == 'rear' or '", camera, "' == 'dual'"]
-            )
-        ),
+    show_rear = IfCondition(
+        PythonExpression(
+            ["'", camera, "' == 'rear' or '", camera, "' == 'dual'"]
+        )
     )
 
     rviz = Node(
@@ -90,7 +110,7 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription([
         camera_arg,
-        front_launch,
-        rear_launch,
+        _camera_node("front", show_front),
+        _camera_node("rear", show_rear),
         rviz,
     ])

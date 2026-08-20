@@ -13,15 +13,10 @@
 # limitations under the License.
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
-from launch.event_handlers import OnProcessStart
-from launch.events import matches_action
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import LifecycleNode
-from launch_ros.event_handlers import OnStateTransition
-from launch_ros.events.lifecycle import ChangeState
 from launch_ros.substitutions import FindPackageShare
-from lifecycle_msgs.msg import Transition
 
 
 def generate_launch_description():
@@ -55,32 +50,12 @@ def generate_launch_description():
         output="screen",
     )
 
-    configure = EmitEvent(
-        event=ChangeState(
-            lifecycle_node_matcher=matches_action(kinect_node),
-            transition_id=Transition.TRANSITION_CONFIGURE,
-        )
-    )
-    activate = EmitEvent(
-        event=ChangeState(
-            lifecycle_node_matcher=matches_action(kinect_node),
-            transition_id=Transition.TRANSITION_ACTIVATE,
-        )
-    )
-
-    # The node is a LifecycleNode: configure then activate so it starts
-    # streaming (and hotplug-polling) as soon as the process is up.
+    # The node starts unconfigured. Drive its lifecycle explicitly for bring-up:
+    #   ros2 lifecycle set /kinect_<camera> configure
+    #   ros2 lifecycle set /kinect_<camera> activate
+    # (Automated lifecycle activation is added back once the manual path is
+    # proven, to avoid racing the node's lifecycle server at startup.)
     return LaunchDescription([
         camera_arg,
         kinect_node,
-        RegisterEventHandler(
-            OnProcessStart(target_action=kinect_node, on_start=[configure])
-        ),
-        RegisterEventHandler(
-            OnStateTransition(
-                target_lifecycle_node=kinect_node,
-                goal_state="inactive",
-                entities=[activate],
-            )
-        ),
     ])
