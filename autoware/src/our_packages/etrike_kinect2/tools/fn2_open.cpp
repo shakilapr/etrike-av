@@ -17,10 +17,11 @@
 // Build: g++ -std=c++17 -I/usr/include tools/fn2_open.cpp -o /tmp/fn2_open \
 //          -lfreenect2 -lpthread
 
-#include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/packet_pipeline.h>
 
 #include <cstdio>
+
+#include <libfreenect2/libfreenect2.hpp>
 
 int main()
 {

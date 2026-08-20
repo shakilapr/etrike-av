@@ -23,11 +23,12 @@
 // usbfs_memory_mb rather than the ROS driver.
 
 #include <libfreenect2/frame_listener_impl.h>
-#include <libfreenect2/libfreenect2.hpp>
 #include <libfreenect2/packet_pipeline.h>
 
 #include <cstdio>
 #include <cstdlib>
+
+#include <libfreenect2/libfreenect2.hpp>
 
 using libfreenect2::CpuPacketPipeline;
 using libfreenect2::Freenect2;
