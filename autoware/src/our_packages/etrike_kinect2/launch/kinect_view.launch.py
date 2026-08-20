@@ -84,6 +84,9 @@ def generate_launch_description() -> LaunchDescription:
         package="rviz2",
         executable="rviz2",
         name="rviz2",
+        # Always render on the Jetson's physical monitor (:1), whether this
+        # launch is triggered from a local terminal or over SSH.
+        env=[("DISPLAY", ":1")],
         arguments=["-d", os.path.join(share, "rviz", "kinect_view.rviz")],
         output="screen",
     )

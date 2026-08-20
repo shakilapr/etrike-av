@@ -53,9 +53,16 @@ case "${1:-dual}" in
     view)
         # Open an RViz2 window on the Jetson's monitor (DISPLAY=:1).
         # The camera is physically on the Jetson; the monitor is :1.
+        # Works identically from the Jetson's local terminal and over SSH,
+        # because the launch file forces DISPLAY=:1 on the RViz node.
         CAMERA="${2:-dual}"
-        export DISPLAY="${DISPLAY:-:1}"
+        export DISPLAY=:1
+        if [ ! -d /tmp/.X11-unix ]; then
+            echo "ERROR: /tmp/.X11-unix not mounted — is this inside the container with X11 passthrough?" >&2
+            exit 1
+        fi
         echo "Opening Kinect viewer on DISPLAY=$DISPLAY (camera=$CAMERA)..."
+        echo "  (run from Jetson terminal or over SSH — window appears on the Jetson monitor)"
         ros2 launch etrike_kinect2 kinect_view.launch.py camera:="$CAMERA"
         ;;
     *)

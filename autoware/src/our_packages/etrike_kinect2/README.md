@@ -171,16 +171,23 @@ vi config/kinect_rear.yaml    # set serial: "109876543210"
 
 The Kinect is physically plugged into the Jetson. The monitor attached to the
 Jetson is `DISPLAY=:1` (inside the Docker container, X11 is passed through
-`/tmp/.X11-unix`). So you open the window **from inside the container**, not
-from Windows.
+`/tmp/.X11-unix`). The RViz window is forced onto `:1` by the launch file, so it
+works the **same way whether you run it from the Jetson's own terminal or over
+SSH** — the window always appears on the Jetson's monitor, never on Windows.
 
-**One command (after the container is up):**
+**From the Jetson's local terminal (inside the container):**
 
 ```bash
-# On the Jetson (SSH into it, then enter the container):
-./docker/shell.sh
-# inside container:
 ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual
+# or: ./run.sh view dual
+```
+
+**Over SSH into the Jetson (inside the container):**
+
+```bash
+ssh med1@172.16.25.56
+./docker/shell.sh            # enter the container
+./run.sh view dual           # window appears on the Jetson monitor (DISPLAY=:1)
 ```
 
 This opens an RViz2 window on the Jetson's monitor showing four `Image` panels:
@@ -199,7 +206,7 @@ docker run -d --name autoware_test --privileged --runtime=nvidia --gpus all \
   bash -c 'while true; do sleep 1000; done'
 ```
 
-Then, from the Jetson host:
+Then, from the Jetson host (or over SSH):
 
 ```bash
 docker exec -it autoware_test bash -c \
