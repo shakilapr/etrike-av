@@ -4,9 +4,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Displays1
-        - /Displays1/Group (Kinect Front)1
-        - /Displays1/Group (Kinect Rear)1
       Splitter Ratio: 0.5
     Tree Height: 421
   - Class: rviz_common/Selection
@@ -23,52 +20,43 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.5
-      Cell Size: 1
-      Class: rviz_default_plugins/Grid
-      Color: 160; 160; 160
+    - Class: rviz_default_plugins/Grid
       Enabled: false
       Name: Grid
       Plane Cell Count: 10
-    - Class: rviz_default_plugins/Group
-      Displays:
-        - Class: rviz_default_plugins/Image
-          Enabled: true
-          Name: Front Color
-          Queue Size: 10
-          Topic:
-            FilterString: "sensor_msgs/msg/Image"
-            Topic: /kinect/front/color/image_raw
-        - Class: rviz_default_plugins/Image
-          Enabled: true
-          Name: Front Depth
-          Queue Size: 10
-          Topic:
-            FilterString: "sensor_msgs/msg/Image"
-            Topic: /kinect/front/depth/image_raw
+      Color: 160; 160; 160
+      Alpha: 0.5
+    - Class: rviz_default_plugins/Image
       Enabled: true
-      Name: Group (Kinect Front)
-    - Class: rviz_default_plugins/Group
-      Displays:
-        - Class: rviz_default_plugins/Image
-          Enabled: true
-          Name: Rear Color
-          Queue Size: 10
-          Topic:
-            FilterString: "sensor_msgs/msg/Image"
-            Topic: /kinect/rear/color/image_raw
-        - Class: rviz_default_plugins/Image
-          Enabled: true
-          Name: Rear Depth
-          Queue Size: 10
-          Topic:
-            FilterString: "sensor_msgs/msg/Image"
-            Topic: /kinect/rear/depth/image_raw
+      Name: Front Color
+      Queue Size: 10
+      Topic:
+        FilterString: "sensor_msgs/msg/Image"
+        Topic: /kinect_front/color/image_raw
+    - Class: rviz_default_plugins/Image
       Enabled: true
-      Name: Group (Kinect Rear)
+      Name: Front Depth
+      Queue Size: 10
+      Topic:
+        FilterString: "sensor_msgs/msg/Image"
+        Topic: /kinect_front/depth/image_raw
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Name: Rear Color
+      Queue Size: 10
+      Topic:
+        FilterString: "sensor_msgs/msg/Image"
+        Topic: /kinect_rear/color/image_raw
+    - Class: rviz_default_plugins/Image
+      Enabled: true
+      Name: Rear Depth
+      Queue Size: 10
+      Topic:
+        FilterString: "sensor_msgs/msg/Image"
+        Topic: /kinect_rear/depth/image_raw
   Enabled: true
   Global Options:
-    Fixed Frame: kinect_front_rgb_optical_frame
+    Fixed Frame: map
   Name: root
   Tools:
     - Class: rviz_default_plugins/Interact

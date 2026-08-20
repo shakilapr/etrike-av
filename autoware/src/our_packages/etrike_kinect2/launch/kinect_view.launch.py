@@ -38,61 +38,11 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent, OpaqueFunction, RegisterEventHandler
-from launch.event_handlers import OnProcessStart
-from launch.events import matches_action
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import LifecycleNode, Node
-from launch_ros.event_handlers import OnStateTransition
-from launch_ros.events.lifecycle import ChangeState
-from launch_ros.substitutions import FindPackageShare
-from lifecycle_msgs.msg import Transition
-
-
-def _camera_node(camera: str):
-    # Node is named "kinect_<camera>" (no ROS namespace) so the param file key
-    # "kinect_<camera>" matches — namespacing would hide params.
-    node = LifecycleNode(
-        package="etrike_kinect2",
-        executable="kinect2_node_exec",
-        name=f"kinect_{camera}",
-        namespace="",
-        parameters=[
-            PathJoinSubstitution([
-                FindPackageShare("etrike_kinect2"),
-                "config",
-                f"kinect_{camera}.yaml",
-            ]),
-        ],
-        output="screen",
-    )
-
-    configure = EmitEvent(
-        event=ChangeState(
-            lifecycle_node_matcher=matches_action(node),
-            transition_id=Transition.TRANSITION_CONFIGURE,
-        )
-    )
-    activate = EmitEvent(
-        event=ChangeState(
-            lifecycle_node_matcher=matches_action(node),
-            transition_id=Transition.TRANSITION_ACTIVATE,
-        )
-    )
-
-    return [
-        node,
-        RegisterEventHandler(
-            OnProcessStart(target_action=node, on_start=[configure])
-        ),
-        RegisterEventHandler(
-            OnStateTransition(
-                target_lifecycle_node=node,
-                goal_state="inactive",
-                entities=[activate],
-            )
-        ),
-    ]
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch_ros.actions import Node
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -104,32 +54,43 @@ def generate_launch_description() -> LaunchDescription:
     )
     camera = LaunchConfiguration("camera")
 
-    def _spawn(context):
-        value = context.launch_configurations.get("camera", "dual")
-        chosen = []
-        if value in ("front", "dual"):
-            chosen.extend(_camera_node("front"))
-        if value in ("rear", "dual"):
-            chosen.extend(_camera_node("rear"))
-        return chosen
+    single = PythonLaunchDescriptionSource(
+        os.path.join(share, "launch", "single_kinect.launch.py")
+    )
+
+    front_launch = IncludeLaunchDescription(
+        single,
+        launch_arguments={"camera": "front"}.items(),
+        condition=IfCondition(
+            PythonExpression(
+                ["'", camera, "' == 'front' or '", camera, "' == 'dual'"]
+            )
+        ),
+    )
+    rear_launch = IncludeLaunchDescription(
+        single,
+        launch_arguments={"camera": "rear"}.items(),
+        condition=IfCondition(
+            PythonExpression(
+                ["'", camera, "' == 'rear' or '", camera, "' == 'dual'"]
+            )
+        ),
+    )
 
     rviz = Node(
         package="rviz2",
         executable="rviz2",
         name="rviz2",
-        # Always render on the Jetson's physical monitor (:1), whether this
-        # launch is triggered from a local terminal or over SSH.
-        env={
-            "DISPLAY": ":1",
-            "XDG_RUNTIME_DIR": "/tmp/runtime-root",
-            "QT_QPA_PLATFORM": "xcb",
-        },
+        # Render on the Jetson's physical monitor. RViz inherits the full launch
+        # environment (AMENT_PREFIX_PATH, LD_LIBRARY_PATH, DISPLAY from the
+        # container), which keeps every rcl/rviz dependency resolvable.
         arguments=["-d", os.path.join(share, "rviz", "kinect_view.rviz")],
         output="screen",
     )
 
     return LaunchDescription([
         camera_arg,
-        OpaqueFunction(function=_spawn),
+        front_launch,
+        rear_launch,
         rviz,
     ])

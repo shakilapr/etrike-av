@@ -45,6 +45,13 @@ def generate_launch_description():
         name=["kinect_", camera],
         namespace="",
         parameters=[config_file],
+        remappings=[
+            ("color/image_raw", ["/kinect_", camera, "/color/image_raw"]),
+            ("color/camera_info", ["/kinect_", camera, "/color/camera_info"]),
+            ("depth/image_raw", ["/kinect_", camera, "/depth/image_raw"]),
+            ("depth/camera_info", ["/kinect_", camera, "/depth/camera_info"]),
+            ("ir/image_raw", ["/kinect_", camera, "/ir/image_raw"]),
+        ],
         output="screen",
     )
 
