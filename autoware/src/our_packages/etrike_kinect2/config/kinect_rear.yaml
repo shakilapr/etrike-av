@@ -10,6 +10,11 @@ kinect_rear:
     frame_id_color: "kinect_rear_rgb_optical_frame"
     frame_id_depth: "kinect_rear_depth_optical_frame"
     frame_id_ir: "kinect_rear_ir_optical_frame"
+    depth_pipeline: "auto"
+    depth_bilateral_filter: true
+    depth_edge_aware_filter: true
+    depth_min_m: 0.5
+    depth_max_m: 4.5
     reconnect_attempts: 3
     reconnect_delay_s: 2.0
     discover_interval_s: 1.0

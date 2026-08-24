@@ -60,6 +60,11 @@ Kinect2Node::Kinect2Node(const rclcpp::NodeOptions & options)
   declare_parameter<double>("discover_interval_s", 1.0);
   declare_parameter<int>("frame_timeout_ms", 1000);
   declare_parameter<int>("poll_interval_ms", 100);
+  declare_parameter<std::string>("depth_pipeline", "auto");
+  declare_parameter<bool>("depth_bilateral_filter", true);
+  declare_parameter<bool>("depth_edge_aware_filter", true);
+  declare_parameter<double>("depth_min_m", 0.5);
+  declare_parameter<double>("depth_max_m", 4.5);
 }
 
 Kinect2Node::~Kinect2Node()
@@ -85,6 +90,11 @@ CallbackReturn Kinect2Node::on_configure(const rclcpp_lifecycle::State & /*state
   discover_interval_s_ = get_parameter("discover_interval_s").as_double();
   frame_timeout_ms_ = get_parameter("frame_timeout_ms").as_int();
   poll_interval_ms_ = get_parameter("poll_interval_ms").as_int();
+  depth_pipeline_ = get_parameter("depth_pipeline").as_string();
+  depth_bilateral_filter_ = get_parameter("depth_bilateral_filter").as_bool();
+  depth_edge_aware_filter_ = get_parameter("depth_edge_aware_filter").as_bool();
+  depth_min_m_ = get_parameter("depth_min_m").as_double();
+  depth_max_m_ = get_parameter("depth_max_m").as_double();
 
   // Hotplug-aware: the node does NOT require the device to be present at
   // configure time. It will connect whenever the target serial appears on
@@ -207,8 +217,29 @@ void Kinect2Node::try_connect()
     return;
   }
 
+  PipelineType pipeline = PipelineType::AUTO;
+  if (depth_pipeline_ == "cpu") {
+    pipeline = PipelineType::CPU;
+  } else if (depth_pipeline_ == "cuda") {
+    pipeline = PipelineType::CUDA;
+  } else if (depth_pipeline_ == "cudakde") {
+    pipeline = PipelineType::CUDA_KDE;
+  } else if (depth_pipeline_ == "opencl") {
+    pipeline = PipelineType::OPENCL;
+  } else if (depth_pipeline_ == "opencl_kde") {
+    pipeline = PipelineType::OPENCL_KDE;
+  }
+
+  DepthConfig config;
+  config.bilateral_filter = depth_bilateral_filter_;
+  config.edge_aware_filter = depth_edge_aware_filter_;
+  config.min_depth_m = depth_min_m_;
+  config.max_depth_m = depth_max_m_;
+
   device_ = std::make_unique<Kinect2Device>();
-  if (!device_->open(serial_, color_enabled_, depth_enabled_, ir_enabled_)) {
+  if (!device_->open(
+      serial_, color_enabled_, depth_enabled_, ir_enabled_, pipeline, config))
+  {
     device_.reset();
     return;
   }
@@ -219,6 +250,10 @@ void Kinect2Node::try_connect()
     device_.reset();
     return;
   }
+
+  RCLCPP_INFO(
+    get_logger(), "Kinect connected: serial=%s pipeline=%s",
+    device_->serial().c_str(), depth_pipeline_.empty() ? "auto" : depth_pipeline_.c_str());
 
   // Refresh CameraInfo with the factory-calibrated intrinsics now that the
   // device is open (dimensions were set at configure time; matrices were

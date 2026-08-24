@@ -51,7 +51,9 @@ bool Kinect2Device::open(
   const std::string & serial,
   bool enable_color,
   bool enable_depth,
-  bool enable_ir)
+  bool enable_ir,
+  PipelineType pipeline,
+  const DepthConfig & config)
 {
   freenect2_ = std::make_unique<libfreenect2::Freenect2>();
 
@@ -61,21 +63,62 @@ bool Kinect2Device::open(
     return false;
   }
 
-  // Prefer the CUDA depth pipeline (built in the etrike-kinect-build image);
-  // it offloads the expensive depth decode to the Orin GPU. Fall back to CPU
-  // if the CUDA pipeline is unavailable (e.g. older image without CUDA).
-#ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
+  // Build the requested depth pipeline. libfreenect2 exposes several depth
+  // reconstruction processors; the KDE variants use kernel-density estimation
+  // to improve phase unwrapping / outlier rejection on Kinect v2 ToF data.
+  // Only pipelines compiled into the linked build are available (see
+  // /usr/include/libfreenect2/config.h), so each case falls back to CPU when
+  // its feature macro is undefined. A constructor throw (e.g. CUDA context
+  // failure) also falls back to CPU.
   try {
-    pipeline_.reset(new libfreenect2::CudaPacketPipeline());
+    switch (pipeline) {
+      case PipelineType::CUDA_KDE:
+#ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
+        pipeline_.reset(new libfreenect2::CudaKdePacketPipeline());
+#else
+        pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+#endif
+        break;
+      case PipelineType::CUDA:
+#ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
+        pipeline_.reset(new libfreenect2::CudaPacketPipeline());
+#else
+        pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+#endif
+        break;
+      case PipelineType::OPENCL_KDE:
+#ifdef LIBFREENECT2_WITH_OPENCL_SUPPORT
+        pipeline_.reset(new libfreenect2::OpenCLKdePacketPipeline());
+#else
+        pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+#endif
+        break;
+      case PipelineType::OPENCL:
+#ifdef LIBFREENECT2_WITH_OPENCL_SUPPORT
+        pipeline_.reset(new libfreenect2::OpenCLPacketPipeline());
+#else
+        pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+#endif
+        break;
+      case PipelineType::AUTO:
+        // Prefer CUDA, then KDE-CUDA; fall back to CPU on exception.
+#ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
+        pipeline_.reset(new libfreenect2::CudaPacketPipeline());
+#else
+        pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+#endif
+        break;
+      case PipelineType::CPU:
+      default:
+        pipeline_.reset(new libfreenect2::CpuPacketPipeline());
+        break;
+    }
   } catch (const std::exception & e) {
     fprintf(
-      stderr, "[kinect2_device] CUDA pipeline unavailable (%s) — falling back to CPU\n",
+      stderr, "[kinect2_device] pipeline unavailable (%s) — falling back to CPU\n",
       e.what());
     pipeline_.reset(new libfreenect2::CpuPacketPipeline());
   }
-#else
-  pipeline_.reset(new libfreenect2::CpuPacketPipeline());
-#endif
 
   device_ = freenect2_->openDevice(serial, pipeline_.get());
   if (!device_) {
@@ -86,6 +129,16 @@ bool Kinect2Device::open(
   enable_color_ = enable_color;
   enable_depth_ = enable_depth;
   enable_ir_ = enable_ir;
+
+  // Apply the depth-processing configuration (bilateral / edge-aware filters,
+  // min/max range). Safe before start() (libfreenect2 requires configuration
+  // before start or after stop).
+  libfreenect2::Freenect2Device::Config device_config;
+  device_config.EnableBilateralFilter = config.bilateral_filter;
+  device_config.EnableEdgeAwareFilter = config.edge_aware_filter;
+  device_config.MinDepth = static_cast<float>(config.min_depth_m);
+  device_config.MaxDepth = static_cast<float>(config.max_depth_m);
+  device_->setConfiguration(device_config);
 
   registration_.reset(
     new libfreenect2::Registration(

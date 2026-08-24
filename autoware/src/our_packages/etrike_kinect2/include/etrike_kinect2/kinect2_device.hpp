@@ -40,6 +40,28 @@ struct DeviceInfo
   std::string firmware;
 };
 
+// Depth-processing pipeline selection (see libfreenect2 packet_pipeline.h).
+// Only entries that are actually compiled into the linked libfreenect2 build
+// are usable at runtime; unknown/unsupported entries fall back to CPU.
+enum class PipelineType
+{
+  AUTO,
+  CPU,
+  CUDA,
+  CUDA_KDE,
+  OPENCL,
+  OPENCL_KDE,
+};
+
+// libfreenect2 depth-processing configuration (Freenect2Device::Config).
+struct DepthConfig
+{
+  bool bilateral_filter = true;
+  bool edge_aware_filter = true;
+  double min_depth_m = 0.5;
+  double max_depth_m = 4.5;
+};
+
 class Kinect2Device
 {
 public:
@@ -55,7 +77,9 @@ public:
     const std::string & serial,
     bool enable_color = true,
     bool enable_depth = true,
-    bool enable_ir = false);
+    bool enable_ir = false,
+    PipelineType pipeline = PipelineType::AUTO,
+    const DepthConfig & config = DepthConfig());
   bool start();
   void stop();
   void close();

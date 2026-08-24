@@ -75,6 +75,11 @@ private:
   double discover_interval_s_;
   int frame_timeout_ms_;
   int poll_interval_ms_;
+  std::string depth_pipeline_;
+  bool depth_bilateral_filter_;
+  bool depth_edge_aware_filter_;
+  double depth_min_m_;
+  double depth_max_m_;
 
   // Device
   std::unique_ptr<Kinect2Device> device_;
