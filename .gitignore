@@ -57,3 +57,6 @@ download/
 
 # References directory
 /references/
+
+# Daily diary (personal, not version-controlled)
+/daily-diary.md
