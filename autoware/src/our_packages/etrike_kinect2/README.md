@@ -24,7 +24,7 @@ Kinect2Node (rclcpp_lifecycle::LifecycleNode, one per camera)
 - The launch files **auto-configure and auto-activate** the node deterministically:
   `RegisterEventHandler(OnStateTransition(inactive))` is registered BEFORE the
   node, then `ChangeState(CONFIGURE)` is emitted explicitly (no `OnProcessStart`
-  — that is racy). See `docs/KINECT2_BRINGUP.md` §4.3.
+  — that is racy). See `docs/kinect2/KINECT2_BRINGUP.md` §4.3.
 - Topics are remapped to `/kinect_{front,rear}/...` while the node keeps a root
   name so the param-file key `kinect_front:` still matches (§4.4 of the doc).
 - **Hotplug-aware**: the device does NOT need to be connected at configure/launch
