@@ -76,22 +76,42 @@ def label(frame, cam, fps):
     return frame
 
 
+def error_panel(cam, w=1280, h=720):
+    """Black panel explaining why a camera is not showing."""
+    panel = np.zeros((h, w, 3), np.uint8)
+    cv2.putText(panel, f"KINECT {cam.upper()} - NOT CONNECTED",
+                (w // 2 - 260, h // 2 - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9,
+                (0, 0, 255), 2, cv2.LINE_AA)
+    cv2.putText(panel, "Camera is not publishing", (w // 2 - 180, h // 2 + 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
+    cv2.putText(panel, "Check USB / launch the driver:", (w // 2 - 180, h // 2 + 45),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1, cv2.LINE_AA)
+    cv2.putText(panel, f"camera:={cam}", (w // 2 - 100, h // 2 + 75),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (140, 140, 255), 1, cv2.LINE_AA)
+    return panel
+
+
 def compose(feeds, mode):
-    """Build the current view (front/rear/both) as a BGR frame."""
+    """Build the current view (front/rear/both) as a BGR frame.
+
+    A camera that is requested but not publishing gets a black error panel.
+    """
     connected = [c for c in CAMS if feeds[c].is_connected()]
-    frames = {c: label(feeds[c].frame_bgr(), c, feeds[c].fps) for c in connected}
-    if not frames:
-        return None
-    want = [mode] if mode in ("front", "rear") else connected
-    want = [c for c in want if c in frames] or connected[:1]
-    if len(want) == 1:
-        return frames[want[0]]
-    a, b = want[0], want[1]
-    h = max(frames[a].shape[0], frames[b].shape[0])
-    w = frames[a].shape[1] + frames[b].shape[1]
+    panels = {}
+    for c in CAMS:
+        if feeds[c].is_connected():
+            panels[c] = label(feeds[c].frame_bgr(), c, feeds[c].fps)
+        else:
+            panels[c] = error_panel(c)
+    if mode in ("front", "rear"):
+        return panels[mode]
+    # both: side by side (each shows live feed or error panel)
+    a, b = "front", "rear"
+    h = max(panels[a].shape[0], panels[b].shape[0])
+    w = panels[a].shape[1] + panels[b].shape[1]
     canvas = np.zeros((h, w, 3), np.uint8)
-    canvas[:frames[a].shape[0], :frames[a].shape[1]] = frames[a]
-    canvas[:frames[b].shape[0], frames[a].shape[1]:] = frames[b]
+    canvas[:panels[a].shape[0], :panels[a].shape[1]] = panels[a]
+    canvas[:panels[b].shape[0], panels[a].shape[1]:] = panels[b]
     return canvas
 
 

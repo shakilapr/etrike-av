@@ -3,11 +3,12 @@
 Kinect v2 viewer with camera switching (OpenCV).
 
 Subscribes to /kinect_front/color/image_raw and /kinect_rear/color/image_raw.
-Lets you switch which camera(s) to view:
-  - Button bar at the top (click with mouse) OR keys:
+Switch which camera(s) to view:
+  - Button bar at the top (click with mouse) OR keyboard keys:
       1 = Front only, 2 = Rear only, 0 = Both (side by side)
-  - q = quit
-Shows "No Kinect connected" if none are streaming.
+      f = toggle fullscreen, q = quit
+Each camera that is not connected shows a black panel with a reason
+(no USB / driver not running / etc.). The window fits the monitor (DISPLAY=:1).
 
 Usage:
     python3 kinect_dual_view.py
@@ -24,7 +25,7 @@ from sensor_msgs.msg import Image
 
 CAMS = ["front", "rear"]
 WINDOW = "Kinect Viewer"
-BTN_H = 40  # button bar height
+BTN_H = 44
 
 
 class CameraFeed(Node):
@@ -62,30 +63,47 @@ class CameraFeed(Node):
         return self.latest is not None and (time.time() - self.latest_ts) < 3.0
 
 
-def draw_button_bar(frame, mode):
-    """Draw a clickable button bar on top. mode in {front, rear, both}."""
+def draw_button_bar(frame, mode, enabled_cams):
+    """Draw a clickable button bar. mode in {front, rear, both}."""
     h, w = frame.shape[:2]
-    bar = np.full((BTN_H, w, 3), 30, np.uint8)
-    labels = [("1: FRONT", 0), ("0: BOTH", w // 3), ("2: REAR", 2 * w // 3)]
+    bar = np.full((BTN_H, w, 3), 24, np.uint8)
     seg = w // 3
-    for text, x0 in labels:
-        active = (text.endswith("FRONT") and mode == "front") or \
-                 (text.endswith("BOTH") and mode == "both") or \
-                 (text.endswith("REAR") and mode == "rear")
-        color = (0, 200, 0) if active else (90, 90, 90)
-        cv2.rectangle(bar, (x0, 0), (x0 + seg, BTN_H), color, 2)
-        cv2.putText(bar, text, (x0 + 10, BTN_H - 12),
+    labels = [("1: FRONT", "front"), ("0: BOTH", "both"), ("2: REAR", "rear")]
+    for i, (text, m) in enumerate(labels):
+        x0 = i * seg
+        active = (mode == m)
+        border = (0, 200, 0) if active else (70, 70, 70)
+        cv2.rectangle(bar, (x0, 2), (x0 + seg - 2, BTN_H - 2), border, 2)
+        cv2.putText(bar, text, (x0 + 12, BTN_H - 13),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(bar, "connected: " + (",".join(enabled_cams) or "none"),
+                (w - 210, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1,
+                cv2.LINE_AA)
     return np.vstack([bar, frame])
 
 
 def label_frame(frame, cam, fps):
     h, w = frame.shape[:2]
-    cv2.rectangle(frame, (0, 0), (w, 30), (0, 0, 0), -1)
-    cv2.putText(
-        frame, f"KINECT {cam.upper()}  {fps:.1f} fps",
-        (6, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
+    cv2.rectangle(frame, (0, 0), (w, 28), (0, 0, 0), -1)
+    cv2.putText(frame, f"KINECT {cam.upper()}  {fps:.1f} fps",
+                (6, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
     return frame
+
+
+def error_panel(cam, w=1280, h=720):
+    """Black panel explaining why a camera is not showing."""
+    panel = np.zeros((h, w, 3), np.uint8)
+    cv2.putText(panel, f"KINECT {cam.upper()} - NOT CONNECTED",
+                (w // 2 - 260, h // 2 - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9,
+                (0, 0, 255), 2, cv2.LINE_AA)
+    cv2.putText(panel, "Camera is not publishing", (w // 2 - 180, h // 2 + 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
+    cv2.putText(panel, "Check USB connection / launch the driver:", (w // 2 - 220, h // 2 + 45),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1, cv2.LINE_AA)
+    cv2.putText(panel, f"  ros2 launch etrike_kinect2 single_kinect.launch.py camera:={cam}",
+                (w // 2 - 260, h // 2 + 75), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                (140, 140, 255), 1, cv2.LINE_AA)
+    return panel
 
 
 def main():
@@ -96,60 +114,108 @@ def main():
         executor.add_node(f)
     threading.Thread(target=executor.spin, daemon=True).start()
 
-    mode = "both"  # front | rear | both
-    print("Kinect viewer: 1=FRONT 2=REAR 0=BOTH q=quit (or click the buttons)")
+    state = {"mode": "both", "fullscreen": False}
+    btn_h_actual = BTN_H
+    STATUS_FILE = "/tmp/kinect_view_status.txt"
+
+    def log_mode():
+        with open(STATUS_FILE, "w") as f:
+            f.write(f"mode={state['mode']} t={time.time():.1f}\n")
+        print(f"[view] mode -> {state['mode']}", flush=True)
+
+    # Determine the display size so the window fits the monitor.
+    screen_w, screen_h = 1366, 768
+    try:
+        import subprocess
+        out = subprocess.check_output(["xdpyinfo", "-display", ":1"]).decode()
+        for line in out.splitlines():
+            if line.strip().startswith("dimensions:"):
+                parts = line.split()[1].split("x")
+                screen_w, screen_h = int(parts[0]), int(parts[1])
+                break
+    except Exception:
+        pass
+    print(f"Display: {screen_w}x{screen_h}")
+
+    def fit_to_screen(frame):
+        nonlocal btn_h_actual
+        h, w = frame.shape[:2]
+        scale = min(screen_w / w, (screen_h) / h)
+        if scale < 1.0:
+            new_w, new_h = int(w * scale), int(h * scale)
+            frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            btn_h_actual = max(1, int(BTN_H * scale))
+        else:
+            btn_h_actual = BTN_H
+        return frame
 
     def on_mouse(event, x, y, flags, param):
-        nonlocal mode
-        if event == cv2.EVENT_LBUTTONDOWN and y < BTN_H:
-            if x < param["w"] // 3:
-                mode = "front"
-            elif x < 2 * param["w"] // 3:
-                mode = "both"
+        if event == cv2.EVENT_LBUTTONDOWN and y < btn_h_actual:
+            w = param["holder"]["w"]
+            if x < w // 3:
+                state["mode"] = "front"
+            elif x < 2 * w // 3:
+                state["mode"] = "both"
             else:
-                mode = "rear"
+                state["mode"] = "rear"
+            log_mode()
 
-    cv2.namedWindow(WINDOW)
+    cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(WINDOW, screen_w, screen_h)
+    holder = {"w": screen_w}
+    cv2.setMouseCallback(WINDOW, on_mouse, {"holder": holder})
+
     try:
         while True:
             connected = [c for c in CAMS if feeds[c].is_connected()]
-            frames = {c: label_frame(feeds[c].latest.copy(), c, feeds[c].fps)
-                      for c in connected}
+            mode = state["mode"]
 
-            if not frames:
-                blank = np.full((480, 640, 3), 40, np.uint8)
-                cv2.putText(blank, "No Kinect connected", (180, 240),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-                view = draw_button_bar(blank, mode)
-            else:
-                # decide which cameras to show based on mode
-                want = [mode] if mode in ("front", "rear") else connected
-                want = [c for c in want if c in frames]
-                if not want:
-                    want = connected[:1]
-                if len(want) == 1:
-                    view = draw_button_bar(frames[want[0]], mode)
+            # build per-camera panels (real frame or black error panel)
+            panels = {}
+            for c in CAMS:
+                if c in connected:
+                    panels[c] = label_frame(feeds[c].latest.copy(), c, feeds[c].fps)
                 else:
-                    a, b = want[0], want[1]
-                    h = max(frames[a].shape[0], frames[b].shape[0])
-                    w = frames[a].shape[1] + frames[b].shape[1]
-                    canvas = np.zeros((h, w, 3), np.uint8)
-                    canvas[:frames[a].shape[0], :frames[a].shape[1]] = frames[a]
-                    canvas[:frames[b].shape[0], frames[a].shape[1]:] = frames[b]
-                    view = draw_button_bar(canvas, mode)
+                    panels[c] = error_panel(c)
 
-            cv2.setMouseCallback(WINDOW, on_mouse, {"w": view.shape[1]})
+            # compose based on mode
+            if mode in ("front", "rear"):
+                view = panels[mode]
+            else:  # both side by side
+                a, b = "front", "rear"
+                h = max(panels[a].shape[0], panels[b].shape[0])
+                w = panels[a].shape[1] + panels[b].shape[1]
+                canvas = np.zeros((h, w, 3), np.uint8)
+                canvas[:panels[a].shape[0], :panels[a].shape[1]] = panels[a]
+                canvas[:panels[b].shape[0], panels[a].shape[1]:] = panels[b]
+                view = canvas
+
+            view = draw_button_bar(view, mode, connected)
+            view = fit_to_screen(view)
+            holder["w"] = view.shape[1]
             cv2.imshow(WINDOW, view)
 
-            key = cv2.waitKey(1) & 0xFF
+            key = cv2.waitKey(5) & 0xFF
             if key == ord("q"):
                 break
             elif key == ord("1"):
-                mode = "front"
+                state["mode"] = "front"
+                log_mode()
             elif key == ord("2"):
-                mode = "rear"
+                state["mode"] = "rear"
+                log_mode()
             elif key == ord("0"):
-                mode = "both"
+                state["mode"] = "both"
+                log_mode()
+            elif key == ord("f"):
+                state["fullscreen"] = not state["fullscreen"]
+                if state["fullscreen"]:
+                    cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN,
+                                          cv2.WINDOW_FULLSCREEN)
+                else:
+                    cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN,
+                                          cv2.WINDOW_NORMAL)
+                    cv2.resizeWindow(WINDOW, screen_w, screen_h)
     except KeyboardInterrupt:
         pass
     finally:
