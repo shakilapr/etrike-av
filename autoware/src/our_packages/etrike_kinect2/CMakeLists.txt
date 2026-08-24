@@ -49,7 +49,7 @@ install(PROGRAMS run.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(PROGRAMS scripts/kinect_dual_view.py scripts/kinect_capture.py
+install(PROGRAMS scripts/kinect_dual_view.py scripts/kinect_capture.py scripts/kinect_fastapi.py
   DESTINATION lib/${PROJECT_NAME}/scripts
 )
 
