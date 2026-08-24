@@ -62,7 +62,7 @@ PandarView2 is Hesai's official point cloud visualization and recording software
 
 ## Correction Files (XT32M2X)
 
-Located in `docs/XT32M/`:
+Located in `docs/sensors/XT32M/`:
 
 - `XT32M2X_Angle_Correction_File-1.csv` — Angle correction
 - `XT32M2X_Firetime_Correction_File.csv.csv` — Firetime correction

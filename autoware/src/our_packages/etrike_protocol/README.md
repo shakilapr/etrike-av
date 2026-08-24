@@ -62,7 +62,7 @@ To push local edits back to the etrike repo:
 git subtree push --prefix=autoware/src/our_packages etrike main
 ```
 
-> See `docs/ETRIKE_AV_GIT_WORKFLOW.md` for the canonical subtree workflow.
+> See `docs/development/ETRIKE_AV_GIT_WORKFLOW.md` for the canonical subtree workflow.
 
 ## Regenerating the header (when only the protocol changed)
 

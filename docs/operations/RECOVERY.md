@@ -196,6 +196,6 @@ to reconstruct everything, not the reconstructed output.
 ## Related documentation
 
 - `UPSTREAM_MODIFICATIONS.md` — what patches exist and why
-- `docs/HOW_BUILD_WORKS.md` — how the overlay build works
-- `docs/ETRIKE_AV_GIT_WORKFLOW.md` — daily Git workflow
-- `docs/JETSON_QUICK_REF.md` — Jetson-specific commands
+- `docs/setup/HOW_BUILD_WORKS.md` — how the overlay build works
+- `docs/development/ETRIKE_AV_GIT_WORKFLOW.md` — daily Git workflow
+- `docs/hardware/JETSON_QUICK_REF.md` — Jetson-specific commands

@@ -4,7 +4,7 @@ This directory contains patch scripts used to modify upstream Autoware repositor
 
 ## Why Patch Scripts?
 
-According to our [Coding Guide](../docs/CODING_GUIDE.md), we **never edit files under `autoware/src/` directly** (except inside `our_packages/`). 
+According to our [Coding Guide](../docs/development/CODING_GUIDE.md), we **never edit files under `autoware/src/` directly** (except inside `our_packages/`). 
 
 Instead of maintaining dozens of forks for minor changes, we use automated patch scripts that are applied during the workspace bootstrap process.
 

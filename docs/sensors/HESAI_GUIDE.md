@@ -19,7 +19,7 @@ Before any of the sections below, the following must already be in place on the 
 1. **Apply the Nebula firetime patch** so the driver loads the device-specific
    firing times. Without it, the decoder uses a hard-coded
    formula that differs from the device CSV by ~5.6 µs mean (details in
-   `docs/LIDAR_SETUP.md`, Section 9):
+   `docs/sensors/LIDAR_SETUP.md`, Section 9):
    ```bash
    ./patches/apply_nebula_firetime_patch.sh
    ```
@@ -119,7 +119,7 @@ two places — network checks on the host, the ROS stack in the container:
   `lidar_link` ↔ `base_link` exists once the stack is up.
 * **Visualization (Windows):** Alternatively, connect the LiDAR directly to a
   Windows PC and use the official **PandarView2** software for quick bench
-  testing (manual is in `docs/XT32M/PandarView2_User_Manual_PV2-en-250810.pdf`).
+  testing (manual is in `docs/sensors/XT32M/PandarView2_User_Manual_PV2-en-250810.pdf`).
 
 > **Note:** `setup_sensor:=true` (default) makes Nebula configure the sensor
 > over PTC (TCP 9347). Verify the sensor streams with:

@@ -110,7 +110,7 @@ sudo tcpdump -i eno1 udp port 2368 -c 10
 
 ## 5. Calibration files
 
-Two device-specific files ship with the sensor (in `docs/XT32M/`):
+Two device-specific files ship with the sensor (in `docs/sensors/XT32M/`):
 
 | File | Purpose | Deployed to |
 |------|---------|-------------|
@@ -188,7 +188,7 @@ The default `autoware.rviz` used by `autoware.launch.xml` is a 2D top-down
 (`TopDownOrtho`) view and has no display for the lidar's own clouds. Use the
 dedicated 3D config shipped in `etrike_common_launch/rviz/etrike.rviz`, which
 defaults to ThirdPersonFollower and pre-adds the `pointcloud_raw_ex` +
-`pointcloud_before_sync` displays (full guide: `docs/HESAI_GUIDE.md` Section 5):
+`pointcloud_before_sync` displays (full guide: `docs/sensors/HESAI_GUIDE.md` Section 5):
 ```bash
 ros2 launch autoware_launch autoware.launch.xml \
   map_path:=/autoware_map/your-map \

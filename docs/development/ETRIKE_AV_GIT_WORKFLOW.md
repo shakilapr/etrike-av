@@ -53,7 +53,7 @@ They are NOT in this repo. They are pulled via `vcs import` from `repositories/o
 - **Modified official repos (2–5):** our fork on GitHub, `etrike-dev` branch. `upstream` remote tracks autowarefoundation.
 - **Our custom packages (2–5):** our own repos on GitHub.
 
-See `docs/GIT_STRATEGY.md` for details.
+See `docs/development/GIT_STRATEGY.md` for details.
 
 ## E-Trike vehicle packages (git subtree)
 
@@ -182,7 +182,7 @@ git remote -v
 
 ### Why don't we need to compile all 500+ packages?
 
-The Docker image has all Autoware pre-built at `/opt/autoware/`. Source it first, then source our workspace on top. Only packages we build shadow the pre-built ones. See `docs/HOW_BUILD_WORKS.md`.
+The Docker image has all Autoware pre-built at `/opt/autoware/`. Source it first, then source our workspace on top. Only packages we build shadow the pre-built ones. See `docs/setup/HOW_BUILD_WORKS.md`.
 
 ### Why are some folders empty?
 

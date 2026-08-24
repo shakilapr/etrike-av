@@ -34,7 +34,7 @@ ros2 launch ...
 
 The Docker image provides ROS 2, CUDA, and all Autoware pre-built at `/opt/autoware/`. We build only our custom packages (and any official packages we modify). Our workspace overlays on top — our packages shadow the pre-built ones. No full rebuild. No Docker rebuild.
 
-See `docs/HOW_BUILD_WORKS.md` for details.
+See `docs/setup/HOW_BUILD_WORKS.md` for details.
 
 ## Recovery (fresh clone)
 
@@ -52,20 +52,20 @@ cd ~/av_project
 3. Applies E-Trike patches (Nebula firetime, etc.)
 4. Verifies all patches applied
 
-See `docs/HOW_BUILD_WORKS.md` for details and `UPSTREAM_MODIFICATIONS.md` for
+See `docs/setup/HOW_BUILD_WORKS.md` for details and `UPSTREAM_MODIFICATIONS.md` for
 the list of patches applied to upstream Autoware.
 
 ## Documentation
 
 | File | Topic |
 |------|-------|
-| `docs/SETUP.md` | Original project design |
-| `docs/SETUP_COMPLETE.md` | Master reference |
-| `docs/HOW_BUILD_WORKS.md` | Overlay/build explanation |
-| `docs/GIT_STRATEGY.md` | Multi-repo Git strategy |
-| `docs/GITHUB_SETUP.md` | GitHub org setup |
-| `docs/SYNCTHING_SETUP.md` | Linux-Windows sync |
-| `docs/ETRIKE_AV_GIT_WORKFLOW.md` | Daily Git workflow + FAQ |
-| `docs/RECOVERY.md` | Disaster recovery from GitHub only |
-| `docs/ETRIKE_RUN.md` | Quick start: launch, drive, stop |
+| `docs/setup/SETUP.md` | Original project design |
+| `docs/setup/SETUP_COMPLETE.md` | Master reference |
+| `docs/setup/HOW_BUILD_WORKS.md` | Overlay/build explanation |
+| `docs/development/GIT_STRATEGY.md` | Multi-repo Git strategy |
+| `docs/development/GITHUB_SETUP.md` | GitHub org setup |
+| `docs/syncthing/SYNCTHING_SETUP.md` | Linux-Windows sync |
+| `docs/development/ETRIKE_AV_GIT_WORKFLOW.md` | Daily Git workflow + FAQ |
+| `docs/operations/RECOVERY.md` | Disaster recovery from GitHub only |
+| `docs/operations/ETRIKE_RUN.md` | Quick start: launch, drive, stop |
 | `UPSTREAM_MODIFICATIONS.md` | Upstream patches registry |
