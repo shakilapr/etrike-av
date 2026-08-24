@@ -7,6 +7,9 @@
 #   ./run.sh rear             Launch rear Kinect only
 #   ./run.sh dual             Launch both Kinects (separate processes)
 #   ./run.sh view [dual|front|rear]   Open RViz window on Jetson monitor (DISPLAY=:1)
+#                                    NOTE: RViz stretches images to fill panels
+#   ./run.sh viewrgb [front|rear]    Aspect-correct color preview (rqt_image_view)
+#   ./run.sh viewdepth [front|rear]  Aspect-correct depth preview (rqt_image_view)
 #   ./run.sh test             Run launch test
 #
 # Prerequisites:
@@ -57,6 +60,8 @@ case "${1:-dual}" in
         # The camera is physically on the Jetson; the monitor is :1.
         # Works identically from the Jetson's local terminal and over SSH,
         # because the launch file forces DISPLAY=:1 on the RViz node.
+        # NOTE: RViz's Image display stretches images to fill the panel; use
+        # `./run.sh viewrgb` / `./run.sh viewdepth` for aspect-correct preview.
         CAMERA="${2:-dual}"
         export DISPLAY=:1
         if [ ! -d /tmp/.X11-unix ]; then
@@ -67,8 +72,29 @@ case "${1:-dual}" in
         echo "  (run from Jetson terminal or over SSH — window appears on the Jetson monitor)"
         ros2 launch etrike_kinect2 kinect_view.launch.py camera:="$CAMERA"
         ;;
+    viewrgb)
+        # Aspect-correct color preview using rqt_image_view (preserves native
+        # aspect ratio, unlike RViz's Image display).
+        CAMERA="${2:-front}"
+        export DISPLAY=:1
+        export QT_QPA_PLATFORM=xcb
+        export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
+        mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+        echo "Opening aspect-correct COLOR view: /kinect_${CAMERA}/color/image_raw on DISPLAY=$DISPLAY"
+        /opt/ros/humble/lib/rqt_image_view/rqt_image_view "/kinect_${CAMERA}/color/image_raw"
+        ;;
+    viewdepth)
+        # Aspect-correct depth preview using rqt_image_view.
+        CAMERA="${2:-front}"
+        export DISPLAY=:1
+        export QT_QPA_PLATFORM=xcb
+        export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
+        mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+        echo "Opening aspect-correct DEPTH view: /kinect_${CAMERA}/depth/image_raw on DISPLAY=$DISPLAY"
+        /opt/ros/humble/lib/rqt_image_view/rqt_image_view "/kinect_${CAMERA}/depth/image_raw"
+        ;;
     *)
-        echo "Usage: $0 [discover|front|rear|dual|view|test]"
+        echo "Usage: $0 [discover|front|rear|dual|view|viewrgb|viewdepth|test]"
         exit 1
         ;;
 esac

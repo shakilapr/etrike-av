@@ -14,7 +14,8 @@ FROM ${AUTOWARE_BASE}
 ENV DEBIAN_FRONTEND=noninteractive
 
 # libfreenect2 build dependencies (CUDA pipeline for depth decode on the Orin
-# GPU; TurboJPEG for color).
+# GPU; TurboJPEG for color) + rqt_image_view for aspect-correct camera preview
+# on the Jetson monitor (RViz's Image display stretches to fill its panel).
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
         build-essential \
@@ -26,7 +27,8 @@ RUN apt-get update -qq && \
         libglfw3-dev \
         libssl-dev \
         ca-certificates \
-        curl && \
+        curl \
+        ros-humble-rqt-image-view && \
     rm -rf /var/lib/apt/lists/*
 
 # Build libfreenect2 from source (CUDA pipeline for depth decode) and install

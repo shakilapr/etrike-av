@@ -206,18 +206,50 @@ ros2 launch etrike_kinect2 dual_kinect.launch.py                   # both (no RV
 
 The Kinect is physically plugged into the Jetson. The monitor attached to the
 Jetson is `DISPLAY=:1` (inside the Docker container, X11 is passed through
-`/tmp/.X11-unix`). The RViz window is forced onto `:1` by the launch file, so it
-works the **same way whether you run it from the Jetson's own terminal or over
-SSH** — the window always appears on the Jetson's monitor, never on Windows.
+`/tmp/.X11-unix`). All viewers below force `:1`, so the window always appears
+on the Jetson's monitor, never on Windows — whether you run them from the
+Jetson's own terminal or over SSH.
 
-**From the Jetson's local terminal (inside the container):**
+#### Aspect-correct preview (recommended): rqt_image_view
+
+RViz's `Image` display **stretches** the frame to fill its panel (no aspect-ratio
+lock), so the 16:9 color feed and the 512×424 depth feed get distorted.
+`rqt_image_view` preserves the native aspect ratio — use it whenever you want an
+honest view of what the camera sees.
+
+Color:
+
+```bash
+ros2 run rqt_image_view rqt_image_view /kinect_front/color/image_raw
+# or: ./run.sh viewrgb front
+```
+
+Depth:
+
+```bash
+ros2 run rqt_image_view rqt_image_view /kinect_front/depth/image_raw
+# or: ./run.sh viewdepth front
+```
+
+For the rear camera use `/kinect_rear/...` (and `./run.sh viewrgb rear` /
+`./run.sh viewdepth rear`).
+
+> `rqt_image_view` is installed in the image (`docker/Dockerfile.kinect` installs
+> `ros-humble-rqt-image-view`). Its binary is
+> `/opt/ros/humble/lib/rqt_image_view/rqt_image_view`.
+
+#### Multi-panel view (stretched): RViz
+
+If you want several streams in one window (front color + front depth + rear
+color + rear depth), RViz does it — but be aware the images are stretched to
+fill the panels:
 
 ```bash
 ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual
 # or: ./run.sh view dual
 ```
 
-**Over SSH into the Jetson (inside the container):**
+From over SSH:
 
 ```bash
 ssh med1@172.16.25.56
@@ -225,8 +257,12 @@ ssh med1@172.16.25.56
 ./run.sh view dual           # window appears on the Jetson monitor (DISPLAY=:1)
 ```
 
-This opens an RViz2 window on the Jetson's monitor showing four `Image` panels:
-front color, front depth, rear color, rear depth.
+**X authorization (one-time after a container recreate):** a fresh container is a
+new X client, so re-allow it on the Jetson host:
+
+```bash
+DISPLAY=:1 xhost +local:
+```
 
 If the container is not running yet, start it with the display passthrough
 (one-time, from the Jetson host):
@@ -237,7 +273,8 @@ docker run -d --name autoware_test --privileged --runtime=nvidia --gpus all \
   --net=host --ipc=host \
   -e DISPLAY=:1 -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
   -v ~/av_project/autoware:/workspace/autoware \
-  ghcr.io/autowarefoundation/autoware:universe-cuda-humble \
+  -v /dev/bus/usb:/dev/bus/usb \
+  etrike-kinect-build:latest \
   bash -c 'while true; do sleep 1000; done'
 ```
 
@@ -245,32 +282,27 @@ Then, from the Jetson host (or over SSH):
 
 ```bash
 docker exec -it autoware_test bash -c \
-  'export DISPLAY=:1; source /opt/autoware/setup.bash; \
+  'export DISPLAY=:1; source /opt/ros/humble/setup.bash; \
    source /workspace/autoware/install/setup.bash; \
    colcon build --symlink-install --packages-select etrike_kinect2; \
    ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual'
 ```
 
-> If you prefer a bare image view (lighter than RViz) on the same monitor:
-> ```bash
-> ros2 run rqt_image_view rqt_image_view /kinect/front/color/image_raw
-> ```
-
 **Data flow when you plug a Kinect into USB:**
 ```
 USB 3.0 port (SuperSpeed)
-   │ libfreenect2 (kernel usb + libusb)
+   │ libfreenect2 (kernel usb + libusb, CUDA depth pipeline)
    ▼
 Kinect2Device (enumerate by serial → openDevice)
-   │ wait_for_frames() in capture thread
+   │ wait_for_frames() in capture thread (~30 Hz with CUDA)
    ▼
 Kinect2Node (LifecycleNode)
    │ frame_converter (libfreenect2 Frame → sensor_msgs/Image)
    ▼
-/kinect/{front,rear}/{color,depth}/image_raw   (bgr8 / 32FC1-meters)
+/kinect_front/{color,depth,depth_registered}/image_raw   (bgr8 / 32FC1-meters / bgr8)
    │
    ▼
-RViz2 Image panel (on DISPLAY=:1)  ← you see RGB + depth live
+rqt_image_view (aspect-correct) or RViz2 (stretched) on DISPLAY=:1
 ```
 
 > Depth is published as `32FC1` **meters** (not mm, not encoded). In RViz the
