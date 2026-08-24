@@ -21,6 +21,7 @@ download/
 *.out
 
 # Kinect depth-analysis reports are committed deliverables (typ source + pdf)
+!docs/sensors/kinect2/reports/*.pdf
 *.toc
 *.lof
 *.lot
