@@ -2,7 +2,7 @@
 # Find serial with: ./run.sh discover
 kinect_rear:
   ros__parameters:
-    serial: ""  # fill after running: ros2 run etrike_kinect2 kinect2_node_exec --discover
+    serial: "500396543042"  # rear Kinect (discovered 2026-08-24)
     color_enabled: true
     depth_enabled: true
     ir_enabled: false

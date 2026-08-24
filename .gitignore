@@ -19,6 +19,8 @@ download/
 *.aux
 *.log
 *.out
+
+# Kinect depth-analysis reports are committed deliverables (typ source + pdf)
 *.toc
 *.lof
 *.lot
