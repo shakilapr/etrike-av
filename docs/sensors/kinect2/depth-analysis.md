@@ -87,12 +87,12 @@ Notes:
   For a controlled A/B of CPU-vs-CUDA-KDE at the *same* scene, a fixture is
   required; the numbers above are indicative, not lab-grade.
 
-**Screenshots** (`/tmp/depth_{cpu,cuda,cudakde}.png` on the Jetson, captured via
-`scrot` on `DISPLAY=:1` while each pipeline rendered in `rqt_image_view`):
-the three depth frames are visually similar (same scene), as expected — the
-pipelines differ in rate, outlier rejection, and phase quality rather than gross
-appearance. Brightness distribution measured nearly identical
-(~40% dark / ~55% bright for all three).
+**Screenshots** are saved locally on the Jetson (`/tmp/depth_{cpu,cuda,cudakde}.png`,
+`/tmp/color_view.png`, captured via `scrot` on `DISPLAY=:1` while each pipeline
+rendered in `rqt_image_view`): the three depth frames are visually similar (same
+scene), as expected — the pipelines differ in rate, outlier rejection, and phase
+quality rather than gross appearance. Brightness distribution measured nearly
+identical (~40% dark / ~55% bright for all three).
 
 **Bottom line:** switch from CPU to a CUDA pipeline (either `cuda` or `cudakde`)
 for real-time depth. `cudakde` is the theoretically better algorithm at the same
@@ -103,13 +103,13 @@ default pending a controlled side-by-side.
 
 ## 4. Screenshots
 
-Stored on the Jetson (`/tmp/`), and copied to the repo under
-`docs/sensors/kinect2/screenshots/`:
+Captured on the Jetson monitor and kept **locally on the Jetson only** (not in
+git — `.gitignore` ignores `*.png`):
 
-- `depth_cpu.png` — CPU pipeline depth view
-- `depth_cuda.png` — CUDA pipeline depth view
-- `depth_cudakde.png` — CUDA-KDE pipeline depth view
-- `color_view.png` — color (RGB) reference view
+- `/tmp/depth_cpu.png` — CPU pipeline depth view
+- `/tmp/depth_cuda.png` — CUDA pipeline depth view
+- `/tmp/depth_cudakde.png` — CUDA-KDE pipeline depth view
+- `/tmp/color_view.png` — color (RGB) reference view
 
 > Screenshots are captures of the Jetson monitor (`DISPLAY=:1`) while
 > `rqt_image_view` displayed the stream, so they include the window chrome.

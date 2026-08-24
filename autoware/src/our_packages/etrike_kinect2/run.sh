@@ -80,6 +80,8 @@ case "${1:-dual}" in
         export QT_QPA_PLATFORM=xcb
         export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
         mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+        # Close any previous viewer window so the monitor doesn't accumulate them.
+        pkill -f "rqt_image_view.*image_raw" 2>/dev/null || true
         echo "Opening aspect-correct COLOR view: /kinect_${CAMERA}/color/image_raw on DISPLAY=$DISPLAY"
         /opt/ros/humble/lib/rqt_image_view/rqt_image_view "/kinect_${CAMERA}/color/image_raw"
         ;;
@@ -90,6 +92,8 @@ case "${1:-dual}" in
         export QT_QPA_PLATFORM=xcb
         export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
         mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+        # Close any previous viewer window so the monitor doesn't accumulate them.
+        pkill -f "rqt_image_view.*image_raw" 2>/dev/null || true
         echo "Opening aspect-correct DEPTH view: /kinect_${CAMERA}/depth/image_raw on DISPLAY=$DISPLAY"
         /opt/ros/humble/lib/rqt_image_view/rqt_image_view "/kinect_${CAMERA}/depth/image_raw"
         ;;
