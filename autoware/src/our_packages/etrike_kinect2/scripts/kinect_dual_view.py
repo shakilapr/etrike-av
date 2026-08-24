@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-Kinect v2 dual-camera viewer (OpenCV).
+Kinect v2 viewer with camera switching (OpenCV).
 
 Subscribes to /kinect_front/color/image_raw and /kinect_rear/color/image_raw.
-Shows one window when only one camera is connected, two side-by-side when both.
-Overlays FPS per camera. Handles connect/disconnect without crashing.
+Lets you switch which camera(s) to view:
+  - Button bar at the top (click with mouse) OR keys:
+      1 = Front only, 2 = Rear only, 0 = Both (side by side)
+  - q = quit
+Shows "No Kinect connected" if none are streaming.
 
 Usage:
-    python3 kinect_dual_view.py [--rgb-only] [--full]
-    (--rgb-only / --full select which driver config; the UI is the same)
+    python3 kinect_dual_view.py
 """
-import argparse
 import threading
 import time
 
@@ -22,6 +23,8 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image
 
 CAMS = ["front", "rear"]
+WINDOW = "Kinect Viewer"
+BTN_H = 40  # button bar height
 
 
 class CameraFeed(Node):
@@ -59,63 +62,94 @@ class CameraFeed(Node):
         return self.latest is not None and (time.time() - self.latest_ts) < 3.0
 
 
-def make_label(frame, cam, fps, status="OK"):
+def draw_button_bar(frame, mode):
+    """Draw a clickable button bar on top. mode in {front, rear, both}."""
+    h, w = frame.shape[:2]
+    bar = np.full((BTN_H, w, 3), 30, np.uint8)
+    labels = [("1: FRONT", 0), ("0: BOTH", w // 3), ("2: REAR", 2 * w // 3)]
+    seg = w // 3
+    for text, x0 in labels:
+        active = (text.endswith("FRONT") and mode == "front") or \
+                 (text.endswith("BOTH") and mode == "both") or \
+                 (text.endswith("REAR") and mode == "rear")
+        color = (0, 200, 0) if active else (90, 90, 90)
+        cv2.rectangle(bar, (x0, 0), (x0 + seg, BTN_H), color, 2)
+        cv2.putText(bar, text, (x0 + 10, BTN_H - 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+    return np.vstack([bar, frame])
+
+
+def label_frame(frame, cam, fps):
     h, w = frame.shape[:2]
     cv2.rectangle(frame, (0, 0), (w, 30), (0, 0, 0), -1)
     cv2.putText(
-        frame, f"KINECT {cam.upper()}  {fps:.1f} fps  {status}",
+        frame, f"KINECT {cam.upper()}  {fps:.1f} fps",
         (6, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA)
     return frame
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--rgb-only", action="store_true", help="RGB-only mode note")
-    parser.add_argument("--full", action="store_true", help="full (color+depth) mode note")
-    args = parser.parse_args()
-
     rclpy.init()
-    feeds = {
-        cam: CameraFeed(cam, f"/kinect_{cam}/color/image_raw") for cam in CAMS
-    }
+    feeds = {cam: CameraFeed(cam, f"/kinect_{cam}/color/image_raw") for cam in CAMS}
     executor = rclpy.executors.MultiThreadedExecutor(num_threads=2)
     for f in feeds.values():
         executor.add_node(f)
-    spin = threading.Thread(target=executor.spin, daemon=True)
-    spin.start()
+    threading.Thread(target=executor.spin, daemon=True).start()
 
-    mode = "RGB-only" if args.rgb_only else "FULL"
-    print(f"Kinect dual viewer started (mode: {mode})")
-    print("Press q to quit")
+    mode = "both"  # front | rear | both
+    print("Kinect viewer: 1=FRONT 2=REAR 0=BOTH q=quit (or click the buttons)")
 
+    def on_mouse(event, x, y, flags, param):
+        nonlocal mode
+        if event == cv2.EVENT_LBUTTONDOWN and y < BTN_H:
+            if x < param["w"] // 3:
+                mode = "front"
+            elif x < 2 * param["w"] // 3:
+                mode = "both"
+            else:
+                mode = "rear"
+
+    cv2.namedWindow(WINDOW)
     try:
         while True:
             connected = [c for c in CAMS if feeds[c].is_connected()]
-            frames = {}
-            for c in connected:
-                f = feeds[c]
-                img = f.latest.copy()
-                frames[c] = make_label(img, c, f.fps)
+            frames = {c: label_frame(feeds[c].latest.copy(), c, feeds[c].fps)
+                      for c in connected}
 
             if not frames:
                 blank = np.full((480, 640, 3), 40, np.uint8)
                 cv2.putText(blank, "No Kinect connected", (180, 240),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-                cv2.imshow("Kinect Viewer", blank)
-            elif len(frames) == 1:
-                cv2.imshow("Kinect Viewer", next(iter(frames.values())))
+                view = draw_button_bar(blank, mode)
             else:
-                # both: side by side
-                h = max(frames["front"].shape[0], frames["rear"].shape[0])
-                w = frames["front"].shape[1] + frames["rear"].shape[1]
-                canvas = np.zeros((h, w, 3), np.uint8)
-                canvas[:frames["front"].shape[0], :frames["front"].shape[1]] = frames["front"]
-                canvas[:frames["rear"].shape[0], frames["front"].shape[1]:] = frames["rear"]
-                cv2.imshow("Kinect Viewer", canvas)
+                # decide which cameras to show based on mode
+                want = [mode] if mode in ("front", "rear") else connected
+                want = [c for c in want if c in frames]
+                if not want:
+                    want = connected[:1]
+                if len(want) == 1:
+                    view = draw_button_bar(frames[want[0]], mode)
+                else:
+                    a, b = want[0], want[1]
+                    h = max(frames[a].shape[0], frames[b].shape[0])
+                    w = frames[a].shape[1] + frames[b].shape[1]
+                    canvas = np.zeros((h, w, 3), np.uint8)
+                    canvas[:frames[a].shape[0], :frames[a].shape[1]] = frames[a]
+                    canvas[:frames[b].shape[0], frames[a].shape[1]:] = frames[b]
+                    view = draw_button_bar(canvas, mode)
+
+            cv2.setMouseCallback(WINDOW, on_mouse, {"w": view.shape[1]})
+            cv2.imshow(WINDOW, view)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
+            elif key == ord("1"):
+                mode = "front"
+            elif key == ord("2"):
+                mode = "rear"
+            elif key == ord("0"):
+                mode = "both"
     except KeyboardInterrupt:
         pass
     finally:
