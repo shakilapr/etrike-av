@@ -4,7 +4,6 @@
     Bajaj RE three-wheeler geometry.
     Frame convention: +X forward, +Y left, +Z up. base_footprint is the
     ground projection of the rear axle midpoint.
-
     Keep preview-time expressions compatible with rde-urdf's JavaScript
     xacro parser. Control parameters are mirrored in vehicle_info.param.yaml.
   -->
@@ -94,13 +93,10 @@
       <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
     </collision>
   </link>
-  <joint name="rear_left_wheel_joint" type="continuous">
+  <joint name="rear_left_wheel_joint" type="fixed">
     <parent link="base_link"/>
     <child link="rear_left_wheel_link"/>
     <origin xyz="0 ${half_rear_track} ${wheel_radius}" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <limit effort="120.0" velocity="45.0"/>
-    <dynamics damping="0.05" friction="0.02"/>
   </joint>
 
   <link name="rear_right_wheel_link">
@@ -119,13 +115,10 @@
       <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
     </collision>
   </link>
-  <joint name="rear_right_wheel_joint" type="continuous">
+  <joint name="rear_right_wheel_joint" type="fixed">
     <parent link="base_link"/>
     <child link="rear_right_wheel_link"/>
     <origin xyz="0 -${half_rear_track} ${wheel_radius}" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <limit effort="120.0" velocity="45.0"/>
-    <dynamics damping="0.05" friction="0.02"/>
   </joint>
 
   <!-- Steering knuckle is at the documented front-wheel center. -->
@@ -140,13 +133,10 @@
       <geometry><box size="0.060 0.060 0.360"/></geometry>
     </collision>
   </link>
-  <joint name="front_steering_joint" type="revolute">
+  <joint name="front_steering_joint" type="fixed">
     <parent link="base_link"/>
     <child link="front_steering_link"/>
     <origin xyz="${wheel_base} 0 ${wheel_radius}" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
-    <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="200.0" velocity="1.5"/>
-    <dynamics damping="2.0" friction="1.0"/>
   </joint>
 
   <link name="front_wheel_link">
@@ -165,13 +155,10 @@
       <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
     </collision>
   </link>
-  <joint name="front_wheel_joint" type="continuous">
+  <joint name="front_wheel_joint" type="fixed">
     <parent link="front_steering_link"/>
     <child link="front_wheel_link"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 1 0"/>
-    <limit effort="120.0" velocity="45.0"/>
-    <dynamics damping="0.05" friction="0.02"/>
   </joint>
 
   <!-- Hesai XT32M2X 3D LiDAR Link (Autoware / ROS 2) -->

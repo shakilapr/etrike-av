@@ -9,7 +9,7 @@
   <!-- Kinect v2 cameras -->
   <xacro:include filename="$(find etrike_kinect2)/urdf/kinect_v2.xacro"/>
 
-  <!-- FRONT Kinect: windshield area, facing forward -->
+  <!-- FRONT Kinect - windshield area, facing forward -->
   <xacro:kinect_v2_macro
     name="kinect_front"
     parent="base_link"
@@ -21,7 +21,7 @@
     yaw="${calibration['base_link']['kinect_front']['yaw']}"
   />
 
-  <!-- REAR Kinect: behind cabin, facing backward -->
+  <!-- REAR Kinect - behind cabin, facing backward -->
   <xacro:kinect_v2_macro
     name="kinect_rear"
     parent="base_link"

@@ -3,18 +3,18 @@
   <!--
     Microsoft Kinect v2 (Kinect One) sensor frames.
 
-    Physical dimensions (approximate):
-      Body: 249mm x 66mm x 67mm (W x H x D)
-      Depth range: 0.5 – 4.5 m
-      RGB: 1920x1080, Depth/IR: 512x424
+    Physical dimensions (approximate)
+      Body 249mm x 66mm x 67mm (W x H x D)
+      Depth range 0.5 - 4.5 m
+      RGB 1920x1080, Depth/IR 512x424
 
-    Frame convention:
-      - Kinect sensor frame: X-right, Y-down, Z-forward (into scene)
-      - Optical frame: X-right, Y-down, Z-forward
+    Frame convention
+      - Kinect sensor frame X-right, Y-down, Z-forward (into scene)
+      - Optical frame X-right, Y-down, Z-forward
         (same as sensor frame for Kinect v2)
 
-    Two instances: front (facing forward) and rear (facing backward).
-    Extrinsic poses are placeholders — calibrate after physical mounting.
+    Two instances front (facing forward) and rear (facing backward).
+    Extrinsic poses are placeholders - calibrate after physical mounting.
   -->
 
   <xacro:macro name="kinect_v2_macro" params="name parent x y z roll pitch yaw">
