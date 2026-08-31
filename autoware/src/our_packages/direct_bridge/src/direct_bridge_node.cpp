@@ -181,7 +181,7 @@ etrike::protocol::FrameView protocol_view(const struct can_frame & frame)
 // =====================================================================
 UnitEncoder::UnitEncoder(const DirectBridgeParams & params) : params_(params) {}
 
-int32_t UnitEncoder::speed_to_mmps_impl(double speed_mps) const
+int32_t UnitEncoder::speed_to_mmps_impl(double speed_mps)
 {
   return static_cast<int32_t>(std::lround(speed_mps * 1000.0));
 }
