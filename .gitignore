@@ -63,3 +63,7 @@ download/
 
 # Daily diary (personal, not version-controlled)
 /daily-diary.md
+
+# Bridge output logs captured by scripts/log_bridge_outputs.py (temp data)
+/data/bridge_logs/
+/autoware/bridge_logs/
