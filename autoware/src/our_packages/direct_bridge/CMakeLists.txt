@@ -78,21 +78,18 @@ if(BUILD_TESTING)
   )
 
   if(ament_cmake_cpplint_FOUND)
-    find_package(ament_cpplint REQUIRED)
     ament_cpplint(
       EXCLUDE ${VENDORED_DIRS}
     )
   endif()
 
   if(ament_cmake_uncrustify_FOUND)
-    find_package(ament_uncrustify REQUIRED)
     ament_uncrustify(
       EXCLUDE ${VENDORED_DIRS}
     )
   endif()
 
   if(ament_cmake_flake8_FOUND)
-    find_package(ament_flake8 REQUIRED)
     ament_flake8(
       include
       launch
@@ -102,7 +99,6 @@ if(BUILD_TESTING)
   endif()
 
   if(ament_cmake_pep257_FOUND)
-    find_package(ament_pep257 REQUIRED)
     ament_pep257(
       include
       launch
@@ -112,14 +108,12 @@ if(BUILD_TESTING)
   endif()
 
   if(ament_cmake_copyright_FOUND)
-    find_package(ament_copyright REQUIRED)
     ament_copyright(
       EXCLUDE ${VENDORED_DIRS}
     )
   endif()
 
   if(ament_cmake_lint_cmake_FOUND)
-    find_package(ament_lint_cmake REQUIRED)
     ament_lint_cmake()
   endif()
 
