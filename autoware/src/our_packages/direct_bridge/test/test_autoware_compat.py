@@ -53,9 +53,16 @@ VCAN = "vcan1"
 
 
 def _setup_vcan():
-    subprocess.run("modprobe vcan", shell=True, check=False)
+    """Create and bring up the virtual CAN interface.
+
+    Returns True on success, False if vcan is not available (e.g. inside a
+    container without the vcan kernel module, or the interface cannot be
+    created). The caller skips the test when False.
+    """
+    subprocess.run("modprobe vcan 2>/dev/null || true", shell=True)
     subprocess.run(f"ip link add dev {VCAN} type vcan 2>/dev/null || true", shell=True)
-    subprocess.run(f"ip link set {VCAN} up", shell=True, check=True)
+    proc = subprocess.run(f"ip link set {VCAN} up 2>/dev/null || true", shell=True)
+    return proc.returncode == 0
 
 
 def _teardown_vcan():
@@ -65,7 +72,8 @@ def _teardown_vcan():
 
 @pytest.mark.launch_test
 def generate_test_description():
-    _setup_vcan()
+    if not _setup_vcan():
+        pytest.skip("vcan not available; run this test on a host with the vcan kernel module")
 
     bridge = LifecycleNode(
         package="direct_bridge",
