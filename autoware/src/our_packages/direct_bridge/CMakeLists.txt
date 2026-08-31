@@ -71,6 +71,8 @@ if(BUILD_TESTING)
     ${CMAKE_CURRENT_SOURCE_DIR}
   )
   ament_target_dependencies(test_encode
+    rclcpp
+    rclcpp_lifecycle
     autoware_control_msgs
     autoware_vehicle_msgs
     tier4_vehicle_msgs
