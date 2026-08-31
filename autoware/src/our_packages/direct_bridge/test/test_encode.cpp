@@ -29,7 +29,7 @@ namespace
 
 void expect_hex(const struct can_frame & frame, const char * hex)
 {
-  // hex is "XX.XX.XX..." (cansend style) or "XXYYZZ" — normalize to a byte array.
+  // hex is "XX.XX.XX..." (cansend style) or "XXYYZZ" - normalize to a byte array.
   std::uint8_t expected[8];
   std::size_t expected_len = 0;
   for (std::size_t i = 0; hex[i] != '\0'; i += 2) {
@@ -98,8 +98,9 @@ void test_ses_command_values()
   assert(frame.len == 8);
   assert((frame.data[0] & 0x03) == 0x03);  // both enables
   etrike::protocol::codecs::ses::Command decoded{};
-  assert(etrike::protocol::codecs::ses::decode_command(
-    etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded) ==
+  assert(
+    etrike::protocol::codecs::ses::decode_command(
+      etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded) ==
     etrike::protocol::CodecStatus::Ok);
   assert(decoded.alignment_enable && decoded.control_enable);
   assert(decoded.target_angle_raw == 30000);
@@ -113,8 +114,9 @@ void test_ses_command_values()
   direct_bridge::UnitEncoder enc2(params);
   assert(enc2.encode_ses(left_10deg, 0.0, frame));
   etrike::protocol::codecs::ses::Command decoded2{};
-  assert(etrike::protocol::codecs::ses::decode_command(
-    etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded2) ==
+  assert(
+    etrike::protocol::codecs::ses::decode_command(
+      etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded2) ==
     etrike::protocol::CodecStatus::Ok);
   assert(decoded2.target_angle_raw == 29900);
 }
@@ -133,8 +135,9 @@ void test_seb_pressure_mode()
   assert(frame.data[3] == 50);             // pressure raw
   // Verify checksum decodes cleanly.
   etrike::protocol::codecs::seb::Command decoded{};
-  assert(etrike::protocol::codecs::seb::decode_command(
-    etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded) ==
+  assert(
+    etrike::protocol::codecs::seb::decode_command(
+      etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded) ==
     etrike::protocol::CodecStatus::Ok);
   assert(decoded.control_mode == etrike::protocol::codecs::seb::ControlMode::Pressure);
   assert(decoded.pressure_request_raw == 50);
@@ -153,8 +156,9 @@ void test_seb_release_stroke()
   assert(frame.data[2] == (600 & 0xFF));
   assert(frame.data[3] == ((600 >> 8) & 0xFF));
   etrike::protocol::codecs::seb::Command decoded{};
-  assert(etrike::protocol::codecs::seb::decode_command(
-    etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded) ==
+  assert(
+    etrike::protocol::codecs::seb::decode_command(
+      etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded) ==
     etrike::protocol::CodecStatus::Ok);
   assert(decoded.control_mode == etrike::protocol::codecs::seb::ControlMode::Stroke);
   assert(decoded.stroke_request_raw == 600);

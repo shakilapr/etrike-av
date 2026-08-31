@@ -179,7 +179,8 @@ etrike::protocol::FrameView protocol_view(const struct can_frame & frame)
 // =====================================================================
 //  UnitEncoder
 // =====================================================================
-UnitEncoder::UnitEncoder(const DirectBridgeParams & params) : params_(params) {}
+UnitEncoder::UnitEncoder(const DirectBridgeParams & params)
+: params_(params) {}
 
 int32_t UnitEncoder::speed_to_mmps_impl(double speed_mps)
 {
@@ -519,7 +520,7 @@ void DirectBridgeNode::on_emergency(
   if ((n - last_estop_tx_).seconds() * 1000.0 < 500.0) {return;}
   last_estop_tx_ = n;
 
-  RCLCPP_ERROR(get_logger(), "EMERGENCY received — sending ESTOP");
+  RCLCPP_ERROR(get_logger(), "EMERGENCY received - sending ESTOP");
   struct can_frame frame;
   if (encoder_ && encoder_->encode_estop(frame)) {
     send(frame);
@@ -738,7 +739,7 @@ void DirectBridgeNode::handle_received_frame(const struct can_frame & frame)
         steer.stamp = now();
         steer.steering_tire_angle =
           encoder_ ? encoder_->steering_rad_from_raw(
-            static_cast<int16_t>(value.steering_angle_raw)) : 0.0f;
+          static_cast<int16_t>(value.steering_angle_raw)) : 0.0f;
         if (pub_steering_->is_activated()) {pub_steering_->publish(steer);}
         break;
       }
