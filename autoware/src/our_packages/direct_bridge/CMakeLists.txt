@@ -137,6 +137,7 @@ if(BUILD_TESTING)
   add_test(NAME encode COMMAND test_encode)
 
   ament_add_pytest_test(${PROJECT_NAME}_autoware_compat test/test_autoware_compat.py)
+  ament_add_pytest_test(${PROJECT_NAME}_signal_loop test/test_signal_loop.py)
 endif()
 
 ament_package()
