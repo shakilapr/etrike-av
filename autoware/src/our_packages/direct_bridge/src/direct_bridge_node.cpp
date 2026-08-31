@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -32,7 +33,9 @@
 #include "protocol/codecs/seb.hpp"
 #include "protocol/codecs/ses.hpp"
 #include "protocol/core/frame.hpp"
-#include "protocol/generated/cpp/etrike_protocol.hpp"namespace direct_bridge
+#include "protocol/generated/cpp/etrike_protocol.hpp"
+
+namespace direct_bridge
 {
 
 namespace generated = etrike::protocol::generated;
@@ -43,7 +46,7 @@ namespace seb = etrike::protocol::codecs::seb;
 namespace gear
 {
 constexpr uint8_t CAN_N = 0, CAN_D = 1, CAN_S = 2, CAN_R = 3;
-constexpr uint8_t AW_NEUTRAL = 1, AW_DRIVE = 2, AW_REVERSE = 20, AW_LOW = 23, AW_NONE = 0;
+constexpr uint8_t AW_NEUTRAL = 1, AW_DRIVE = 2, AW_REVERSE = 20, AW_LOW = 23;
 }  // namespace gear
 
 // Mode constants (0x110).
@@ -186,10 +189,17 @@ int32_t UnitEncoder::speed_to_mmps_impl(double speed_mps) const
 bool UnitEncoder::encode_drive(double speed_mps, uint8_t gear, struct can_frame & frame) const
 {
   if (!std::isfinite(speed_mps)) {return false;}
+  // Protocol hard bounds: the generated RtDriveCmd codec rejects values outside
+  // [-500, +3000] mm/s. Clamp to the intersection of the configured limits and
+  // these hard bounds so an over-large parameter can never make the codec fail.
+  const int32_t hard_min = -500;
+  const int32_t hard_max = 3000;
+  const int32_t lo = std::max(
+    hard_min, static_cast<int32_t>(-params_.max_speed_reverse * 1000.0));
+  const int32_t hi = std::min(
+    hard_max, static_cast<int32_t>(params_.max_speed_forward * 1000.0));
   int32_t speed_mmps = speed_to_mmps_impl(speed_mps);
-  speed_mmps = std::clamp(
-    speed_mmps, static_cast<int32_t>(-params_.max_speed_reverse * 1000.0),
-    static_cast<int32_t>(params_.max_speed_forward * 1000.0));
+  speed_mmps = std::clamp(speed_mmps, lo, hi);
 
   generated::RtDriveCmd message{};
   message.motor_speed_mmps = speed_mmps;
@@ -650,15 +660,6 @@ bool DirectBridgeNode::send(const struct can_frame & frame)
   return can_->send(frame);
 }
 
-void DirectBridgeNode::send_safe_output()
-{
-  if (!encoder_) {return;}
-  struct can_frame frame;
-  if (encoder_->encode_neutral_drive(frame)) {send(frame);}
-  if (encoder_->encode_ses(0.0, 0.0, frame)) {send(frame);}
-  if (encoder_->encode_seb_release(frame)) {send(frame);}
-}
-
 uint8_t DirectBridgeNode::resolve_gear(
   int32_t speed_mmps, bool has_override, uint8_t override_gear) const
 {
@@ -733,8 +734,6 @@ void DirectBridgeNode::handle_received_frame(const struct can_frame & frame)
           break;
         }
         ses_aligned_.store(value.angle_aligned, std::memory_order_relaxed);
-        ses_angle_raw_.store(static_cast<int16_t>(value.steering_angle_raw),
-          std::memory_order_relaxed);
         SteeringReport steer;
         steer.stamp = now();
         steer.steering_tire_angle =

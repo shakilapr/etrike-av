@@ -177,7 +177,6 @@ private:
 
   // ---- SES alignment gate (set in RX thread) ----
   std::atomic<bool> ses_aligned_{false};
-  std::atomic<int16_t> ses_angle_raw_{0};
 
   // ---- Rate limiting ----
   rclcpp::Time last_estop_tx_{0, 0, RCL_SYSTEM_TIME};
@@ -198,7 +197,6 @@ private:
   bool load_parameters();
   void invalidate_control();
   bool send(const struct can_frame & frame);
-  void send_safe_output();
   void handle_received_frame(const struct can_frame & frame);
   uint8_t resolve_gear(int32_t speed_mmps, bool has_override, uint8_t override_gear) const;
 };

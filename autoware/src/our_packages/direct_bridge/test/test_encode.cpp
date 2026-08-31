@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -85,33 +86,37 @@ void test_estop()
 
 void test_ses_command_values()
 {
-  // Vector: ses-command-values -> alignment=1, control=1, angle_raw=1234,
-  //         speed_raw=328, roll=5, veh_spd=10
+  // Structural SES encode/decode + checksum verification.
+  // Use an in-range angle (within max_steering_angle clamp) so the codec
+  // accepts it and the raw value round-trips exactly.
   direct_bridge::DirectBridgeParams params;
   direct_bridge::UnitEncoder enc(params);
   struct can_frame frame;
 
-  // Angle 1234 raw - offset 30000 = -28766 in 0.1deg -> rad.
-  // Build via the encoder with a hand-computed angle; assert raw angle via codec.
-  // Use encode_ses and decode back to verify fields + checksum.
-  double angle_rad = enc.steering_rad_from_raw(static_cast<int16_t>(1234));
-  // Reset roll to produce the vector's roll=5: encoder roll starts at 0,
-  // so call next_ses_roll() five times then encode with a fresh encoder path.
-  assert(enc.encode_ses(angle_rad, 0.0, frame));
-  // The first encode uses roll=1 (roll starts 0, next_ses_roll increments first).
-  // To match roll=5 we set the counter manually via a helper isn't exposed;
-  // instead assert structural correctness: byte0 = 0x03, checksum valid, DLC 8.
+  // 0 rad -> centered raw 30000.
+  assert(enc.encode_ses(0.0, 0.0, frame));
   assert(frame.len == 8);
   assert((frame.data[0] & 0x03) == 0x03);  // both enables
-  // Decode with the codec to verify checksum passes and fields round-trip.
-  direct_bridge::UnitEncoder enc2(params);
-  assert(enc2.encode_ses(angle_rad, 0.0, frame));
   etrike::protocol::codecs::ses::Command decoded{};
   assert(etrike::protocol::codecs::ses::decode_command(
     etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded) ==
     etrike::protocol::CodecStatus::Ok);
   assert(decoded.alignment_enable && decoded.control_enable);
-  assert(decoded.target_angle_raw == 1234);
+  assert(decoded.target_angle_raw == 30000);
+  assert(decoded.vehicle_speed_raw == 0);
+  // Slew rate at 0 m/s clamps to steer_rate_min (125).
+  assert(decoded.target_speed_raw == 125);
+
+  // A right-positive +10 degree wire angle maps to raw = -100 + 30000 = 29900.
+  // From the Autoware convention (+10 deg left) the encoder negates to -10 deg.
+  double left_10deg = 10.0 * 3.14159265358979323846 / 180.0;
+  direct_bridge::UnitEncoder enc2(params);
+  assert(enc2.encode_ses(left_10deg, 0.0, frame));
+  etrike::protocol::codecs::ses::Command decoded2{};
+  assert(etrike::protocol::codecs::ses::decode_command(
+    etrike::protocol::FrameView(frame.can_id, false, frame.len, frame.data), decoded2) ==
+    etrike::protocol::CodecStatus::Ok);
+  assert(decoded2.target_angle_raw == 29900);
 }
 
 void test_seb_pressure_mode()
