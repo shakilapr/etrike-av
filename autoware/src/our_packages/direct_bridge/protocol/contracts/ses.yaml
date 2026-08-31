@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "messages": [
+    {"key":"vcu_ses_req","owner":"ses","protocol":"ses.vendor.v1","name":"VCU_SES_REQ","dlc":8,"byte_order":"little","codec":{"strategy":"custom","implementation_id":"ses-command-v1","vector_set_id":"payload-v1"},"layout":{"kind":"opaque","bytes":8,"algorithm":"xor8-complement over bytes 0..6; rolling counter and enable bits share byte 5"},"instances":[{"bus":"low","id":"0x169","frame_format":"standard","sender":"RT","receivers":["EPS_C"],"cycle_ms":20,"semantics":"independent"}]},
+    {"key":"ses_status","owner":"ses","protocol":"ses.vendor.v1","name":"SES_STATUS","dlc":8,"byte_order":"little","codec":{"strategy":"custom","implementation_id":"ses-status-v1","vector_set_id":"payload-v1"},"layout":{"kind":"opaque","bytes":8,"algorithm":"vendor overlapping status layout; XOR8-complement checksum"},"instances":[{"bus":"low","id":"0x201","frame_format":"standard","sender":"EPS_C","receivers":["RT"],"cycle_ms":10,"semantics":"independent"}]}
+  ]
+}

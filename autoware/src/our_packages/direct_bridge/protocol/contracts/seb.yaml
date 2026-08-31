@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "messages": [
+    {"key":"vcu_seb_req","owner":"seb","protocol":"seb.vendor.v1","name":"VCU_SEB_REQ","dlc":8,"byte_order":"little","codec":{"strategy":"custom","implementation_id":"seb-command-v1","vector_set_id":"payload-v1"},"layout":{"kind":"opaque","bytes":8,"algorithm":"vendor pressure/stroke overlap; XOR8-complement checksum"},"instances":[{"bus":"low","id":"0x7B9","frame_format":"standard","sender":"SYS","receivers":["SEB"],"cycle_ms":20,"semantics":"independent"}]},
+    {"key":"seb_status","owner":"seb","protocol":"seb.vendor.v1","name":"SEB_STATUS","dlc":8,"byte_order":"little","codec":{"strategy":"custom","implementation_id":"seb-status-v1","vector_set_id":"payload-v1"},"layout":{"kind":"opaque","bytes":8,"algorithm":"vendor pressure/stroke/angle overlap; XOR8-complement checksum"},"instances":[{"bus":"low","id":"0x721","frame_format":"standard","sender":"SEB","receivers":["SYS","RT"],"cycle_ms":10,"semantics":"independent"}]}
+  ]
+}

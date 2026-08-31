@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "messages": [
+    {"key":"rt_drive_cmd","owner":"rt","protocol":"etrike.application.v1","name":"RT_DRIVE_CMD","dlc":5,"byte_order":"big","codec":{"strategy":"generated"},"layout":{"kind":"signals","fields":[
+      {"key":"motor_speed_mmps","byte":0,"bit":0,"bits":32,"signed":true,"min":-500,"max":3000},
+      {"key":"gear","byte":4,"bit":0,"bits":8,"min":0,"max":3,"enum":{"0":"N","1":"D","2":"S","3":"R"}}
+    ]},"instances":[{"bus":"low","id":"0x204","frame_format":"standard","sender":"RT","receivers":["SYS","MTR"],"cycle_ms":10,"semantics":"independent"}]}
+  ]
+}

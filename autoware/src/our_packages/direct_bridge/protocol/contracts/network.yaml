@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "protocol_version": "etrike-wire-v1",
+  "instance_semantics": {
+    "same_frame": "The received frame is forwarded without changing ID, format, DLC, or payload bytes.",
+    "regenerated": "A receiver decodes and emits a new frame; payload and sequence state are not inherited.",
+    "independent": "The producer emits this instance with bus-local sequence and scheduling state."
+  },
+  "buses": [
+    {"key": "low", "bitrate_hz": 500000}
+  ],
+  "nodes": ["Host", "RT", "SYS", "MTR", "PWT", "DCDC", "EPS_C", "SEB", "HMI", "Any"],
+  "routes": [],
+  "messages": [
+    {
+      "key": "safety_estop", "owner": "safety", "protocol": "etrike.application.v1", "name": "SAFETY_ESTOP", "dlc": 0, "byte_order": "big",
+      "codec": {"strategy": "generated"}, "layout": {"kind": "signals", "fields": []},
+      "instances": [
+        {"bus": "low", "id": "0x001", "frame_format": "standard", "sender": "Any", "receivers": ["SYS", "Host", "MTR", "DCDC"], "cycle_ms": 0, "semantics": "independent"}
+      ]
+    }
+  ]
+}
