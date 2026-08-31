@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <linux/can.h>
+
 #include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-
-#include <linux/can.h>
 
 #include "direct_bridge/direct_bridge_node.hpp"
 #include "protocol/codecs/seb.hpp"

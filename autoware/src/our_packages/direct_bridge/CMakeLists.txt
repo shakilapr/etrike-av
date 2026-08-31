@@ -69,56 +69,45 @@ if(BUILD_TESTING)
 
   # The vendored protocol/codecs/core/generated headers, the vendored protocol
   # generator (tools/protocol.py), and the vector JSON files are copied verbatim
-  # from the etrike repository and MUST NOT be reformatted or restyled. Exclude
-  # them from linting; only our own sources are linted.
-  set(VENDORED_DIRS
-    protocol
-    tools
-    vectors
+  # from the etrike repository and MUST NOT be reformatted or restyled. Only our
+  # own source directories are passed to the linters, so the vendored files are
+  # never scanned.
+  set(LINT_SOURCE_DIRS
+    include
+    src
+    test
+    launch
+    scripts
+    config
   )
 
   if(ament_cmake_cpplint_FOUND)
     ament_cpplint(
-      include
-      src
-      test
+      ${LINT_SOURCE_DIRS}
     )
   endif()
 
   if(ament_cmake_uncrustify_FOUND)
     ament_uncrustify(
-      EXCLUDE ${VENDORED_DIRS}
-      include
-      src
-      test
+      ${LINT_SOURCE_DIRS}
     )
   endif()
 
   if(ament_cmake_flake8_FOUND)
     ament_flake8(
-      include
-      launch
-      scripts
-      test
+      ${LINT_SOURCE_DIRS}
     )
   endif()
 
   if(ament_cmake_pep257_FOUND)
     ament_pep257(
-      include
-      launch
-      scripts
-      test
+      ${LINT_SOURCE_DIRS}
     )
   endif()
 
   if(ament_cmake_copyright_FOUND)
     ament_copyright(
-      include
-      src
-      test
-      launch
-      config
+      ${LINT_SOURCE_DIRS}
     )
   endif()
 
