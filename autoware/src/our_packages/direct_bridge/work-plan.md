@@ -116,18 +116,24 @@ The testing strategy has five layers, matching Architecture, Section 12.
    - Spins up `vcan1` and launches the bridge with a mock Autoware command publisher (publishes `Control`, `GearCommand`, `VehicleEmergencyStamped` on the exact Autoware topics with matching QoS).
    - Asserts lifecycle reaches active, topic names/types/QoS match the Autoware contract, transmit frames appear with expected bytes, reports publish from injected feedback, and timeout/emergency paths fail closed.
 
-4. **Real-stack Autoware launch test — `test/test_launch_autoware.py`:**
+4. **Signal-loop test — `test/test_signal_loop.py`:**
+   - Runs in `colcon test` on `vcan1`, validating the complete bidirectional Autoware <-> CAN signal path with value assertions.
+   - Input-to-output: publishes `Control`/`GearCommand` values and asserts byte-exact `0x204` (speed clamp, gear), `0x169` (steering raw + offset + slew), `0x7B9` (brake pressure byte), and the emergency `0x001` + `0x110` MANUAL path.
+   - Output-to-input: injects `0x120`/`0x206`/`0x201` feedback and asserts the published `/vehicle/status/*` report values.
+   - Skips cleanly when `vcan` is unavailable.
+
+5. **Real-stack Autoware launch test — `test/test_launch_autoware.py`:**
    - Validates integration against the actual Autoware control stack (not a mock).
    - Verifies end-to-end topic compatibility, QoS negotiation, and lifecycle management.
    - Heavier and container-dependent; not part of the default `colcon test` run. Executed explicitly during validation and on the target hardware.
 
-5. **Jetson hardware-connected test — `test/test_jetson_hardware.py`:**
+6. **Jetson hardware-connected test — `test/test_jetson_hardware.py`:**
    - Validates the bridge against the physical low-level CAN bus when the Jetson is connected to the low bus via `can1` and the SES, SEB, and MTR units are powered.
    - Run on the Jetson (or via SSH): `python3 test/test_jetson_hardware.py --interface can1`.
    - Checks interface presence, lifecycle active, TX frames streaming (`0x204`, `0x110`, `0x169`, `0x7B9`), real ECU feedback received (`0x120`, `0x206`, `0x201`, `0x721`), vehicle reports publishing, timeout idle path, and emergency `0x001` broadcast.
    - Not part of the default `colcon test` run; requires physical hardware. It is the final gate before any motor motion.
 
-**Acceptance:** unit tests pass locally; the bench script runs against `vcan1` and is `can1`-ready; the self-contained Autoware-compat pytest passes in `colcon test`; the real-stack launch test and the Jetson hardware test are documented and run on the target.
+**Acceptance:** unit tests pass locally; the bench script runs against `vcan1` and is `can1`-ready; the self-contained Autoware-compat pytest and the signal-loop test pass in `colcon test`; the real-stack launch test and the Jetson hardware test are documented and run on the target.
 
 ### Phase 5 — Validation and Handoff
 

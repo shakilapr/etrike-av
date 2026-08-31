@@ -331,6 +331,7 @@ direct_bridge/
 ├── test/
 │   ├── test_encode.cpp
 │   ├── test_autoware_compat.py
+│   ├── test_signal_loop.py
 │   ├── test_launch_autoware.py
 │   └── test_jetson_hardware.py
 ├── vectors/
@@ -401,7 +402,7 @@ The script works inside the Autoware container or on the host; it does not assum
 
 ### 12.3 Autoware-Compatibility Tests
 
-Two complementary tests validate that the bridge is drop-in compatible with Autoware's vehicle-interface contract.
+Three complementary tests validate that the bridge is drop-in compatible with Autoware's vehicle-interface contract.
 
 **Self-contained pytest (`test/test_autoware_compat.py`):** runs in `colcon test` with no external stack. It spins up `vcan1`, launches the bridge, and runs a mock Autoware command publisher — a small pytest node that publishes `Control`, `GearCommand`, and `VehicleEmergencyStamped` on the exact Autoware topics with the matching QoS. It asserts:
 - The lifecycle node reaches the active state and exposes the expected subscriptions and publications.
@@ -411,6 +412,11 @@ Two complementary tests validate that the bridge is drop-in compatible with Auto
 - The timeout and emergency fail-closed paths behave correctly.
 
 This test follows the `etrike_kinect2` launch-test pattern (`ament_add_pytest_test`, `@pytest.mark.launch_test`, `generate_test_description`).
+
+**Signal-loop test (`test/test_signal_loop.py`):** runs in `colcon test` on `vcan1` and validates the complete bidirectional signal path with value-asserting checks:
+- **Input to output (Autoware -> CAN):** publishes `Control`/`GearCommand` values and asserts byte-exact `0x204` (speed clamp, gear from command or speed sign), `0x169` (steering raw angle with the 30000 offset and slew rate), `0x7B9` (brake pressure mode, `round(kPa x 0.02)` byte), and the emergency `0x001` broadcast with the `0x110` MANUAL mode switch.
+- **Output to input (CAN -> Autoware):** injects `0x120`/`0x206`/`0x201` feedback frames with valid XOR8 checksums and asserts the published `/vehicle/status/velocity_status`, `/vehicle/status/gear_status`, and `/vehicle/status/steering_status` values match (e.g. speed 1000 mm/s -> 1.0 m/s, gear D -> DRIVE, raw 30000 -> 0.0 rad).
+- It skips cleanly when `vcan` is unavailable.
 
 **Real-stack launch test (`test/test_launch_autoware.py`):** validates integration against the actual Autoware control stack rather than a mock. It launches the bridge alongside the real Autoware vehicle-interface launch and verifies end-to-end topic compatibility, QoS negotiation, and lifecycle management. This test is heavier and container-dependent, so it is not part of the default `colcon test` run; it is executed explicitly during validation and on the target hardware.
 
