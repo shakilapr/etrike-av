@@ -89,7 +89,7 @@ def inject_feedback(interface):
     frames = [
         "120#03E8",
         "206#03E80100",
-        "201#0100000000000000",   # aligned; xor8 checksum computed below
+        "201#0100307500000000",   # aligned, centered (raw angle 30000 = 0x7530 LE)
         "721#0100000000000000",
     ]
     # Compute XOR8-complement checksums for SES/SEB status frames (bytes 0-6).
