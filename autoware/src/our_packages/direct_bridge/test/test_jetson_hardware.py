@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Hardware-connected test for the direct_bridge node against the Jetson.
+"""
+Hardware-connected test for the direct_bridge node against the Jetson.
 
 Validates the bridge against the physical low-level CAN bus when the Jetson
 is connected to the low bus via the second MTTCAN interface (can1) and the

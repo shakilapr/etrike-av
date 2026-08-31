@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Self-contained Autoware-compatibility test for the direct_bridge node.
+"""
+Self-contained Autoware-compatibility test for the direct_bridge node.
 
 Launches the bridge against vcan1 with a mock Autoware command publisher that
 publishes Control, GearCommand, and VehicleEmergencyStamped on the exact
@@ -53,7 +54,8 @@ VCAN = "vcan1"
 
 
 def _setup_vcan():
-    """Create and bring up the virtual CAN interface.
+    """
+    Create and bring up the virtual CAN interface.
 
     Returns True on success, False if vcan is not available (e.g. inside a
     container without the vcan kernel module, or the interface cannot be

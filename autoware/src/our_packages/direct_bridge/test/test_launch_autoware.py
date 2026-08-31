@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Real-stack Autoware integration test for the direct_bridge node.
+"""
+Real-stack Autoware integration test for the direct_bridge node.
 
 Validates the bridge against the actual Autoware control stack rather than a
 mock. Launches the bridge alongside the real Autoware vehicle-interface launch
@@ -66,7 +67,7 @@ def main():
     args = parser.parse_args()
 
     if args.launch_command:
-        run(f"modprobe vcan")
+        run("modprobe vcan")
         run(f"ip link add dev {args.interface} type vcan 2>/dev/null || true")
         run(f"ip link set {args.interface} up")
         launch_proc = subprocess.Popen(
@@ -81,7 +82,9 @@ def main():
         # Direct bridge command topics (published by the Autoware control stack).
         check_topic("/control/command/control_cmd", "autoware_control_msgs/msg/Control")
         check_topic("/control/command/gear_cmd", "autoware_vehicle_msgs/msg/GearCommand")
-        check_topic("/control/command/emergency_cmd", "tier4_vehicle_msgs/msg/VehicleEmergencyStamped")
+        check_topic(
+            "/control/command/emergency_cmd",
+            "tier4_vehicle_msgs/msg/VehicleEmergencyStamped")
         # Direct bridge report topics (consumed by the Autoware vehicle stack).
         check_topic("/vehicle/status/velocity_status", "autoware_vehicle_msgs/msg/VelocityReport")
         check_topic("/vehicle/status/gear_status", "autoware_vehicle_msgs/msg/GearReport")

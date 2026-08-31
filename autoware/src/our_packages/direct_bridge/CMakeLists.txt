@@ -60,8 +60,68 @@ install(DIRECTORY
 )
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
+  find_package(ament_cmake_cpplint QUIET)
+  find_package(ament_cmake_uncrustify QUIET)
+  find_package(ament_cmake_flake8 QUIET)
+  find_package(ament_cmake_pep257 QUIET)
+  find_package(ament_cmake_copyright QUIET)
+  find_package(ament_cmake_lint_cmake QUIET)
+
+  # The vendored protocol/codecs/core/generated headers, the vendored protocol
+  # generator (tools/protocol.py), and the vector JSON files are copied verbatim
+  # from the etrike repository and MUST NOT be reformatted or restyled. Exclude
+  # them from linting; only our own sources are linted.
+  set(VENDORED_DIRS
+    protocol
+    tools
+    vectors
+  )
+
+  if(ament_cmake_cpplint_FOUND)
+    find_package(ament_cpplint REQUIRED)
+    ament_cpplint(
+      EXCLUDE ${VENDORED_DIRS}
+    )
+  endif()
+
+  if(ament_cmake_uncrustify_FOUND)
+    find_package(ament_uncrustify REQUIRED)
+    ament_uncrustify(
+      EXCLUDE ${VENDORED_DIRS}
+    )
+  endif()
+
+  if(ament_cmake_flake8_FOUND)
+    find_package(ament_flake8 REQUIRED)
+    ament_flake8(
+      include
+      launch
+      scripts
+      test
+    )
+  endif()
+
+  if(ament_cmake_pep257_FOUND)
+    find_package(ament_pep257 REQUIRED)
+    ament_pep257(
+      include
+      launch
+      scripts
+      test
+    )
+  endif()
+
+  if(ament_cmake_copyright_FOUND)
+    find_package(ament_copyright REQUIRED)
+    ament_copyright(
+      EXCLUDE ${VENDORED_DIRS}
+    )
+  endif()
+
+  if(ament_cmake_lint_cmake_FOUND)
+    find_package(ament_lint_cmake REQUIRED)
+    ament_lint_cmake()
+  endif()
 
   find_package(ament_cmake_pytest REQUIRED)
 

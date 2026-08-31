@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Dual-mode bench harness for the direct_bridge low-bus bring-up.
+"""
+Dual-mode bench harness for the direct_bridge low-bus bring-up.
 
 Runs the bridge against a virtual CAN interface (vcan1, default) for bench
 testing or a physical low-bus interface (can1) for hardware bring-up.
-
 Prerequisites inside the container / host:
   - SocketCAN kernel modules (vcan) and can-utils (cansend, candump, cansniffer)
   - The ROS 2 workspace sourced (ros2 command available)
@@ -77,7 +77,8 @@ def launch_bridge(interface):
 
 
 def inject_feedback(interface):
-    """Inject the four feedback frames the bridge decodes.
+    """
+    Inject the four feedback frames the bridge decodes.
 
     Payloads are produced by the vendored codecs so checksums/counters are
     valid. These are the payload-v1 vectors:
