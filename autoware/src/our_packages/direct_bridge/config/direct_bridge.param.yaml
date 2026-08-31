@@ -1,0 +1,22 @@
+/**:
+  ros__parameters:
+    can_interface: "vcan1"
+    loop_rate: 100.0
+    enable_mtr: true
+    enable_ses: true
+    enable_seb: true
+    max_speed_forward: 3.0
+    max_speed_reverse: 0.5
+    max_steering_angle: 0.747
+    max_deceleration: 5.0
+    max_brake_pressure_kpa: 5000.0
+    command_timeout_ms: 200
+    send_mode_auto: true
+    steer_by_wire_offset: 30000
+    steer_rate_min: 125.0
+    steer_rate_max: 525.0
+    require_ses_aligned: true
+    brake_kpa_to_raw: 0.02
+    stroke_zero_raw: 600
+    stroke_max_raw: 1140
+    publish_brake_diag: false
