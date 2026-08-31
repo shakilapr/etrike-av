@@ -331,7 +331,8 @@ direct_bridge/
 ├── test/
 │   ├── test_encode.cpp
 │   ├── test_autoware_compat.py
-│   └── test_launch_autoware.py
+│   ├── test_launch_autoware.py
+│   └── test_jetson_hardware.py
 ├── vectors/
 │   ├── payload-v1.json
 │   └── custom-codec-values-v1.json
@@ -375,7 +376,7 @@ The bridge must not be used for autonomous operation. Production safety behavior
 
 ## 12. Testing Strategy
 
-The testing strategy has four layers: unit tests, a dual-mode bench script, a self-contained Autoware-compatibility pytest, and a real-stack launch test. Together they validate the codec correctness, the controller conformance, the fail-closed behavior, and the Autoware interface compatibility.
+The testing strategy has five layers: unit tests, a dual-mode bench script, a self-contained Autoware-compatibility pytest, a real-stack launch test, and a Jetson hardware-connected test. Together they validate the codec correctness, the controller conformance, the fail-closed behavior, the Autoware interface compatibility, and the physical low-bus bring-up.
 
 ### 12.1 Unit Tests
 
@@ -413,9 +414,28 @@ This test follows the `etrike_kinect2` launch-test pattern (`ament_add_pytest_te
 
 **Real-stack launch test (`test/test_launch_autoware.py`):** validates integration against the actual Autoware control stack rather than a mock. It launches the bridge alongside the real Autoware vehicle-interface launch and verifies end-to-end topic compatibility, QoS negotiation, and lifecycle management. This test is heavier and container-dependent, so it is not part of the default `colcon test` run; it is executed explicitly during validation and on the target hardware.
 
-### 12.4 Hardware Bring-Up
+### 12.4 Jetson Hardware-Connected Test
 
-Once the low-bus drop to the Jetson is wired, `scripts/run_bench.py --interface can1` is used against each unit in isolation, starting with the SES steering unit and the SEB brake unit before any motor motion. Each unit is exercised with wheels lifted or the vehicle safely supported. The real-stack launch test from Section 12.3 is run on the target before any autonomous operation is attempted.
+`test/test_jetson_hardware.py` validates the bridge against the physical low-level CAN bus when the Jetson is connected to the low bus through the second MTTCAN interface (`can1`) and the SES, SEB, and MTR units are powered. It is **not** part of the default `colcon test` run; it requires physical hardware and is executed explicitly on the Jetson (or via SSH to it):
+
+```
+python3 test/test_jetson_hardware.py --interface can1
+```
+
+It performs these checks:
+- Interface presence: `can1` exists and is brought up at the low-bus bitrate (500 kbit/s).
+- Bridge lifecycle: the node reaches the active state.
+- Transmit frames stream on the physical bus (`0x204`, `0x110`, `0x169`, `0x7B9`).
+- Real ECU feedback is received from the connected units (`0x120`, `0x206` from MTR; `0x201` from SES; `0x721` from SEB).
+- Vehicle reports publish on the standard Autoware topics (`/vehicle/status/velocity_status`, `/vehicle/status/gear_status`, `/vehicle/status/steering_status`).
+- The command-timeout path keeps the MTR stream at idle zero and the bridge safe.
+- An asserted emergency produces a `0x001` broadcast.
+
+The test exits non-zero with a report of failed checks on any failure. It is the final gate before any motor motion on the vehicle.
+
+### 12.5 Hardware Bring-Up
+
+Once the low-bus drop to the Jetson is wired, `scripts/run_bench.py --interface can1` is used against each unit in isolation, starting with the SES steering unit and the SEB brake unit before any motor motion. Each unit is exercised with wheels lifted or the vehicle safely supported. The real-stack launch test from Section 12.3 and the Jetson hardware test from Section 12.4 are run on the target before any autonomous operation is attempted.
 
 ## 13. Out of Scope (Restated)
 

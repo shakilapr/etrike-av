@@ -92,7 +92,7 @@ Build a standalone ROS 2 bridge for bench bring-up and commissioning of the E-Tr
 
 ### Phase 4 — Tests
 
-The testing strategy has four layers, matching Architecture, Section 12.
+The testing strategy has five layers, matching Architecture, Section 12.
 
 1. **Unit tests — `test/test_encode.cpp`:**
    - Encode `0x204`, `0x110`, `0x169`, and `0x7B9` from known values.
@@ -121,7 +121,13 @@ The testing strategy has four layers, matching Architecture, Section 12.
    - Verifies end-to-end topic compatibility, QoS negotiation, and lifecycle management.
    - Heavier and container-dependent; not part of the default `colcon test` run. Executed explicitly during validation and on the target hardware.
 
-**Acceptance:** unit tests pass locally; the bench script runs against `vcan1` and is `can1`-ready; the self-contained Autoware-compat pytest passes in `colcon test`; the real-stack launch test is documented and run on the target.
+5. **Jetson hardware-connected test — `test/test_jetson_hardware.py`:**
+   - Validates the bridge against the physical low-level CAN bus when the Jetson is connected to the low bus via `can1` and the SES, SEB, and MTR units are powered.
+   - Run on the Jetson (or via SSH): `python3 test/test_jetson_hardware.py --interface can1`.
+   - Checks interface presence, lifecycle active, TX frames streaming (`0x204`, `0x110`, `0x169`, `0x7B9`), real ECU feedback received (`0x120`, `0x206`, `0x201`, `0x721`), vehicle reports publishing, timeout idle path, and emergency `0x001` broadcast.
+   - Not part of the default `colcon test` run; requires physical hardware. It is the final gate before any motor motion.
+
+**Acceptance:** unit tests pass locally; the bench script runs against `vcan1` and is `can1`-ready; the self-contained Autoware-compat pytest passes in `colcon test`; the real-stack launch test and the Jetson hardware test are documented and run on the target.
 
 ### Phase 5 — Validation and Handoff
 
@@ -131,9 +137,9 @@ The testing strategy has four layers, matching Architecture, Section 12.
 4. Verify the launch file and lifecycle transitions, and confirm QoS compatibility with `ros2 topic info -v`.
 5. Document the bench bring-up procedure and the physical `can1` path in the architecture or a companion note.
 6. Flag the hardware task: wire the Jetson low-bus drop and confirm the interface name (`can1`).
-7. On the target hardware, run the real-stack Autoware launch test (`test_launch_autoware.py`) before any motor motion.
+7. On the target hardware, run the real-stack Autoware launch test (`test_launch_autoware.py`) and the Jetson hardware test (`test_jetson_hardware.py`) before any motor motion.
 
-**Acceptance:** the package builds, all four test layers pass or are documented, the bring-up procedure is documented, and the real-stack test is validated on the target.
+**Acceptance:** the package builds, all five test layers pass or are documented, the bring-up procedure is documented, and the real-stack and Jetson hardware tests are validated on the target.
 
 ## 5. Risks and Open Items
 
