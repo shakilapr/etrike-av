@@ -785,6 +785,7 @@ void DirectBridgeNode::handle_received_frame(const struct can_frame & frame)
 
 }  // namespace direct_bridge
 
+#ifndef DIRECT_BRIDGE_NO_MAIN
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
@@ -795,3 +796,4 @@ int main(int argc, char * argv[])
   rclcpp::shutdown();
   return 0;
 }
+#endif  // DIRECT_BRIDGE_NO_MAIN

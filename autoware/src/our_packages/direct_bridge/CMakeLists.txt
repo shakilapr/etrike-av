@@ -65,7 +65,11 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_pytest REQUIRED)
 
-  add_executable(test_encode test/test_encode.cpp)
+  add_executable(test_encode
+    test/test_encode.cpp
+    src/direct_bridge_node.cpp
+  )
+  target_compile_definitions(test_encode PRIVATE DIRECT_BRIDGE_NO_MAIN)
   target_include_directories(test_encode PRIVATE
     include
     ${CMAKE_CURRENT_SOURCE_DIR}
