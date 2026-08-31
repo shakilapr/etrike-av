@@ -27,12 +27,12 @@
 #include <cstring>
 #include <string>
 
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+
 #include "protocol/codecs/seb.hpp"
 #include "protocol/codecs/ses.hpp"
 #include "protocol/core/frame.hpp"
-#include "protocol/generated/cpp/etrike_protocol.hpp"
-
-namespace direct_bridge
+#include "protocol/generated/cpp/etrike_protocol.hpp"namespace direct_bridge
 {
 
 namespace generated = etrike::protocol::generated;
@@ -526,12 +526,12 @@ void DirectBridgeNode::tick_control()
 
   // Snapshot latest commands.
   autoware_control_msgs::msg::Control::SharedPtr ctrl;
-  autoware_vehicle_msgs::msg::GearCommand::SharedPtr gear;
+  autoware_vehicle_msgs::msg::GearCommand::SharedPtr gear_cmd;
   rclcpp::Time command_time;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     ctrl = latest_control_;
-    gear = latest_gear_;
+    gear_cmd = latest_gear_;
     command_time = last_cmd_time_;
   }
 
@@ -569,9 +569,9 @@ void DirectBridgeNode::tick_control()
     }
 
     // Gear resolution.
-    if (gear && gear->command != autoware_vehicle_msgs::msg::GearCommand::NONE) {
+    if (gear_cmd && gear_cmd->command != autoware_vehicle_msgs::msg::GearCommand::NONE) {
       has_gear = true;
-      switch (gear->command) {
+      switch (gear_cmd->command) {
         case gear::AW_DRIVE:   gear_can = gear::CAN_D; break;
         case gear::AW_REVERSE: gear_can = gear::CAN_R; break;
         case gear::AW_LOW:     gear_can = gear::CAN_S; break;
