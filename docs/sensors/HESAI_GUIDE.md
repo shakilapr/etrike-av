@@ -55,7 +55,7 @@ To first connect the sensor and retrieve a raw point cloud, you must SSH into th
 1. Connect the LiDAR to the Jetson Orin via Ethernet.
 2. Open your terminal and SSH into the Jetson, then navigate to the workspace:
    ```bash
-   ssh med1@172.16.25.56
+   ssh med1@172.16.25.67
    cd ~/av_project
    ```
 3. Configure the Jetson's network interface to communicate with the sensor

@@ -17,7 +17,7 @@ def ssh_run(client, cmd, timeout=60):
 def main():
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect("172.16.25.56", username="med1", password="med1", timeout=30)
+    client.connect("172.16.25.67", username="med1", password="med1", timeout=30)
     print("Connected!\n")
     
     # Fix YAML - change integer 5000 to float 5000.0

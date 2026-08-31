@@ -10,7 +10,7 @@
 
 **Linux Sync (via Windows PowerShell SSH Tunnel):**
 ```powershell
-ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.56
+ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.67
 ```
 *(Leave window open, then open `http://127.0.0.1:8390` in your browser)*
 

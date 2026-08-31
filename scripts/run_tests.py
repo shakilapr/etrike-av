@@ -46,7 +46,7 @@ def ssh_connect_and_run(host, username, password, commands, timeout=60):
         client.close()
 
 def main():
-    host = "172.16.25.56"
+    host = "172.16.25.67"
     username = "med1"
     password = "med1"
     

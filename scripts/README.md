@@ -354,12 +354,12 @@ This directory contains utility scripts for workspace management, testing, diagn
 ## 5. SSH Remote Commands
 
 ### [ssh_connect.ps1](file:///E:/work/av_project/scripts/ssh_connect.ps1)
-* **Description**: Utility PowerShell wrapper that invokes PuTTY's `plink.exe` using a transient `expect` automation file to bypass host key prompts when connecting to the Jetson (`172.16.25.56`).
+* **Description**: Utility PowerShell wrapper that invokes PuTTY's `plink.exe` using a transient `expect` automation file to bypass host key prompts when connecting to the Jetson (`172.16.25.67`).
 * **Pseudo-code**:
   ```python
   READ Command (default: hostname output)
   SET expectScript = TRANSIENT SCRIPT:
-      - Spawn plink -ssh med1@172.16.25.56 Command
+      - Spawn plink -ssh med1@172.16.25.67 Command
       - IF prompted with "The host key is not cached" -> send "y"
       - IF prompted with "Store key in cache" -> send "y"
   WRITE expectScript to a temporary .exp file
@@ -377,7 +377,7 @@ This directory contains utility scripts for workspace management, testing, diagn
   ```python
   INITIALIZE Paramiko SSHClient
   SET missing host key policy to AutoAddPolicy
-  CONNECT to 172.16.25.56 (username med1, password med1)
+  CONNECT to 172.16.25.67 (username med1, password med1)
   
   FOR each command IN ["Connection successful", "hostname", "uname -a", "ls -la ~/av_project/"]:
       EXECUTE command on remote
@@ -395,7 +395,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Automates package building, C++ unit tests, virtual CAN setup, node integration launching, and diagnostics checks on the remote Jetson.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   
   # Step 1-2: Setup Docker
   CLEANUP "autoware_test" container
@@ -435,7 +435,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Safety validation script executing 9 functional scenarios (engage, disengage, estop, heartbeat timeout, command timeout, and feedback status) via virtual CAN injection before running on a real vehicle.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP autoware_test container and BUILD packages
   CREATE and bring up vcan0 interface on host
   LAUNCH vehicle_interface.launch.xml in background
@@ -493,7 +493,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Connects via SSH to test baseline simulation launches with both the generic `sample_vehicle` model and the custom `etrike_vehicle` model.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP autoware_test container and BUILD packages
 
   # TEST 1: Launch with sample_vehicle
@@ -521,7 +521,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Performs a quick integration test verifying that CAN feedback signals map to diagnostic topics and vehicle status topics inside the Docker container.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP autoware_test container and BUILD packages
   SETUP vcan0 on host
   LAUNCH vehicle_interface.launch.xml in background
@@ -548,7 +548,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Remote runner to launch `planning_simulator.launch.xml` with `etrike_vehicle` in the foreground to capture startup bugs and dependency issues.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP autoware_test container
   BUILD etrike_protocol, autoware_vehicle_bridge, description, and launch
   
@@ -563,7 +563,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Investigates how the vehicle bridge responds before and after injecting various CAN frames (diagnostic checks).
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP container, build packages, setup vcan0
   LAUNCH vehicle_interface.launch.xml in background
   WAIT 8 seconds
@@ -586,7 +586,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Inspects upstream and sample launch files and checks the files/YAML configuration within the container.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP container
   
   # Output file contents
@@ -607,7 +607,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Starts the Autoware planning simulator and queries environment parameters and ROS status inside the container.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP container, build packages
   LIST contents of map directory ~/autoware_map/sample-map-planning/
   
@@ -623,7 +623,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Directly transitions the `/vehicle_bridge` lifecycle node and injects CAN messages to inspect resulting states and logs.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP container, build packages, setup vcan0
   LAUNCH vehicle_interface.launch.xml in background
   WAIT 8 seconds
@@ -650,7 +650,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Launches `vehicle_interface.launch.xml` in the foreground for 15 seconds to check for startup crashes.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP container, build packages, setup vcan0
   
   LAUNCH in foreground: "timeout 15 ros2 launch etrike_vehicle_launch vehicle_interface.launch.xml can_interface:=vcan0"
@@ -662,7 +662,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Inspects C++ unit test logs, executes the test binaries directly, and launches the node to query interface health.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   SPIN UP container, build packages
   
   # Inspect unit tests
@@ -686,7 +686,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Fixes a specific scope declaration bug (CallbackReturn) in `vehicle_bridge_node.cpp` via sed, runs build/unit tests, and tests integration behavior.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   
   # Fix scope issue
   REPLACE "CallbackReturn VehicleBridgeNode::" WITH "rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn VehicleBridgeNode::" in vehicle_bridge_node.cpp
@@ -716,7 +716,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Writes an updated `vehicle_bridge.launch.py` to fix a node namespace configuration issue, rebuilds the package, and verifies functionality using `cansend`.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   
   # Overwrite launch file
   WRITE updated python launch code to ~/av_project/autoware/src/our_packages/autoware_vehicle_bridge/launch/vehicle_bridge.launch.py (defining namespace="")
@@ -741,7 +741,7 @@ This directory contains utility scripts for workspace management, testing, diagn
 * **Description**: Fixes a parameter type casting crash in `etrike.param.yaml` (integer to double conversion), rebuilds, and launches the node to test functionality.
 * **Pseudo-code**:
   ```python
-  CONNECT via SSH to 172.16.25.56
+  CONNECT via SSH to 172.16.25.67
   
   # Fix YAML type error
   REPLACE "max_brake_pressure_kpa: 5000" WITH "max_brake_pressure_kpa: 5000.0" in etrike.param.yaml

@@ -212,7 +212,7 @@ Phase 11: Low-speed track test                    ← Run on track
 
 Run on Jetson:
 ```bash
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 cd ~/av_project
 python3 scripts/pre_vehicle_tests.py
 ```

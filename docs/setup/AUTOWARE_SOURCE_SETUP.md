@@ -1,7 +1,7 @@
 # Autoware Source Setup
 
 **Date:** 2026-08-10
-**Server:** `med1@172.16.25.56`
+**Server:** `med1@172.16.25.67`
 
 ---
 

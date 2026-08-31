@@ -1,6 +1,6 @@
 # Jetson Quick Reference
 
-**Host:** `med1@172.16.25.56`  
+**Host:** `med1@172.16.25.67`  
 **Password:** `med1`
 
 ---
@@ -9,7 +9,7 @@
 
 ### SSH Connect
 ```bash
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 ```
 
 ### Enter Docker Container

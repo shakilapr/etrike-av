@@ -38,7 +38,7 @@ def ssh_connect_and_run(host, username, password, commands, timeout=30):
 
 if __name__ == "__main__":
     # Test connection
-    host = "172.16.25.56"
+    host = "172.16.25.67"
     username = "med1"
     password = "med1"
     

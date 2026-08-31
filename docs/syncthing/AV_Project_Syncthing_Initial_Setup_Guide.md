@@ -6,7 +6,7 @@
 |---|---|
 | Windows project root | E:\work\av_project |
 | Linux project root | /home/med1/av_project |
-| Linux SSH host | med1@172.16.25.56 |
+| Linux SSH host | med1@172.16.25.67 |
 | Synchronization | Syncthing (bidirectional after initial seed) |
 
 > Version 1.0 - 10 August 2026
@@ -36,18 +36,18 @@ Linux Docker bind mount:
 | --- | --- |
 | Windows project folder | E:\work\av_project |
 | Linux project folder | /home/med1/av_project |
-| SSH host | med1@172.16.25.56 |
+| SSH host | med1@172.16.25.67 |
 | Windows Syncthing GUI | http://127.0.0.1:8384 |
 | Linux Syncthing GUI from Windows | http://127.0.0.1:8390 |
 | SSH management tunnel | Windows local 8390 -> Linux 127.0.0.1:8384 |
-| Syncthing sync endpoint | tcp://172.16.25.56:22000 |
+| Syncthing sync endpoint | tcp://172.16.25.67:22000 |
 | Linux Syncthing service | syncthing@med1.service |
 | Normal folder mode after setup | Send & Receive on both devices |
 
 ## 3. Linux: verify the project
 
 ```
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 cd ~/av_project
 pwd
 ls -la
@@ -169,7 +169,7 @@ http://127.0.0.1:8384
 Run this command from Windows PowerShell, not from the Linux shell:
 
 ```
-ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.56
+ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.67
 ```
 
 Enter the SSH password. With -N there is no remote shell, so after authentication the PowerShell window normally becomes silent. Leave that window open while you need the Linux GUI.
@@ -191,7 +191,7 @@ Enter the SSH password. With -N there is no remote shell, so after authenticatio
 
 3. Name the Linux device med1-linux.
 
-4. For the Linux device address on Windows, set tcp://172.16.25.56:22000. Optionally add dynamic as a second address for fallback discovery.
+4. For the Linux device address on Windows, set tcp://172.16.25.67:22000. Optionally add dynamic as a second address for fallback discovery.
 
 5. Save. On Linux, accept the newly detected Windows device and name it windows-dev.
 
@@ -259,7 +259,7 @@ When Windows receives the share notification, accept it using:
 
 ```
 "windows sync test" | Set-Content "E:\work\av_project\sync-test.txt"
-ssh med1@172.16.25.56 "cat ~/av_project/sync-test.txt"
+ssh med1@172.16.25.67 "cat ~/av_project/sync-test.txt"
 ```
 
 Expected output: windows sync test
@@ -267,7 +267,7 @@ Expected output: windows sync test
 ### 14.2 Linux -> Windows
 
 ```
-ssh med1@172.16.25.56 "echo 'linux sync test' > ~/av_project/linux-test.txt"
+ssh med1@172.16.25.67 "echo 'linux sync test' > ~/av_project/linux-test.txt"
 Get-Content "E:\work\av_project\linux-test.txt"
 ```
 
@@ -297,7 +297,7 @@ codex
 Build and run on Linux:
 
 ```
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 cd ~/av_project
 docker compose up -d
 docker compose exec dev bash

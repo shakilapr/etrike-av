@@ -3,7 +3,7 @@ param(
 )
 
 $plinkPath = "C:\Program Files\PuTTY\plink.exe"
-$host_ip = "172.16.25.56"
+$host_ip = "172.16.25.67"
 $username = "med1"
 $password = "med1"
 

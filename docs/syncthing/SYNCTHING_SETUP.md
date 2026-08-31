@@ -1,6 +1,6 @@
 # Syncthing Setup — Linux Server
 
-**Server:** `med1@172.16.25.56`
+**Server:** `med1@172.16.25.67`
 **Date:** 2026-08-10
 
 ---
@@ -10,7 +10,7 @@
 From Windows PowerShell:
 
 ```powershell
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 ```
 
 Verify the project:
@@ -211,7 +211,7 @@ sudo ufw allow 22000/udp
 Do **not** expose port 8384 (the web GUI). Access it via SSH tunnel instead:
 
 ```bash
-ssh -L 8384:localhost:8384 med1@172.16.25.56
+ssh -L 8384:localhost:8384 med1@172.16.25.67
 ```
 
 Then open `http://localhost:8384` in a browser on Windows.

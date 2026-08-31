@@ -252,7 +252,7 @@ ros2 launch etrike_kinect2 kinect_view.launch.py camera:=dual
 From over SSH:
 
 ```bash
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 ./docker/shell.sh            # enter the container
 ./run.sh view dual           # window appears on the Jetson monitor (DISPLAY=:1)
 ```

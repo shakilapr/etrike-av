@@ -15,7 +15,7 @@ Set-Content -LiteralPath "E:\work\av_project\sync-test.txt" -Value "windows sync
 Then, from a terminal with SSH access to the Linux machine:
 
 ```bash
-ssh med1@172.16.25.56 "cat ~/av_project/sync-test.txt"
+ssh med1@172.16.25.67 "cat ~/av_project/sync-test.txt"
 ```
 
 Expected output:

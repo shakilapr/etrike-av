@@ -1,7 +1,7 @@
 # E-Trike Test Plan
 
 **Date:** 2026-08-17  
-**Target:** Jetson Orin (`med1@172.16.25.56`)
+**Target:** Jetson Orin (`med1@172.16.25.67`)
 
 ---
 
@@ -26,7 +26,7 @@
 ### 1.1 SSH Access
 
 ```bash
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 # Password: med1
 ```
 

@@ -4,7 +4,7 @@
 - Add new patches to `scripts/bootstrap_workspace.sh`
 - Check repo sync status by running `pwsh -File scripts/audit_repo_sync.ps1`
 - Environment: Code edited on Windows is instantly uploaded to the Linux runtime via Syncthing.
-- Connection: Use SSH to connect to the Linux machine (e.g., `ssh med1@172.16.25.56`) if the user explicitly asks you to run commands or build on Linux.
+- Connection: Use SSH to connect to the Linux machine (e.g., `ssh med1@172.16.25.67`) if the user explicitly asks you to run commands or build on Linux.
 - Python code: 4-space indent, snake_case methods, PascalCase classes, strict type hints
 - ROS2 nodes: Must be LifecycleNodes, fail-closed, with timeouts on all subscriptions
 - Commits: Use format `type(scope): message`

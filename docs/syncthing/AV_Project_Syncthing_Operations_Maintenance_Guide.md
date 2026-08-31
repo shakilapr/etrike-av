@@ -6,7 +6,7 @@
 |---|---|
 | Windows project root | E:\work\av_project |
 | Linux project root | /home/med1/av_project |
-| Linux SSH host | med1@172.16.25.56 |
+| Linux SSH host | med1@172.16.25.67 |
 | Synchronization | Syncthing (bidirectional after initial seed) |
 
 > Version 1.0 - 10 August 2026
@@ -79,7 +79,7 @@ Most days no check is necessary. If you want to verify before a build or importa
 6. Commit/version-control changes from the Linux repositories under the current Git strategy because .git is not mirrored to Windows.
 
 ```
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 cd ~/av_project
 docker compose up -d
 docker compose exec dev bash
@@ -102,7 +102,7 @@ This works whenever the Windows Syncthing process is running.
 Open a Windows PowerShell window and run:
 
 ```
-ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.56
+ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.67
 ```
 
 After entering the password, silence is normal. While that PowerShell window remains open, browse to:
@@ -202,23 +202,23 @@ sudo systemctl start syncthing@med1.service
 
 ## 12. After Windows or Linux changes IP/network
 
-The Windows configuration currently points directly to tcp://172.16.25.56:22000. If the Linux server IP changes, Windows may no longer connect using that static address.
+The Windows configuration currently points directly to tcp://172.16.25.67:22000. If the Linux server IP changes, Windows may no longer connect using that static address.
 
 1. Confirm the new Linux IP address.
 
 2. Windows Syncthing > med1-linux > Edit > Advanced > Addresses.
 
-3. Replace the old tcp://172.16.25.56:22000 value with the new address.
+3. Replace the old tcp://172.16.25.67:22000 value with the new address.
 
 4. Optionally retain dynamic as an additional address so discovery can provide a fallback.
 
-If 172.16.25.56 is intentionally a fixed LAN address, no routine change is needed.
+If 172.16.25.67 is intentionally a fixed LAN address, no routine change is needed.
 
 ## 13. If synchronization stops
 
 | Symptom | Check | Fix |
 | --- | --- | --- |
-| Windows says Disconnected | Is Linux powered on and reachable by SSH? | Test ssh med1@172.16.25.56. Then check Linux Syncthing service. |
+| Windows says Disconnected | Is Linux powered on and reachable by SSH? | Test ssh med1@172.16.25.67. Then check Linux Syncthing service. |
 | SSH works, Syncthing disconnected | systemctl status syncthing@med1.service | Start/restart the service; verify firewall and port 22000. |
 | Folder says Out of Sync | Open folder details and inspect failed items. | Resolve permissions, invalid filenames, conflicts, or unavailable paths; then rescan. |
 | Windows GUI does not open | Is Windows Syncthing process running? | Start Syncthing / verify autostart. |
@@ -276,7 +276,7 @@ Current key ignores:
 The synchronization policy excludes **/.git. Therefore the Windows mirror contains source files but not the nested repository databases/history. Continue Git operations on Linux for the current setup.
 
 ```
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 cd ~/av_project/autoware/src/<repository>
 git status
 git diff
@@ -390,15 +390,15 @@ There is no mandatory shutdown ritual. For normal work:
 | Purpose | Command / Address |
 | --- | --- |
 | Open Windows project | code E:\work\av_project |
-| SSH to Linux | ssh med1@172.16.25.56 |
+| SSH to Linux | ssh med1@172.16.25.67 |
 | Windows GUI | http://127.0.0.1:8384 |
-| Open Linux GUI tunnel | ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.56 |
+| Open Linux GUI tunnel | ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.67 |
 | Linux GUI while tunnel open | http://127.0.0.1:8390 |
 | Check Linux Syncthing | systemctl status syncthing@med1.service |
 | Restart Linux Syncthing | sudo systemctl restart syncthing@med1.service |
 | Linux project root | /home/med1/av_project |
 | Windows project root | E:\work\av_project |
-| Linux sync address from Windows | tcp://172.16.25.56:22000 |
+| Linux sync address from Windows | tcp://172.16.25.67:22000 |
 
 ## 26. Operational checklist
 

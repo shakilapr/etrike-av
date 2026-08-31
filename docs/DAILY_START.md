@@ -13,7 +13,7 @@ The Linux computer also syncs automatically, but to view its status on your Wind
 1. Open **Windows PowerShell**.
 2. Copy and paste this command, then press Enter:
    ```powershell
-   ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.56
+   ssh -N -L 8390:127.0.0.1:8384 med1@172.16.25.67
    ```
 3. Type in the password. *(The window will just sit there without a prompt—this is normal. Just leave it open in the background).*
 4. Open your web browser and go to: [http://127.0.0.1:8390](http://127.0.0.1:8390)
@@ -30,7 +30,7 @@ Instead of typing long docker commands, you can use the helpful shortcut scripts
 1. Open **Windows PowerShell**.
 2. Log into the Linux computer:
    ```powershell
-   ssh med1@172.16.25.56
+   ssh med1@172.16.25.67
    ```
 3. Once logged in, go to the project folder:
    ```bash

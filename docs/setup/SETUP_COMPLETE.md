@@ -44,7 +44,7 @@ the pre-built version.
 
 | Item              | Value                          |
 | ----------------- | ------------------------------ |
-| Server            | `med1@172.16.25.56`            |
+| Server            | `med1@172.16.25.67`            |
 | Architecture      | ARM64 (Jetson / Tegra)         |
 | OS                | Linux 5.15.185-tegra           |
 | ROS 2 distro      | humble (via Docker image)      |
@@ -53,7 +53,7 @@ the pre-built version.
 Access from Windows:
 
 ```powershell
-ssh med1@172.16.25.56
+ssh med1@172.16.25.67
 cd ~/av_project
 ```
 
@@ -405,7 +405,7 @@ The `syncthing@med1.service` user service keeps Syncthing running even when
 ### Web GUI via SSH tunnel (never expose port 8384 directly)
 
 ```bash
-ssh -N -L 8384:localhost:8384 med1@172.16.25.56
+ssh -N -L 8384:localhost:8384 med1@172.16.25.67
 # then open http://localhost:8384 in a browser
 ```
 
@@ -516,7 +516,7 @@ ros2 launch autoware_launch planning_simulator.launch.xml \
 
 ```bash
 systemctl status syncthing@med1.service   # check service
-ssh -N -L 8384:localhost:8384 med1@172.16.25.56   # tunnel to web GUI
+ssh -N -L 8384:localhost:8384 med1@172.16.25.67   # tunnel to web GUI
 ```
 
 ---
