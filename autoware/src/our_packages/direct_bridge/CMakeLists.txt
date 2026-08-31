@@ -74,6 +74,7 @@ if(BUILD_TESTING)
     autoware_control_msgs
     autoware_vehicle_msgs
     tier4_vehicle_msgs
+    diagnostic_msgs
   )
   add_test(NAME encode COMMAND test_encode)
 
