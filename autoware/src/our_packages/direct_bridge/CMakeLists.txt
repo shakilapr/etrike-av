@@ -79,13 +79,18 @@ if(BUILD_TESTING)
 
   if(ament_cmake_cpplint_FOUND)
     ament_cpplint(
-      EXCLUDE ${VENDORED_DIRS}
+      include
+      src
+      test
     )
   endif()
 
   if(ament_cmake_uncrustify_FOUND)
     ament_uncrustify(
       EXCLUDE ${VENDORED_DIRS}
+      include
+      src
+      test
     )
   endif()
 
@@ -109,7 +114,11 @@ if(BUILD_TESTING)
 
   if(ament_cmake_copyright_FOUND)
     ament_copyright(
-      EXCLUDE ${VENDORED_DIRS}
+      include
+      src
+      test
+      launch
+      config
     )
   endif()
 
