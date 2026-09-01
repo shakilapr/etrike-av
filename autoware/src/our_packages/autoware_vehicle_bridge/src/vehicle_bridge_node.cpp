@@ -120,6 +120,7 @@ bool VehicleParams::load_from(const rclcpp_lifecycle::LifecycleNode * node)
   state_report_timeout_ms = node->get_parameter("state_report_timeout_ms").as_int();
   motion_report_timeout_ms = node->get_parameter("motion_report_timeout_ms").as_int();
   can_interface = node->get_parameter("can_interface").as_string();
+  can_bitrate = node->get_parameter("can_bitrate").as_int();
   return true;
 }
 
@@ -150,6 +151,7 @@ void VehicleParams::validate_or_throw() const
     throw std::domain_error("motion_report_timeout_ms must be positive");
   }
   if (can_interface.empty()) {throw std::domain_error("can_interface must not be empty");}
+  if (can_bitrate <= 0) {throw std::domain_error("can_bitrate must be positive");}
 }
 
 // =====================================================================
@@ -170,6 +172,20 @@ bool SocketCanDriver::open(const std::string & interface)
   addr.can_ifindex = ifr.ifr_ifindex;
   if (bind(fd_, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0) {
     close(); return false;
+  }
+
+  // Bring the interface up and configure its bitrate. Setting the bitrate
+  // requires the interface to be DOWN, so skip it if already UP (a live bus
+  // must not be bounced). vcan ignores SIOCSCANBITRATE; that is tolerated.
+  if (ioctl(fd_, SIOCGIFFLAGS, &ifr) < 0) {close(); return false;}
+  if ((ifr.ifr_flags & IFF_UP) == 0) {
+    const int br = bitrate_;
+    if (ioctl(fd_, SIOCSCANBITRATE, &br) < 0) {
+      // Not fatal: vcan has no bitrate; only fail if we cannot bring it up.
+      if (errno != ENOTTY && errno != EINVAL) {close(); return false;}
+    }
+    ifr.ifr_flags |= IFF_UP;
+    if (ioctl(fd_, SIOCSIFFLAGS, &ifr) < 0) {close(); return false;}
   }
 
   return true;
@@ -621,6 +637,7 @@ on_configure(const rclcpp_lifecycle::State &)
     RCLCPP_ERROR(get_logger(), "Parameter validation failed: %s", e.what());
     return CallbackReturn::FAILURE;
   }
+  can_->set_bitrate(params_.can_bitrate);
   if (!can_->open(params_.can_interface)) {
     RCLCPP_ERROR(
       get_logger(), "Failed to open CAN '%s': %s",
@@ -648,8 +665,9 @@ on_configure(const rclcpp_lifecycle::State &)
   timer_diag_->cancel();
 
   RCLCPP_INFO(
-    get_logger(), "Configured: wheelbase=%.2f loop=%.0fHz can=%s",
-    params_.wheel_base, params_.loop_rate, params_.can_interface.c_str());
+    get_logger(), "Configured: wheelbase=%.2f loop=%.0fHz can=%s bitrate=%d",
+    params_.wheel_base, params_.loop_rate, params_.can_interface.c_str(),
+    params_.can_bitrate);
   return CallbackReturn::SUCCESS;
 }
 
@@ -658,6 +676,7 @@ on_activate(const rclcpp_lifecycle::State &)
 {
   RCLCPP_INFO(get_logger(), "on_activate");
   // Reopen CAN socket (was closed in on_deactivate)
+  can_->set_bitrate(params_.can_bitrate);
   if (!can_->is_open() && !can_->open(params_.can_interface)) {
     RCLCPP_ERROR(get_logger(), "Failed to reopen CAN '%s'", params_.can_interface.c_str());
     return CallbackReturn::FAILURE;

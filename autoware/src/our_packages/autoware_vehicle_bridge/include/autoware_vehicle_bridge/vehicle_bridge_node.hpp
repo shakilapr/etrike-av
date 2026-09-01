@@ -57,6 +57,8 @@ public:
   virtual bool send(const struct can_frame & frame) = 0;
   virtual bool receive(struct can_frame & frame, int timeout_ms) = 0;
   virtual bool is_open() const = 0;
+  // Optional: set the CAN bitrate (bits/s). Default no-op for mocks.
+  virtual void set_bitrate(int /*bitrate*/) {}
 };
 
 class SocketCanDriver : public CanDriver
@@ -68,9 +70,11 @@ public:
   bool receive(struct can_frame & frame, int timeout_ms) override;
   bool is_open() const override {return fd_ >= 0;}
   int fd() const {return fd_;}
+  void set_bitrate(int bitrate) override {bitrate_ = bitrate;}
 
 private:
   int fd_{-1};
+  int bitrate_{500000};
 };
 
 // ---- Vehicle parameters (immutable after configure) ----
@@ -91,6 +95,7 @@ struct VehicleParams
   int state_report_timeout_ms{500};
   int motion_report_timeout_ms{100};
   std::string can_interface{"can0"};
+  int can_bitrate{500000};
 
   bool load_from(const rclcpp_lifecycle::LifecycleNode * node);
   void validate_or_throw() const;
