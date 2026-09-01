@@ -1,6 +1,6 @@
 {
   "git.scanRepositories": [
-    "${workspaceFolder}/autoware/src/extensions/autoware_teleop"
+    "E:/work/av_project/autoware/src/extensions/autoware_teleop"
   ],
   "git.autoRepositoryDetection": true
 }

@@ -1,0 +1,9 @@
+{
+  "folders": [
+    { "path": "." },
+    { "path": "autoware/src/extensions/autoware_teleop" }
+  ],
+  "settings": {
+    "git.autoRepositoryDetection": true
+  }
+}
