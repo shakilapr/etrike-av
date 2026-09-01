@@ -1,0 +1,6 @@
+{
+  "git.scanRepositories": [
+    "${workspaceFolder}/autoware/src/extensions/autoware_teleop"
+  ],
+  "git.autoRepositoryDetection": true
+}
