@@ -176,6 +176,8 @@ EOF"
         sudo udevadm control --reload-rules
         sudo udevadm trigger
         echo "  [SUCCESS] Installed! Re-plug CANable USB device to get interface name 'canable0'."
+        echo "  Note: the rename happens on the USB add event. If it is already"
+        echo "  plugged in, unbind/rebind it or physically re-plug it (it must be DOWN)."
         ;;
 
     install-sudo)
@@ -183,7 +185,11 @@ EOF"
         echo " Installing Passwordless Sudo for CANable"
         echo "========================================"
         echo "Adding NOPASSWD rules for $USER (ip link, modprobe, udevadm, slcand)..."
-        sudo bash -c "echo '$USER ALL=(root) NOPASSWD: /sbin/ip, /usr/sbin/modprobe, /usr/sbin/udevadm, /usr/bin/slcand' > /etc/sudoers.d/canable"
+        IP_BIN="$(command -v ip)"
+        MODPROBE_BIN="$(command -v modprobe)"
+        UDEVADM_BIN="$(command -v udevadm)"
+        SLCAND_BIN="$(command -v slcand)"
+        sudo bash -c "echo '$USER ALL=(root) NOPASSWD: $IP_BIN, $MODPROBE_BIN, $UDEVADM_BIN, $SLCAND_BIN' > /etc/sudoers.d/canable"
         sudo chmod 440 /etc/sudoers.d/canable
         sudo visudo -c -f /etc/sudoers.d/canable || { echo "  [ERROR] sudoers file invalid; removing."; sudo rm -f /etc/sudoers.d/canable; exit 1; }
         echo "  [SUCCESS] Passwordless sudo installed for $USER. Test with: sudo -n ip link show canable0"

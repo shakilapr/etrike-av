@@ -95,9 +95,22 @@ This writes `/etc/udev/rules.d/99-canable.rules`:
 SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", ATTRS{serial}=="<device-serial>", NAME="canable0"
 ```
 
-Then **unplug and re-plug** the USB device (or `sudo udevadm trigger`). Verify:
+Then **unplug and re-plug** the USB device (or unbind/rebind it — see below).
+The rename happens on the USB **add** event, and udev **cannot rename an
+interface that is `UP`**, so the device must be down/absent at that moment.
+Verify:
 
 ```bash
+ip link show canable0
+```
+
+If the device was already plugged in when the rule was installed, force the
+add event:
+
+```bash
+sudo sh -c 'echo 1-4.4 > /sys/bus/usb/drivers/usb/unbind'   # replace 1-4.4 with your USB path
+sleep 2
+sudo sh -c 'echo 1-4.4 > /sys/bus/usb/drivers/usb/bind'
 ip link show canable0
 ```
 
@@ -208,6 +221,7 @@ candump -tz canable0               # confirm you see frames
 |---|---|
 | No `canable0` / only `can2` | udev rule not installed → run `install-udev` + re-plug |
 | `Operation not permitted` | Missing passwordless sudo → run `install-sudo` |
+| `cannot rename to canable0` / still `can2` | udev can't rename an UP interface → bring it down first, then unbind/rebind or re-plug |
 | `ip link set ... bitrate` fails | Interface already UP: bring DOWN first (script does this) |
 | `gs_usb` not loaded | `sudo modprobe gs_usb` (or `setup_canable.sh up` loads it) |
 | `candump` shows nothing | Not a bus issue: no other node is transmitting; `cansend` a test frame |
