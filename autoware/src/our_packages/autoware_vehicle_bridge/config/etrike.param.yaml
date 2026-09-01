@@ -16,3 +16,4 @@
     motion_report_timeout_ms: 100
     can_interface: "can0"
     can_bitrate: 500000
+    sim_mode: false

@@ -128,6 +128,7 @@ universe_steering_rad(d) = -d * (π/1800)                  # 0.1deg wire → rad
 |---|---|---|
 | `can_interface` | `can0` | CAN socket interface |
 | `can_bitrate` | `500000` | CAN bus speed in bits/s (applied at open; vcan ignores it) |
+| `sim_mode` | `false` | Sim mode: pass through whatever the simulator commands, ignoring hardware feedback / engage / estop (test only — never in production) |
 | `wheel_base` | `2.0` | m, for yaw conversion |
 | `max_speed_forward` | `3.0` | m/s clamp |
 | `max_speed_reverse` | `0.5` | m/s clamp |

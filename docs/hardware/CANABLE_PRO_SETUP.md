@@ -162,6 +162,21 @@ Whenever testing with the CANable Pro plugged in, pass `can_interface:=canable0`
 ros2 launch autoware_vehicle_bridge vehicle_bridge.launch.py can_interface:=canable0
 ```
 
+For **sim / bench testing without the real E-Trike ECUs** on the bus (no ECU
+feedback → the safety gate stays closed by default and only safe frames +
+heartbeat are sent), enable the bridge **sim mode** so it passes through whatever
+the simulator commands, ignoring hardware feedback / engage / estop:
+
+```bash
+ros2 launch autoware_vehicle_bridge vehicle_bridge.launch.py can_interface:=canable0 sim_mode:=true
+```
+
+> **`sim_mode:=true` is for sim/bench testing only.** It makes the bridge a pure
+> passthrough: no ECU-feedback / engage / AUTO / estop checks, and no ESTOP
+> frames. `0x300`/`0x303` carry whatever the simulator publishes on
+> `/control/command/control_cmd`. Never use it on the real vehicle
+> (`can0`/`can1`) — there it would disable the fail-closed safety gate.
+
 ### 2. Full Vehicle Interface Launch
 ```bash
 ros2 launch etrike_vehicle_launch vehicle_interface.launch.xml can_interface:=canable0

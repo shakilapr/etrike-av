@@ -124,6 +124,7 @@ bool VehicleParams::load_from(const rclcpp_lifecycle::LifecycleNode * node)
   motion_report_timeout_ms = node->get_parameter("motion_report_timeout_ms").as_int();
   can_interface = node->get_parameter("can_interface").as_string();
   can_bitrate = node->get_parameter("can_bitrate").as_int();
+  sim_mode = node->get_parameter("sim_mode").as_bool();
   return true;
 }
 
@@ -610,7 +611,7 @@ void HeartbeatMonitor::reset()
   std::lock_guard<std::mutex> lk(mutex_);
   have_sample_ = false;
   counter_ = 0;
-  last_time_ = rclcpp::Time(0, 0, RCL_SYSTEM_TIME);
+  last_time_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
 }
 
 bool HeartbeatMonitor::is_alive(const rclcpp::Time & now, int timeout_ms) const
@@ -619,7 +620,9 @@ bool HeartbeatMonitor::is_alive(const rclcpp::Time & now, int timeout_ms) const
   if (!have_sample_) {
     return true;                    // no data yet
   }
-  return (now - last_time_).seconds() * 1000.0 < timeout_ms;
+  const int64_t diff_ns = now.nanoseconds() - last_time_.nanoseconds();
+  if (diff_ns < 0) {return false;}
+  return (static_cast<double>(diff_ns) / 1000000.0) < timeout_ms;
 }
 
 // =====================================================================
@@ -651,6 +654,7 @@ VehicleBridgeNode::VehicleBridgeNode(const rclcpp::NodeOptions & options)
   declare_parameter("motion_report_timeout_ms", 100);
   declare_parameter("can_interface", "can0");
   declare_parameter("can_bitrate", 500000);
+  declare_parameter("sim_mode", false);
 
   // VOLATILE durability: connects to both VOLATILE and TRANSIENT_LOCAL publishers.
   // (transient_local would silently fail to connect to standard VOLATILE Autoware
@@ -747,9 +751,9 @@ on_configure(const rclcpp_lifecycle::State &)
   timer_diag_->cancel();
 
   RCLCPP_INFO(
-    get_logger(), "Configured: wheelbase=%.2f loop=%.0fHz can=%s bitrate=%d",
+    get_logger(), "Configured: wheelbase=%.2f loop=%.0fHz can=%s bitrate=%d sim_mode=%s",
     params_.wheel_base, params_.loop_rate, params_.can_interface.c_str(),
-    params_.can_bitrate);
+    params_.can_bitrate, params_.sim_mode ? "true" : "false");
   return CallbackReturn::SUCCESS;
 }
 
@@ -863,8 +867,9 @@ bool VehicleBridgeNode::load_parameters()
 void VehicleBridgeNode::on_control(const autoware_control_msgs::msg::Control::SharedPtr msg)
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (!accepting_control_.load(std::memory_order_relaxed) ||
-    software_emergency_.load(std::memory_order_relaxed))
+  if (!params_.sim_mode &&
+    (!accepting_control_.load(std::memory_order_relaxed) ||
+    software_emergency_.load(std::memory_order_relaxed)))
   {
     return;
   }
@@ -929,6 +934,9 @@ void VehicleBridgeNode::on_emergency(
   const tier4_vehicle_msgs::msg::VehicleEmergencyStamped::SharedPtr msg)
 {
   software_emergency_.store(msg->emergency, std::memory_order_relaxed);
+  // SIM mode: the simulator's emergency pipeline is authoritative; the bridge is
+  // a pure passthrough and must not assert its own ESTOP / drop control.
+  if (params_.sim_mode) {return;}
   if (!msg->emergency) {
     // Stop asserting ESTOP. Physical recovery remains exclusively with SYS/operator input.
     return;
@@ -939,7 +947,8 @@ void VehicleBridgeNode::on_emergency(
 
   // Rate-limited: max 1 ESTOP frame per 500ms from Host
   auto n = now();
-  if ((n - last_estop_tx_).seconds() * 1000.0 < 500.0) {return;}
+  const int64_t estop_diff_ns = n.nanoseconds() - last_estop_tx_.nanoseconds();
+  if (last_estop_tx_.nanoseconds() > 0 && (static_cast<double>(estop_diff_ns) / 1000000.0) < 500.0) {return;}
   last_estop_tx_ = n;
 
   RCLCPP_ERROR(get_logger(), "EMERGENCY received — sending ESTOP");
@@ -960,7 +969,20 @@ void VehicleBridgeNode::tick_control()
       if (encoder_->encode_neutral_drive(z)) {can_->send(z);}
       if (encoder_->encode_invalid_steering(z)) {can_->send(z);}
     };
-  const bool feedback_ready =
+  // SIM mode: pure pass-through from the Autoware Universe simulator to CAN.
+  // The simulator already runs the full command pipeline (engage, gate, MRM,
+  // safety) and provides its own vehicle model, so the bridge forwards whatever
+  // the sim commands with NO hardware/E-stop/ECU-feedback gating. Never enable
+  // on the real vehicle.
+  if (!params_.sim_mode) {
+  // Sim mode: pass through whatever the simulator commands, ignoring all
+  // hardware feedback / engage / estop signals. Production (sim_mode=false)
+  // requires real ECU feedback + engaged + AUTO + no estop.
+  const bool base_gate_ready = params_.sim_mode ||
+    (engaged_.load(std::memory_order_relaxed) &&
+    confirmed_auto_.load(std::memory_order_relaxed) &&
+    !software_emergency_.load(std::memory_order_relaxed) &&
+    sys_estop_active_.load(std::memory_order_relaxed) == 0 &&
     rt_heartbeat_.has_sample() &&
     rt_heartbeat_.is_alive(tick_now, params_.rt_heartbeat_timeout_ms) &&
     sys_status_.has_sample() &&
@@ -969,22 +991,18 @@ void VehicleBridgeNode::tick_control()
     state_report_.is_alive(tick_now, params_.state_report_timeout_ms) &&
     motion_report_.has_sample() &&
     motion_report_.is_alive(tick_now, params_.motion_report_timeout_ms) &&
-    sys_heartbeat_ok_.load(std::memory_order_relaxed) == 1;
-  const bool base_gate_ready = engaged_.load(std::memory_order_relaxed) &&
-    confirmed_auto_.load(std::memory_order_relaxed) &&
-    !software_emergency_.load(std::memory_order_relaxed) &&
-    sys_estop_active_.load(std::memory_order_relaxed) == 0 &&
-    feedback_ready;
-  if (!base_gate_ready) {
-    accepting_control_.store(false, std::memory_order_relaxed);
-    invalidate_control();
-    send_safe_motion();
-    return;
-  }
-  if (!accepting_control_.exchange(true, std::memory_order_relaxed)) {
-    invalidate_control();
-    send_safe_motion();
-    return;
+    sys_heartbeat_ok_.load(std::memory_order_relaxed) == 1);
+    if (!base_gate_ready) {
+      accepting_control_.store(false, std::memory_order_relaxed);
+      invalidate_control();
+      send_safe_motion();
+      return;
+    }
+    if (!accepting_control_.exchange(true, std::memory_order_relaxed)) {
+      invalidate_control();
+      send_safe_motion();
+      return;
+    }
   }
 
   // Snapshot latest commands
@@ -1002,7 +1020,9 @@ void VehicleBridgeNode::tick_control()
     send_safe_motion();
     return;
   }
-  auto cmd_age = (tick_now - command_time).seconds() * 1000.0;
+  const int64_t cmd_diff_ns = tick_now.nanoseconds() - command_time.nanoseconds();
+  const double cmd_age = (command_time.nanoseconds() > 0 && cmd_diff_ns >= 0) ?
+    (static_cast<double>(cmd_diff_ns) / 1000000.0) : 1e9;
   if (cmd_age > params_.command_timeout_ms) {
     RCLCPP_WARN_THROTTLE(
       get_logger(),
@@ -1026,7 +1046,7 @@ void VehicleBridgeNode::tick_control()
       default:            gear_val = gear::CAN_N; break;
     }
     has_gear = true;
-  } else if (engaged_.load(std::memory_order_relaxed)) {
+  } else if (engaged_.load(std::memory_order_relaxed) || params_.sim_mode) {
     gear_val = gear::CAN_D;
     has_gear = true;
   }
@@ -1103,6 +1123,11 @@ void VehicleBridgeNode::tick_diagnostics()
     };
 
   add("CAN", can_->is_open(), can_->is_open() ? "connected" : "disconnected");
+  if (params_.sim_mode) {
+    add("Sim mode", true, "passthrough (no hardware gating)");
+    pub_diag_->publish(diag);
+    return;
+  }
   const bool engaged = engaged_.load(std::memory_order_relaxed);
   add("Engage", engaged, engaged ? "engaged" : "disengaged");
   add(

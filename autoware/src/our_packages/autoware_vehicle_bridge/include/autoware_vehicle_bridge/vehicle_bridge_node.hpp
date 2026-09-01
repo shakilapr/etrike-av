@@ -96,6 +96,7 @@ struct VehicleParams
   int motion_report_timeout_ms{100};
   std::string can_interface{"can0"};
   int can_bitrate{500000};
+  bool sim_mode{false};
 
   bool load_from(const rclcpp_lifecycle::LifecycleNode * node);
   void validate_or_throw() const;
@@ -191,7 +192,7 @@ private:
   mutable std::mutex mutex_;
   bool have_sample_{false};
   uint8_t counter_{0};
-  rclcpp::Time last_time_{0, 0, RCL_SYSTEM_TIME};
+  rclcpp::Time last_time_{0, 0, RCL_ROS_TIME};
 };
 
 // ---- Main node ----
@@ -273,7 +274,7 @@ private:
   std::atomic<uint8_t> sys_heartbeat_ok_{0};
 
   // ---- Rate limiting ----
-  rclcpp::Time last_estop_tx_{0, 0, RCL_SYSTEM_TIME};
+  rclcpp::Time last_estop_tx_{0, 0, RCL_ROS_TIME};
 
   // ---- Callbacks ----
   void on_control(const autoware_control_msgs::msg::Control::SharedPtr msg);

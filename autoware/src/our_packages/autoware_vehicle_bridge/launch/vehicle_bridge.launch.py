@@ -29,6 +29,7 @@ from lifecycle_msgs.msg import Transition
 def generate_launch_description() -> LaunchDescription:
     can_interface = LaunchConfiguration("can_interface")
     engage_topic = LaunchConfiguration("engage_topic")
+    sim_mode = LaunchConfiguration("sim_mode")
     parameter_file = PathJoinSubstitution(
         [FindPackageShare("autoware_vehicle_bridge"), "config", "etrike.param.yaml"]
     )
@@ -39,7 +40,13 @@ def generate_launch_description() -> LaunchDescription:
         name="vehicle_bridge",
         namespace="",
         output="screen",
-        parameters=[parameter_file, {"can_interface": can_interface}],
+        parameters=[
+            parameter_file,
+            {
+                "can_interface": can_interface,
+                "sim_mode": sim_mode,
+            },
+        ],
         remappings=[("~/input/engage", engage_topic)],
     )
 
@@ -59,6 +66,13 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             DeclareLaunchArgument("can_interface", default_value="can0"),
+            DeclareLaunchArgument(
+                "sim_mode",
+                default_value="false",
+                description="Sim mode: pass through whatever the simulator commands, "
+                "ignoring hardware feedback / engage / estop. Test only, never on the "
+                "real vehicle.",
+            ),
             DeclareLaunchArgument(
                 "engage_topic",
                 default_value="/api/autoware/get/engage",
