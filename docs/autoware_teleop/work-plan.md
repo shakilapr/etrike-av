@@ -99,6 +99,23 @@ path with gate enforcement.
 
 **Acceptance:** CI green; contribution-ready.
 
+## 4b. Implementation Status
+
+Current state as of the initial implementation pass:
+
+| Item | Status | Verified |
+|---|---|---|
+| `ecu_sim.py` (vcan ECU simulator) | implemented | frame builders unit-checked; committed in `direct_bridge/scripts/` |
+| `autoware_teleop_web` (FastAPI + Pydantic) | implemented | 8 schema tests pass (no ROS needed) |
+| `autoware_teleop` (rclcpp node, direct gateway) | implemented | builds + lifecycle + publishers verified on Jetson (vcan1) |
+| `autoware_teleop_ui` (React) | scaffolded | not yet built (P3) |
+| ADAPI Path B | planned | not started (P4) |
+
+Known fixes applied during bring-up:
+- `include_directories(include)` added to CMake (header include path).
+- Report subscriptions stored as members (previously destroyed immediately — a
+  classic rclcpp lifetime bug), verified via `ros2 node info`.
+
 ## 5. Risks and Open Items
 
 | Item | Impact | Mitigation |
