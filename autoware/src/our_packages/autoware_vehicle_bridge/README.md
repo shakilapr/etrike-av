@@ -127,6 +127,7 @@ universe_steering_rad(d) = -d * (π/1800)                  # 0.1deg wire → rad
 | Param | Default | Meaning |
 |---|---|---|
 | `can_interface` | `can0` | CAN socket interface |
+| `can_bitrate` | `500000` | CAN bus speed in bits/s (applied at open; vcan ignores it) |
 | `wheel_base` | `2.0` | m, for yaw conversion |
 | `max_speed_forward` | `3.0` | m/s clamp |
 | `max_speed_reverse` | `0.5` | m/s clamp |
