@@ -650,6 +650,7 @@ VehicleBridgeNode::VehicleBridgeNode(const rclcpp::NodeOptions & options)
   declare_parameter("state_report_timeout_ms", 500);
   declare_parameter("motion_report_timeout_ms", 100);
   declare_parameter("can_interface", "can0");
+  declare_parameter("can_bitrate", 500000);
 
   // VOLATILE durability: connects to both VOLATILE and TRANSIENT_LOCAL publishers.
   // (transient_local would silently fail to connect to standard VOLATILE Autoware
