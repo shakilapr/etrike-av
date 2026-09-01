@@ -3,11 +3,12 @@
 # CANable Pro USB-to-CAN Management Script (E-Trike AV Test Stage)
 # ==============================================================================
 # Usage:
-#   ./scripts/setup_canable.sh up       [interface] [bitrate]  # Bring UP CANable
-#   ./scripts/setup_canable.sh down     [interface]            # Bring DOWN CANable
-#   ./scripts/setup_canable.sh status                          # Check status & link
-#   ./scripts/setup_canable.sh dump     [interface]            # Run candump sniffer
-#   ./scripts/setup_canable.sh install-udev                    # Install persistent naming rule
+#   ./scripts/setup_canable.sh up          [interface] [bitrate]  # Bring UP CANable
+#   ./scripts/setup_canable.sh down        [interface]            # Bring DOWN CANable
+#   ./scripts/setup_canable.sh status                             # Check status & link
+#   ./scripts/setup_canable.sh dump        [interface]            # Run candump sniffer
+#   ./scripts/setup_canable.sh install-udev                       # Install persistent naming rule (serial-keyed -> canable0)
+#   ./scripts/setup_canable.sh install-sudo                       # Install passwordless sudo for med1 (ip/can tools)
 # ==============================================================================
 
 set -eo pipefail
@@ -39,6 +40,19 @@ detect_usb_device() {
     fi
 }
 
+detect_canable_serial() {
+    # Find the USB device serial for the gs_usb CANable adapter.
+    # Used by install-udev to make the interface name stable per device.
+    for usbdev in /sys/bus/usb/devices/*/; do
+        if [ "$(cat "$usbdev/idVendor" 2>/dev/null)" = "$CANABLE_VENDOR_ID" ] &&
+           [ "$(cat "$usbdev/idProduct" 2>/dev/null)" = "$CANABLE_PRODUCT_ID" ]; then
+            cat "$usbdev/serial" 2>/dev/null
+            return 0
+        fi
+    done
+    return 1
+}
+
 find_socketcan_iface() {
     # If the target interface exists directly, return it
     if ip link show "$IFACE" &>/dev/null; then
@@ -46,8 +60,9 @@ find_socketcan_iface() {
         return 0
     fi
 
-    # Search for available gs_usb / can network interfaces
-    for dev in $(ls /sys/class/net/ 2>/dev/null | grep -E '^can[0-9]+|^slcan[0-9]+'); do
+    # Search for available gs_usb / can network interfaces (including the
+    # fixed-name canable0 set by install-udev)
+    for dev in $(ls /sys/class/net/ 2>/dev/null | grep -E '^can[0-9]+|^canable[0-9]+|^slcan[0-9]+'); do
         # Check if backed by USB
         if readlink -f "/sys/class/net/$dev/device" | grep -q "usb"; then
             echo "$dev"
@@ -140,16 +155,38 @@ case "$ACTION" in
         UDEV_FILE="/etc/udev/rules.d/99-canable.rules"
         echo "Writing persistent rule to $UDEV_FILE..."
         
-        # Rule: Assign CandleLight gs_usb device to fixed name 'canable0'
-        sudo bash -c "cat << 'EOF' > $UDEV_FILE
+        # Rule: Assign CandleLight gs_usb device to fixed name 'canable0'.
+        # Keyed on the device serial (in addition to vendor/product) so the
+        # name survives re-plug / port changes and is unique per device.
+        CANABLE_SERIAL="$(detect_canable_serial)"
+        if [ -n "$CANABLE_SERIAL" ]; then
+            echo "  Device serial: $CANABLE_SERIAL"
+            SERIAL_MATCH=", ATTRS{serial}==\"$CANABLE_SERIAL\""
+        else
+            echo "  [WARN] Device serial not detected; keying on vendor/product only."
+            SERIAL_MATCH=""
+        fi
+
+        sudo bash -c "cat << EOF > $UDEV_FILE
 # CANable Pro / Candlelight USB-to-CAN persistent naming
-SUBSYSTEM==\"net\", ACTION==\"add\", ATTRS{idVendor}==\"1d50\", ATTRS{idProduct}==\"606f\", NAME=\"canable0\"
+SUBSYSTEM==\"net\", ACTION==\"add\", ATTRS{idVendor}==\"$CANABLE_VENDOR_ID\", ATTRS{idProduct}==\"$CANABLE_PRODUCT_ID\"$SERIAL_MATCH, NAME=\"canable0\"
 EOF"
 
         echo "Reloading udev rules..."
         sudo udevadm control --reload-rules
         sudo udevadm trigger
         echo "  [SUCCESS] Installed! Re-plug CANable USB device to get interface name 'canable0'."
+        ;;
+
+    install-sudo)
+        echo "========================================"
+        echo " Installing Passwordless Sudo for CANable"
+        echo "========================================"
+        echo "Adding NOPASSWD rules for $USER (ip link, modprobe, udevadm, slcand)..."
+        sudo bash -c "echo '$USER ALL=(root) NOPASSWD: /sbin/ip, /usr/sbin/modprobe, /usr/sbin/udevadm, /usr/bin/slcand' > /etc/sudoers.d/canable"
+        sudo chmod 440 /etc/sudoers.d/canable
+        sudo visudo -c -f /etc/sudoers.d/canable || { echo "  [ERROR] sudoers file invalid; removing."; sudo rm -f /etc/sudoers.d/canable; exit 1; }
+        echo "  [SUCCESS] Passwordless sudo installed for $USER. Test with: sudo -n ip link show canable0"
         ;;
 
     *)
