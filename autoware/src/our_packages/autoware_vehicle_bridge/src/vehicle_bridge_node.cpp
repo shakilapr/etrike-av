@@ -15,7 +15,10 @@
 #include "autoware_vehicle_bridge/vehicle_bridge_node.hpp"
 
 #include <linux/can.h>
+#include <linux/can/netlink.h>
 #include <linux/can/raw.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -155,6 +158,87 @@ void VehicleParams::validate_or_throw() const
 }
 
 // =====================================================================
+//  CAN interface configuration (rtnetlink)
+// =====================================================================
+// Set the bitrate of a CAN interface via rtnetlink. There is no SIOCSCANBITRATE
+// ioctl; the CAN controller speed is configured through the netlink interface.
+// Returns true on success, or if the interface does not support a bitrate
+// (e.g. vcan) - the caller still brings the link up.
+static bool can_set_bitrate_netlink(const std::string & interface, int bitrate)
+{
+  int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+  if (fd < 0) {return false;}
+
+  struct {
+    nlmsghdr nlh;
+    ifinfomsg ifm;
+    char attrbuf[128];
+  } req {};
+  req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+  req.nlh.nlmsg_type = RTM_NEWLINK;
+  req.nlh.nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
+  req.nlh.nlmsg_seq = 1;
+  req.ifm.ifi_family = AF_UNSPEC;
+  req.ifm.ifi_index = static_cast<int>(if_nametoindex(interface.c_str()));
+  if (req.ifm.ifi_index == 0) {::close(fd); return false;}
+
+  struct rtattr * rta = reinterpret_cast<struct rtattr *>(req.attrbuf);
+  struct rtattr * linkinfo = rta;
+  rta->rta_type = IFLA_LINKINFO;
+  rta->rta_len = RTA_LENGTH(0);
+  rta = reinterpret_cast<struct rtattr *>(
+    reinterpret_cast<char *>(rta) + RTA_LENGTH(0));
+
+  rta->rta_type = IFLA_INFO_KIND;
+  rta->rta_len = RTA_LENGTH(sizeof("can"));
+  std::memcpy(RTA_DATA(rta), "can", sizeof("can"));
+  linkinfo->rta_len = static_cast<unsigned short>(
+    reinterpret_cast<char *>(rta) - reinterpret_cast<char *>(linkinfo) +
+    RTA_LENGTH(sizeof("can")));
+  rta = reinterpret_cast<struct rtattr *>(
+    reinterpret_cast<char *>(rta) + RTA_LENGTH(sizeof("can")));
+
+  rta->rta_type = IFLA_INFO_DATA;
+  rta->rta_len = RTA_LENGTH(0);
+  struct rtattr * data = rta;
+  rta = reinterpret_cast<struct rtattr *>(
+    reinterpret_cast<char *>(rta) + RTA_LENGTH(0));
+
+  rta->rta_type = IFLA_CAN_BITTIMING;
+  rta->rta_len = RTA_LENGTH(sizeof(struct can_bittiming));
+  struct can_bittiming bittiming {};
+  bittiming.bitrate = static_cast<__u32>(bitrate);
+  std::memcpy(RTA_DATA(rta), &bittiming, sizeof(struct can_bittiming));
+  data->rta_len = static_cast<unsigned short>(
+    reinterpret_cast<char *>(rta) - reinterpret_cast<char *>(data) +
+    RTA_LENGTH(sizeof(struct can_bittiming)));
+  rta = reinterpret_cast<struct rtattr *>(
+    reinterpret_cast<char *>(rta) + RTA_LENGTH(sizeof(struct can_bittiming)));
+
+  linkinfo->rta_len = static_cast<unsigned short>(
+    reinterpret_cast<char *>(rta) - reinterpret_cast<char *>(linkinfo));
+  req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)) +
+    reinterpret_cast<unsigned char *>(rta) -
+    reinterpret_cast<unsigned char *>(req.attrbuf);
+
+  const ssize_t sent = ::send(fd, &req, req.nlh.nlmsg_len, 0);
+  if (sent < 0) {::close(fd); return false;}
+
+  char buf[4096];
+  const ssize_t recvd = ::recv(fd, buf, sizeof(buf), 0);
+  ::close(fd);
+  if (recvd < 0) {return false;}
+  // An error message means failure (e.g. EINVAL on vcan, which we tolerate).
+  const struct nlmsghdr * nlh = reinterpret_cast<const struct nlmsghdr *>(buf);
+  if (nlh->nlmsg_type == NLMSG_ERROR) {
+    const struct nlmsgerr * err = reinterpret_cast<const struct nlmsgerr *>(
+      NLMSG_DATA(nlh));
+    return err->error == 0;
+  }
+  return true;
+}
+
+// =====================================================================
 //  SocketCanDriver
 // =====================================================================
 bool SocketCanDriver::open(const std::string & interface)
@@ -176,14 +260,11 @@ bool SocketCanDriver::open(const std::string & interface)
 
   // Bring the interface up and configure its bitrate. Setting the bitrate
   // requires the interface to be DOWN, so skip it if already UP (a live bus
-  // must not be bounced). vcan ignores SIOCSCANBITRATE; that is tolerated.
+  // must not be bounced). The bitrate request is best-effort: vcan has no
+  // controller and the netlink set fails there, which is tolerated.
   if (ioctl(fd_, SIOCGIFFLAGS, &ifr) < 0) {close(); return false;}
   if ((ifr.ifr_flags & IFF_UP) == 0) {
-    const int br = bitrate_;
-    if (ioctl(fd_, SIOCSCANBITRATE, &br) < 0) {
-      // Not fatal: vcan has no bitrate; only fail if we cannot bring it up.
-      if (errno != ENOTTY && errno != EINVAL) {close(); return false;}
-    }
+    can_set_bitrate_netlink(interface, bitrate_);
     ifr.ifr_flags |= IFF_UP;
     if (ioctl(fd_, SIOCSIFFLAGS, &ifr) < 0) {close(); return false;}
   }
