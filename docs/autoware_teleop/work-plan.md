@@ -125,6 +125,24 @@ Known fixes applied during bring-up:
 - Report subscriptions stored as members (previously destroyed immediately — a
   classic rclcpp lifetime bug), verified via `ros2 node info`.
 
+## 4c. Control-Toolkit-Driven Improvements (new)
+
+Learned from the E-Trike `control-toolkit` (bench CAN tool): authority limits,
+node-enforced lock/input-mode, one-producer ownership + stale-sequence, explicit
+safe-frame on release, per-value freshness/age, sim provenance, cmd-vs-fbk split,
+WS heartbeat + typed errors, and a compact sidebar/live-readout. See
+`teleop-architecture.md` §6.3.x, §6.7, §7.0, §10.
+
+| Work item | Where | Status |
+|---|---|---|
+| Node-enforced control lock + input-mode gating | `autoware_teleop/src/node.cpp` | pending |
+| Authority limits (speed/steer/brake ceiling) clamped in node | node + UI + schema | pending |
+| Intent `sequence`/`source` + stale rejection + safe frame on loss | node + schema | pending |
+| Per-topic freshness/age + sim provenance | web bridge + schema + UI | pending |
+| Sidebar: cmd-vs-fbk, TX status, stop-all, ESTOP observability, monitor list | UI | pending |
+| WS heartbeat + sequence + typed error envelope | web | pending |
+| Fix `main.py` telemetry payload (`t.mode.mode` → nonexistent field) | web | pending |
+
 ## 5. Risks and Open Items
 
 | Item | Impact | Mitigation |
@@ -132,6 +150,8 @@ Known fixes applied during bring-up:
 | rclcpp + FastAPI split complexity | Two languages/lifecycles | Keep web as thin WS proxy; core logic in node |
 | Path B depends on full Autoware stack | Hard to test without it | Test with planning sim + `ecu_sim`; gate mock for CI |
 | Watchdog tuning on real hardware | False brakes or missed stops | Configurable `arrival_timeout_ms`; test on `vcan1` + `can1` |
+| Authority-limit scope creep | UI/back-end drift on ceiling enforcement | Node owns clamp; UI only sets the value |
+| Multi-source intent ownership | Two producers fighting over the control path | One-active-producer + stale-sequence rejection in node |
 | Frontend scope creep (uPlot, etc.) | Delays MVP | Defer graphs to P5 stretch; ship controls+dashboard first |
 
 ## 6. Out of Scope

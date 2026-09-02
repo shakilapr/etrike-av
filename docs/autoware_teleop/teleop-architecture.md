@@ -57,14 +57,31 @@ hardware. It supports two integration paths:
    `arrival_timeout_ms`. A **control lock** (engage/motor-enable) visually and
    functionally gates all command output — the operator must unlock before the
    vehicle moves, mirroring the reference's `LOCKED` overlay + `motor_enable`.
-4. **Autoware topics drive the dashboard.** Every dashboard panel maps 1:1 to an
-   Autoware Universe topic/message. No fabricated data in production mode.
-5. **Sim mode for development.** When `test_mode=sim`, the node synthesizes
-   `/vehicle/status/*` reports from its own commanded values (like the reference's
-   SIM source), so the UI is fully demonstrable without a bridge or hardware.
-6. **Frontend is ROS-free.** The React UI talks only to the FastAPI WebSocket
-   schema; it never touches ROS topics directly.
-7. **Headless operation.** The node runs standalone via `ros2 run` + params.
+   The lock is **enforced at the node**, not just drawn in the browser: while
+   locked or when the active input mode forbids an axis, the node publishes zero
+   velocity / neutral gear regardless of intent (single authority).
+4. **Authority limits, not raw axes.** The operator sets a **speed/steer ceiling**
+   (max forward/reverse speed, max steering angle) in the UI. The node clamps
+   commanded output to that ceiling — the ceiling is enforced server-side, and the
+   browser keyboard/axis scaling is a convenience, not the safety boundary.
+5. **Autoware topics drive the dashboard.** Every dashboard panel maps 1:1 to an
+   Autoware Universe topic/message. No fabricated data in production mode. Sim
+   reports are **labeled as synthetic** (provenance badge) and never presented as
+   measured feedback.
+6. **Freshness is visible.** Every status value carries a `live | late | missing |
+   invalid` state and a numeric age, aged by an independent clock — a connected but
+   silent topic must not look live. Absent topics degrade gracefully.
+7. **One active producer.** Exactly one intent source (browser, keyboard, terminal)
+   owns the control path at a time. Intent carries a monotonic `sequence`; the node
+   rejects stale/duplicate sequences and, on source loss or browser disconnect,
+   publishes an explicit zero/neutral safe frame (not just the deadman timeout).
+8. **Backend-owned timing.** The node owns shaping, gating, and safe-release. The
+   web bridge is a thin transport: it forwards intent, relays telemetry, and never
+   decides whether a command is emitted.
+9. **Frontend is ROS-free.** The React UI talks only to the FastAPI WebSocket
+   schema; it never touches ROS topics directly. All mutations and queries go
+   through one client-neutral, typed WS contract.
+10. **Headless operation.** The node runs standalone via `ros2 run` + params.
 
 ## 4. Autoware Topic Surface (what the console/dashboard use)
 
@@ -176,10 +193,53 @@ Mirrors the reference's `motor_enable` + `LOCKED` overlay:
 - A `locked` boolean gates all command output. When locked, the node publishes
   zero velocity / neutral gear and the UI shows a **LOCKED** overlay over the
   console (greyed sliders, disabled buttons).
+- **Node-enforced (single authority).** `make_control()` in the node is the only
+  place that decides whether a commanded axis reaches `/control/command/*`.
+  While `engage=false`, or when the intent source's `input_mode` is not the one
+  allowed for an axis (e.g. sliders muted in keyboard mode), the node emits
+  zeros/neutral — it never trusts the browser to have disabled a control.
 - Unlock requires an explicit **ENGAGE** (or `motor_enable` equivalent). On the
   ADAPI path, engage maps to `enable_autoware_control`.
 - **Signal watchdog**: if telemetry stops for `signal_loss_timeout`, the lock
   engages automatically (reference's "commands lock if telemetry stops").
+
+### 6.3.1 Authority Limits (speed/steer ceiling)
+
+The operator can cap how hard the vehicle is allowed to move, independent of
+slider/keyboard position:
+
+- The node owns `max_speed_forward`, `max_speed_reverse`, `max_steering_angle`,
+  `max_brake_accel`. The UI presents them as **limit sliders + numeric input**
+  (port of the reference `Authority limits` sliders) and includes the ceiling in
+  each intent tick.
+- The node clamps `make_control()` to the operator-set ceiling (never above the
+  firmware/parameter max). Browser-side axis scaling (`keys × max/3000`) is a UX
+  convenience; the authority boundary is the node clamp.
+- Keyboard axes are scaled by the ceiling before shaping, so holding W at a 1 m/s
+  ceiling still yields ≤ 1 m/s.
+
+### 6.3.2 Intent Ownership & Sequence
+
+One active producer owns the control path (port of the Control Toolkit's
+ownership/lease + stale-sequence model):
+
+- Every `Intent` carries a monotonic `sequence` and a `source`.
+- The node rejects an intent whose `sequence` regresses for the same continuous
+  source (stale/duplicate/out-of-order), treating it as not-a-command.
+- Switching sources (browser → terminal) releases the previous source's stream.
+- When intent stops arriving (browser disconnect, tab hidden, explicit release),
+  the node publishes an explicit zero/neutral/brake safe frame immediately — it
+  does not wait for the `arrival_timeout_ms` deadman.
+
+### 6.3.3 Input-Mode Gating
+
+`input_mode` (`raw` | `keyboard`) is enforced at the node, not only in the UI:
+
+- In `keyboard` mode the node ignores slider/raw axes and uses only the
+  WASD/space-derived axes (it is the arbiter, so a stale slider value cannot drive).
+- In `raw` mode keyboard axes are ignored.
+- The UI shows a **KEYBOARD MODE** overlay and disables the sliders when keyboard
+  mode is active; this mirrors the UI, but the node is what makes it safe.
 
 ### 6.4 Telemetry Sinks
 
@@ -208,6 +268,29 @@ derived from its own commanded velocity/steer/gear (like the reference SIM
 source). This makes the dashboard show live movement from UI sliders with **no
 bridge and no hardware** — the primary development/demo path.
 
+**Provenance is preserved.** Synthetic reports carry a `simulated: true` flag in
+the telemetry payload and render with a **SIM** badge in the dashboard. They are
+never presented as measured feedback. The dashboard shows a **requested vs
+vehicle** split (commanded target beside measured feedback) so the operator sees
+disagreement even in sim.
+
+### 6.7 Freshness & Ageing
+
+Every status value carries a `freshness` state (`live | late | missing |
+invalid`) and a numeric `age_ms`, computed by the node/bridge from the topic's
+expected cadence and aged by an independent clock — a connected-but-silent topic
+ages to `late`/`missing` and must not look live (port of the Control Toolkit
+`freshness.py`):
+
+- `late` — age beyond ~2× expected period;
+- `missing` — age beyond ~5× expected period (or a bounded floor);
+- `invalid` — a frame arrived but failed validation;
+- `unseen` — no frame yet.
+
+The UI renders `age_ms` numerically and greys/dims `late`/`missing` values. The
+vehicle card, command-vs-feedback readouts, and dashboard gauges all honor this
+state; a `late` feedback value is never presented as current.
+
 ## 7. Console (React UI)
 
 The console is the control surface, modeled on the reference's keypad + lock.
@@ -224,10 +307,31 @@ The console is the control surface, modeled on the reference's keypad + lock.
 │ │  STEER    ──────●─────────────           │  │
 │ │  [D] [R] [N]  TURN[L|R]  HAZARD          │  │
 │ └──────────────────────────────────────────┘  │
+│ INPUT MODE [raw|keyboard]                     │
+│ AUTHORITY LIMITS (ceiling, enforced in node)  │
+│   max fwd [----●----] mm/s  max rev [●----]   │
+│   max steer [--●--] rad      max brake [●--]  │
 │ TEST MODE [manual|auto|sim|mtr|ses|seb]       │
 │   MTR[✓] SES[✓] SEB[✓] auto[✓] sim[ ] diag[ ]│
+│ LIVE: cmd 1.2 m/s · fbk 1.1 m/s · age 42 ms   │
 └──────────────────────────────────────────────┘
 ```
+
+### 7.0 Sidebar / live readout strip
+
+A compact, always-visible panel (kept inside the single viewport) mirrors the
+reference's vehicle card + control toolbelt:
+
+- **Command vs feedback** — `cmd <speed>` · `fbk <speed>` · `cmd yaw` · `fbk
+  steer`, each with a freshness chip (`live/late/missing`) and numeric age.
+- **TX status** — what `/control/command/*` is actively publishing: armed/locked/
+  sim, current authority ceiling, stream-health badge (`LIVE | DELAYED | LOST`).
+- **Stop all motion / release** — one danger action that calls the shared
+  `controlRelease` (and on the direct path, the node's explicit safe frame).
+- **ESTOP observability** — port the reference `observeEstop`: shows *why* an
+  ESTOP is active (RT reason code, bus `0x001`, SYS flags), not just an armed flag.
+- **Per-topic monitor list** — a compact live/stale list of the `/vehicle/status/*`
+  topics the bridge subscribes (name, value, age, freshness), driven by §6.7.
 
 ### 7.1 Keyboard map (browser focus on console)
 
@@ -252,15 +356,18 @@ absent topics show a greyed "no data".
 ```
 ┌────────────────────────────────────────────────┐
 │  SPEED  │  STEER  │  GEAR  │  MODE │  TEST     │
-│  1.2m/s │ -0.3rad │  DRIVE │ REMOTE│  auto     │
+│  1.2m/s │ -0.3rad │  DRIVE │ REMOTE│  auto [SIM]│
 │  ──●──  │  ──●──  │   D    │   R  │           │
 ├────────────────────────────────────────────────┤
+│  CMD vs FBK   speed 1.2 / 1.1 m/s (42ms)       │
+│               yaw   -0.2 / -0.3 rad (20ms)     │
 │  TURN [L|R]  HAZARD   DIAG: [CAN][heartbeat]    │
 │  ●  ○        ●        [estop][mode][timeout]    │
 ├────────────────────────────────────────────────┤
 │  OPERATION MODE  manual control  drive mode     │
 │  velocity  target  accel  target  steer target  │
 │  bridge params: MTR✓ SES✓ SEB✓ auto✓ sim□ diag□ │
+│  freshness: live/late/missing + age per value   │
 └────────────────────────────────────────────────┘
 ```
 
@@ -268,8 +375,8 @@ absent topics show a greyed "no data".
 
 | Panel | Source topic | Note |
 |---|---|---|
-| Speedometer | `/vehicle/status/velocity_status` | needle + digital |
-| Steering gauge | `/vehicle/status/steering_status` | center needle |
+| Speedometer | `/vehicle/status/velocity_status` | needle + digital + freshness |
+| Steering gauge | `/vehicle/status/steering_status` | center needle + freshness |
 | Gear lamp | `/vehicle/status/gear_status` | D/R/N/P |
 | Turn lamps | `/vehicle/status/turn_indicators_status` | left/right |
 | Hazard lamp | `/vehicle/status/hazard_lights_status` | |
@@ -277,7 +384,10 @@ absent topics show a greyed "no data".
 | Manual control | node-derived | PEDALS/ACCEL/VELOCITY |
 | Diagnostics | `~/output/diagnostics` | strip of key diag values |
 | Target/effort | node-derived / `/vehicle/status/actuation_status` | commanded vs actual |
+| **Cmd vs fbk** | node-derived | paired rows — `cmd` target beside measured `fbk`, with freshness + age (§7.0) |
 | Bridge params | node-derived | live test-mode/param readout |
+| **Provenance** | node-derived | `simulated: true` → **SIM** badge; sim reports never shown as measured |
+| **Age/freshness** | node/bridge | every value carries `live/late/missing/invalid` + `age_ms` (§6.7) |
 
 ### 8.2 Screen-fit
 
@@ -315,6 +425,12 @@ absent topics show a greyed "no data".
 | `operation_mode` | string | STOP/AUTO/LOCAL/REMOTE |
 | `manual_control_mode` | string | PEDALS/ACCELERATION/VELOCITY |
 | `engage` | bool | control lock |
+| `input_mode` | string | `raw` \| `keyboard` — node-enforced (§6.3.3) |
+| `sequence` | int | monotonic, per source — stale/regressed rejected (§6.3.2) |
+| `source` | string | producer identity (`web`, `keyboard`, `terminal`) |
+| `max_speed_forward` / `max_speed_reverse` | number | authority ceiling, m/s (§6.3.1) |
+| `max_steering_angle` | number | authority ceiling, rad |
+| `max_brake_accel` | number | authority ceiling, m/s² |
 | `test_mode` | string | manual/auto/sim/mtr_only/ses_only/seb_only |
 | `bridge_params` | object | enable_mtr/ses/seb, sim_mode, diag, limits |
 | `mode_cycle` / `toggle_auto` / `reset_pose` / `estop` | int | monotonic counters |
@@ -329,25 +445,42 @@ absent topics show a greyed "no data".
 | `shift.{shift_state,pending_gear}` | gear shift progress |
 | `test_mode` | active profile |
 | `watchdog_tripped`, `info`, `timestamp` | safety + status |
+| `vehicle.*freshness` / `age_ms` | per-value `live/late/missing/invalid` + numeric age (§6.7) |
+| `simulated` | bool — synthetic report provenance (SIM badge) |
+| `requested.{speed,steer,gear}` | commanded target for cmd-vs-fbk split (§7.0) |
+| `stream.{sequence,heartbeat_ok}` | WS sequence + liveness (heartbeat) |
 
 ## 11. Safety
 
 - **Control lock** — explicit engage gates all command output; a LOCKED overlay
-  shows in the UI. On signal loss, the lock engages automatically.
+  shows in the UI. **Enforced at the node**, not only in the browser (§6.3).
+- **Authority limits** — operator-set speed/steer/brake ceiling clamped in
+  `make_control()`, never above firmware max (§6.3.1).
+- **Stale-sequence rejection** — one active producer; regressed/duplicate intents
+  ignored (§6.3.2).
+- **Explicit safe frame on loss** — browser disconnect/tab-hide triggers an
+  immediate zero/neutral/brake frame, not just the deadman timeout (§6.3.2).
 - **Deadman watchdog** — `arrival_timeout_ms`; brakes on timeout.
 - **Emergency stop** — independent of mode; max braking + heartbeat stop on Path B.
 - **Lifecycle** — commands only emitted while active.
-- **Sim mode** — synthetic reports only; no real command output.
+- **Sim mode** — synthetic reports only; no real command output; SIM badge.
 - **Rate limits** — clamped to vehicle limits (E-Trike: ±3.0 m/s, ±0.747 rad).
 
 ## 12. Testing Strategy
 
 - **Node unit tests** — gtest with mock gateway; verify lock, watchdog, estop,
-  mode transitions, sim reports.
+  mode transitions, sim reports. Extend for: **node-enforced lock/input-mode**,
+  **authority-limit clamp**, **stale-sequence rejection**, **explicit safe-frame
+  on release**.
 - **Web tests** — pytest for schemas (Zod↔Pydantic parity) + WS intent→publish.
-- **Frontend tests** — Vitest + RTL for console/dashboard; Playwright e2e.
+  Extend for: telemetry payload build (freshness/age/simulated), heartbeat +
+  sequence, typed error envelope.
+- **Frontend tests** — Vitest + RTL for console/dashboard (authority-limit
+  sliders, cmd-vs-fbk readout, SIM badge, freshness states); Playwright e2e.
 - **Integration** — node + web + UI on `vcan1` with `ecu_sim.py` (or sim mode);
-  WebSocket smoke via curl/websocat.
+  WebSocket smoke via curl/websocat. Verify: browser disconnect → node publishes
+  explicit safe frame; sim reports labeled; stale slider cannot drive in keyboard
+  mode.
 
 ## 13. Out of Scope (Restated)
 
