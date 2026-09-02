@@ -5,10 +5,15 @@
 `autoware_teleop` is a standalone, community-oriented teleoperation extension for
 **Autoware Universe**. It lets an operator drive an Autoware vehicle from a
 terminal, a browser dashboard, or a gamepad, injecting manual control commands
-and rendering live vehicle telemetry.
+and rendering live vehicle telemetry from the topics Autoware actually exposes.
 
-It is designed as an independent Autoware Universe extension, decoupled from any
-specific vehicle hardware. It supports two integration paths into Autoware:
+The design is modeled on a proven reference: the LeadMate `robot_control`
+dashboard (PySide6 + ROS2) which drives a standard `cmd_vel` robot with a rich
+dashboard. Here the command surface is **Autoware's** vehicle interface, so the
+console and dashboard are built around the topics Autoware Universe provides.
+
+It is an independent Autoware Universe extension, decoupled from specific vehicle
+hardware. It supports two integration paths:
 
 - **Direct vehicle interface** — publishes `/control/command/*` and reads
   `/vehicle/status/*` (used by our E-Trike `autoware_vehicle_bridge` and
@@ -23,223 +28,330 @@ specific vehicle hardware. It supports two integration paths into Autoware:
 
 - A transport-blind manual-control core with pluggable intent sources and
   telemetry sinks.
-- A keyboard (terminal) intent source and a WebSocket intent source.
-- A terminal console telemetry sink and a WebSocket telemetry sink.
+- A keyboard intent source (browser and terminal) with WASD-style control and
+  **hold-to-move** semantics.
+- A **motor/control lock** (deadman + explicit engage) that visually locks the
+  console when disabled — the same pattern as the reference's `LOCKED` overlay.
+- A web console and a feedback dashboard that visualize the Autoware topics.
 - Two Autoware gateways: `direct` and `adapi`.
-- Safety: deadman watchdog, emergency stop, operator heartbeat.
-- A FastAPI web backend exposing the WebSocket schema and serving the React UI.
-- A React frontend (game-console controls + feedback dashboard).
+- Safety: deadman watchdog, emergency stop, operator heartbeat, control lock.
+- A FastAPI web backend (WS bridge) and a React frontend.
+- A **self-contained sim/bench mode** so the UI works with no hardware or bridge.
 
 ### 2.2 Out of Scope
 
-- Vehicle-specific mappings (E-Trike, other OEMs).
+- Vehicle-specific hardware mappings (E-Trike-specific, other OEMs).
 - Perception, planning, or mapping integration.
 - Localization seed / route planning (unless trivial hooks).
-- Production-grade autonomous operation; this is a manual-operator tool.
+- Production autonomous operation; this is a manual operator tool.
 
 ## 3. Design Principles
 
-1. **Transport-blind core.** The control loop depends only on an *intent
-   source* and a *telemetry sink*, behind an `AutowareGateway`. Keyboard,
-   WebSocket, and Zenoh are all pluggable I/O; adding a new front-end never
-   touches the control logic.
+1. **Transport-blind core.** The control loop depends only on an *intent source*
+   and a *telemetry sink*, behind an `AutowareGateway`. Keyboard, WebSocket, and
+   Zenoh are pluggable I/O.
 2. **Gateway seam.** The `AutowareGateway` abstracts how commands reach Autoware.
    `direct` targets `/control/command/*`; `adapi` targets `/external/selected/*`
-   plus operation-mode services. Selected by a ROS parameter, default `direct`.
-3. **Safety first.** A deadman watchdog brakes when no fresh intent arrives
-   within `arrival_timeout_ms`. Emergency stop is independent of the active
-   drive mode. The `adapi` path additionally relies on Autoware's own gate and
-   heartbeat enforcement.
-4. **Frontend is ROS-free.** The React UI talks only to the FastAPI WebSocket
-   schema (throttle/brake/steer/gear/estop intents + telemetry), never to ROS
-   topics directly. This keeps the UI testable and reusable.
-5. **Headless operation.** The node runs standalone via `ros2 run` with ROS
-   params and CLI flags, so shell scripts and CI can exercise it without the web
-   stack.
+   plus operation-mode services. Selected by a ROS parameter.
+3. **Safety first.** A deadman watchdog brakes when no fresh intent arrives within
+   `arrival_timeout_ms`. A **control lock** (engage/motor-enable) visually and
+   functionally gates all command output — the operator must unlock before the
+   vehicle moves, mirroring the reference's `LOCKED` overlay + `motor_enable`.
+4. **Autoware topics drive the dashboard.** Every dashboard panel maps 1:1 to an
+   Autoware Universe topic/message. No fabricated data in production mode.
+5. **Sim mode for development.** When `test_mode=sim`, the node synthesizes
+   `/vehicle/status/*` reports from its own commanded values (like the reference's
+   SIM source), so the UI is fully demonstrable without a bridge or hardware.
+6. **Frontend is ROS-free.** The React UI talks only to the FastAPI WebSocket
+   schema; it never touches ROS topics directly.
+7. **Headless operation.** The node runs standalone via `ros2 run` + params.
 
-## 4. Repository Layout
+## 4. Autoware Topic Surface (what the console/dashboard use)
+
+The console and dashboard are built directly from the Autoware Universe message
+packages present in this workspace (`autoware_vehicle_msgs`,
+`tier4_vehicle_msgs`, `autoware_control_msgs`, `autoware_adapi_v1_msgs`).
+
+### 4.1 Command topics (console output)
+
+| Topic | Type | Control |
+|---|---|---|
+| `/control/command/control_cmd` | `autoware_control_msgs/msg/Control` | throttle (velocity), brake (acceleration), steering |
+| `/control/command/gear_cmd` | `autoware_vehicle_msgs/msg/GearCommand` | PARK / DRIVE / REVERSE / NEUTRAL |
+| `/control/command/turn_indicators_cmd` | `autoware_vehicle_msgs/msg/TurnIndicatorsCommand` | left / right |
+| `/control/command/hazard_lights_cmd` | `autoware_vehicle_msgs/msg/HazardLightsCommand` | hazard on/off |
+| `/control/command/emergency_cmd` | `tier4_vehicle_msgs/msg/VehicleEmergencyStamped` | emergency stop |
+| (ADAPI) `/external/selected/*` | various | external-command path |
+| (ADAPI) `/api/operation_mode/change_to_*` | service | STOP / AUTO / REMOTE / LOCAL |
+| (ADAPI) `/api/operation_mode/enable_autoware_control` | service | engage |
+
+### 4.2 Status topics (dashboard input)
+
+| Topic | Type | Dashboard panel |
+|---|---|---|
+| `/vehicle/status/velocity_status` | `VelocityReport` | speedometer |
+| `/vehicle/status/steering_status` | `SteeringReport` | steering gauge |
+| `/vehicle/status/gear_status` | `GearReport` | gear lamp |
+| `/vehicle/status/turn_indicators_status` | `TurnIndicatorsReport` | turn lamps |
+| `/vehicle/status/hazard_lights_status` | `HazardLightsReport` | hazard lamp |
+| `/vehicle/status/control_mode` | `ControlModeReport` | mode indicator |
+| `/vehicle/status/actuation_status` | `ActuationStatusStamped` | accel/brake/steer effort |
+| `/vehicle/status/battery_charge` | `tier4_vehicle_msgs/BatteryStatus` | battery |
+| `/api/operation_mode/state` | `OperationModeState` | operation-mode lamp |
+| `~/output/diagnostics` | `DiagnosticArray` | diagnostic strip |
+
+The **E-Trike bridges** currently publish a subset (velocity/steering/gear/turn/
+hazard/control_mode/diagnostics). The dashboard degrades gracefully: panels whose
+topic is absent show a greyed "no data" state.
+
+## 5. Repository Layout
 
 ```
 autoware_teleop/                      # standalone extension repo
 ├── teleop-architecture.md
 ├── work-plan.md
 ├── README.md
+├── autoware_teleop_msgs/             # Intent message package
 ├── autoware_teleop/                  # ROS 2 rclcpp lifecycle node
-│   ├── package.xml
-│   ├── CMakeLists.txt
+│   ├── package.xml  CMakeLists.txt
 │   ├── include/autoware_teleop/
-│   │   ├── node.hpp                 # LifecycleNode
-│   │   ├── intent/
-│   │   │   ├── intent_source.hpp    # ABC
-│   │   │   ├── keyboard.hpp         # curses stdin (WASD/Space/Gear/E)
+│   │   ├── node.hpp                 # LifecycleNode (single control authority)
+│   │   ├── intent/                  # intent sources
+│   │   │   ├── keyboard.hpp         # browser keyboard (WS) + terminal
 │   │   │   └── websocket.hpp        # remote intent from FastAPI
-│   │   ├── telemetry/
-│   │   │   ├── telemetry_sink.hpp   # ABC
+│   │   ├── telemetry/               # telemetry sinks
 │   │   │   ├── console.hpp          # terminal render
 │   │   │   └── websocket.hpp        # outbound telemetry
 │   │   ├── gateway/
-│   │   │   ├── autoware_gateway.hpp # ABC
-│   │   │   ├── direct.hpp           # Path A
-│   │   │   └── adapi.hpp            # Path B
+│   │   │   ├── direct.hpp           # /control/command/* + /vehicle/status/*
+│   │   │   └── adapi.hpp            # /external/selected/* + op-mode
 │   │   └── core/
-│   │       ├── control_loop.hpp     # mode plugins, rate
+│   │       ├── control_loop.hpp     # 10 Hz loop, mode plugins
 │   │       ├── modes.hpp            # stop / physics / cruise
-│   │       └── watchdog.hpp         # deadman
+│   │       ├── watchdog.hpp         # deadman
+│   │       └── lock.hpp             # control lock (engage/motor-enable)
 │   ├── src/
 │   ├── config/teleop.yaml
 │   ├── launch/teleop.launch.xml
-│   └── test/                        # pytest / gtest with mock gateway
+│   └── test/
 ├── autoware_teleop_web/             # FastAPI backend (thin WS bridge)
 │   ├── pyproject.toml
-│   ├── app/
-│   │   ├── main.py                  # FastAPI app, static SPA, /ws
-│   │   ├── schemas.py               # Pydantic intent/telemetry
-│   │   ├── ws.py                    # WebSocket endpoint
-│   │   └── ros_bridge.py            # rclpy (optional; or proxy to node)
+│   ├── app/main.py  schemas.py  ros_bridge.py
 │   └── test/
-├── autoware_teleop_ui/              # React frontend (served by FastAPI)
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.ts
+├── autoware_teleop_ui/              # React frontend
+│   ├── package.json  vite.config.ts
 │   ├── src/
-│   │   ├── components/              # console, gauges, dashboard
-│   │   ├── stores/                  # zustand
-│   │   └── lib/                     # ws client, zod schemas
-│   └── tests/                       # Vitest, RTL, Playwright
+│   │   ├── components/  (Console, Dashboard, ...)
+│   │   ├── stores/  lib/
+│   └── tests/
 └── docs/
 ```
 
-## 5. Components
+## 6. Components
 
-### 5.1 ROS 2 Node (`autoware_teleop`)
+### 6.1 ROS 2 Node (`autoware_teleop`)
 
-A `rclcpp::lifecycle::LifecycleNode` with a deterministic lifecycle:
+`rclcpp::lifecycle::LifecycleNode`. The **single authority** publishing
+`/control/command/*`. Lifecycle:
 
-- **on_configure** — load params, build the selected gateway and intent/telemetry
-  plugins, validate configuration.
-- **on_activate** — start the control loop and any socket/console threads.
-- **on_deactivate** — stop the loop, release the operator (safe state).
-- **on_cleanup / on_shutdown** — tear down.
+- **on_configure** — load params, build gateway + intent/telemetry plugins.
+- **on_activate** — start control loop, telemetry, lock armed/required.
+- **on_deactivate** — stop loop, release to safe state.
+- **on_cleanup / on_shutdown** — teardown.
 
-The control loop runs at a configurable rate (default 10 Hz, matching Autoware's
-`vehicle_cmd_gate` `update_rate`).
+Control loop at 10 Hz (matches `vehicle_cmd_gate` `update_rate`).
 
-### 5.2 Intent Sources
+### 6.2 Intent Sources
 
-- **keyboard** — curses-based terminal reader: `W`/`S` throttle, `A`/`D` steer,
-  `Space` brake, `X`/`C`/`V` gear (Drive/Reverse/Park), `Z` toggle auto/remote,
-  `R` seed pose, `E` emergency stop, `Q` quit.
-- **websocket** — receives JSON intent objects from the FastAPI bridge.
+- **keyboard (browser)** — WASD + Space + gear keys over WS. Hold-to-move:
+  keys are tracked as held/not-held, command ramps up while held and decays on
+  release (reference `send_commands` behavior).
+- **keyboard (terminal)** — curses reader, same keymap.
+- **websocket** — JSON intent from FastAPI (includes keyboard events + sliders).
 
-### 5.3 Telemetry Sinks
+### 6.3 Control Lock
 
-- **console** — terminal render of live operation mode, gear, real/target speed,
-  steering, CAN/estop state.
-- **websocket** — publishes JSON telemetry to the FastAPI bridge for the browser.
+Mirrors the reference's `motor_enable` + `LOCKED` overlay:
 
-### 5.4 Autoware Gateways
+- A `locked` boolean gates all command output. When locked, the node publishes
+  zero velocity / neutral gear and the UI shows a **LOCKED** overlay over the
+  console (greyed sliders, disabled buttons).
+- Unlock requires an explicit **ENGAGE** (or `motor_enable` equivalent). On the
+  ADAPI path, engage maps to `enable_autoware_control`.
+- **Signal watchdog**: if telemetry stops for `signal_loss_timeout`, the lock
+  engages automatically (reference's "commands lock if telemetry stops").
+
+### 6.4 Telemetry Sinks
+
+- **console** — terminal render of operation mode, gear, speed, steer, estop,
+  lock state, diagnostics.
+- **websocket** — JSON telemetry to the browser.
+
+### 6.5 Autoware Gateways
 
 **`direct` gateway (Path A):**
-- Publishes `/control/command/control_cmd`, `/control/command/gear_cmd`,
-  `/control/command/emergency_cmd`.
-- Subscribes `/vehicle/status/{velocity,steering,gear}_status`.
+- Publishes `/control/command/{control_cmd,gear_cmd,emergency_cmd}` (+ turn/
+  hazard on the production bridge).
+- Subscribes `/vehicle/status/{velocity,steering,gear,turn_indicators,hazard,
+  control_mode}_status` + `~/output/diagnostics`.
 - QoS: commands `QoS(1).reliable()` VOLATILE; reports `QoS(1)`.
-- This is the path our E-Trike bridges consume.
 
 **`adapi` gateway (Path B):**
-- Publishes `/external/selected/control_cmd`, `/external/selected/gear_cmd`,
-  `/external/selected/heartbeat`.
-- Calls `/api/operation_mode/change_to_stop`, `/change_to_remote`,
-  `/change_to_local` (whichever `operator_mode` selects).
+- Publishes `/external/selected/*`; calls `/api/operation_mode/change_to_*`.
 - Subscribes `/api/operation_mode/state`.
-- Relies on `autoware_vehicle_cmd_gate` (remaps `input/external/*`) for STOP /
-  engage / heartbeat enforcement.
+- Relies on `vehicle_cmd_gate` for STOP/engage/heartbeat enforcement.
 
-### 5.5 Control Core
+### 6.6 Sim Mode
 
-- **modes**: `stop` (required initial + emergency mode, max braking), `physics`
-  (inertia/friction, steering auto-center), `cruise` (target-speed snap/ramp,
-  steering hold). Mode plugins are config-selected.
-- **watchdog**: if no fresh intent within `arrival_timeout_ms` (default 500 ms),
-  deadman-brakes until input resumes. Prevents a stale/disconnected client from
-  leaving the vehicle driving.
+When `test_mode=sim`, the node publishes synthetic `/vehicle/status/*` reports
+derived from its own commanded velocity/steer/gear (like the reference SIM
+source). This makes the dashboard show live movement from UI sliders with **no
+bridge and no hardware** — the primary development/demo path.
 
-## 6. Data Flow
+## 7. Console (React UI)
+
+The console is the control surface, modeled on the reference's keypad + lock.
 
 ```
- Browser (React) ──WS──▶ FastAPI (schemas) ──▶ autoware_teleop (intent.websocket)
-   │                                          │
-   │                                          ▼  core control loop
-   │                                          │
-   │                                          ▼  gateway (direct | adapi)
-   │                                          ▼
-   │                               /control/command/*  or  /external/selected/*
-   │                                          │
-   │  telemetry ◀── WS ◀── telemetry.websocket ◀── /vehicle/status/* ◀─────────┘
-   │
- Curses keyboard ───────────────▶ intent.keyboard (same core)
+┌──────────────────────────────────────────────┐
+│ OPERATION [STOP|AUTO|LOCAL|REMOTE]  MANUAL    │
+│            [PEDALS|ACCEL|VELOCITY]            │
+│ [ENGAGE/LOCK]          [ESTOP]                │
+│ ┌──────────────────────────────────────────┐  │
+│ │        LOCKED  (overlay when locked)     │  │
+│ │  THROTTLE ────────────●─────             │  │
+│ │  BRAKE    ─────────────●────             │  │
+│ │  STEER    ──────●─────────────           │  │
+│ │  [D] [R] [N]  TURN[L|R]  HAZARD          │  │
+│ └──────────────────────────────────────────┘  │
+│ TEST MODE [manual|auto|sim|mtr|ses|seb]       │
+│   MTR[✓] SES[✓] SEB[✓] auto[✓] sim[ ] diag[ ]│
+└──────────────────────────────────────────────┘
 ```
 
-The same control loop consumes intents from any source; the gateway determines
-the Autoware transport. This is the "two axes" model from the reference
-`autoware_manual_control` project, adapted for a web-first operator.
+### 7.1 Keyboard map (browser focus on console)
 
-## 7. Interfaces
+| Key | Action |
+|---|---|
+| `W`/`S` | throttle up/down (hold to ramp) |
+| `A`/`D` | steer left/right (hold) |
+| `Space` | brake (hold) / ESTOP toggle |
+| `X`/`C`/`V` | gear DRIVE / REVERSE / PARK |
+| `E` | engage/lock toggle |
+| `M` | cycle drive mode |
+| `F` | hazard toggle |
 
-### 7.1 WebSocket Schema (FastAPI ↔ browser)
+Keys are tracked as held (`keys[w]=true`) and command ramps/decays like the
+reference `send_commands`.
 
-**Intent (client → node), one object per control tick:**
+## 8. Dashboard (React UI)
+
+The dashboard visualizes the Autoware status topics. Panels map 1:1 to topics;
+absent topics show a greyed "no data".
+
+```
+┌────────────────────────────────────────────────┐
+│  SPEED  │  STEER  │  GEAR  │  MODE │  TEST     │
+│  1.2m/s │ -0.3rad │  DRIVE │ REMOTE│  auto     │
+│  ──●──  │  ──●──  │   D    │   R  │           │
+├────────────────────────────────────────────────┤
+│  TURN [L|R]  HAZARD   DIAG: [CAN][heartbeat]    │
+│  ●  ○        ●        [estop][mode][timeout]    │
+├────────────────────────────────────────────────┤
+│  OPERATION MODE  manual control  drive mode     │
+│  velocity  target  accel  target  steer target  │
+│  bridge params: MTR✓ SES✓ SEB✓ auto✓ sim□ diag□ │
+└────────────────────────────────────────────────┘
+```
+
+### 8.1 Panels
+
+| Panel | Source topic | Note |
+|---|---|---|
+| Speedometer | `/vehicle/status/velocity_status` | needle + digital |
+| Steering gauge | `/vehicle/status/steering_status` | center needle |
+| Gear lamp | `/vehicle/status/gear_status` | D/R/N/P |
+| Turn lamps | `/vehicle/status/turn_indicators_status` | left/right |
+| Hazard lamp | `/vehicle/status/hazard_lights_status` | |
+| Operation mode | `/api/operation_mode/state` | STOP/AUTO/REMOTE/LOCAL |
+| Manual control | node-derived | PEDALS/ACCEL/VELOCITY |
+| Diagnostics | `~/output/diagnostics` | strip of key diag values |
+| Target/effort | node-derived / `/vehicle/status/actuation_status` | commanded vs actual |
+| Bridge params | node-derived | live test-mode/param readout |
+
+### 8.2 Screen-fit
+
+- **Single-page, fixed grid** (max ~1280×800), no vertical scroll for the core
+  console + dashboard.
+- **Responsive**: on narrow screens the dashboard stacks under the console; on
+  wide screens it sits side-by-side.
+- All widgets are compact (small text, tight spacing) so the full surface fits
+  one viewport — the same intent as the reference's single-window dashboard.
+
+## 9. Data Flow
+
+```
+ Browser (React) ──WS──▶ FastAPI (schemas) ──▶ autoware_teleop (node)
+   │                       │                    │
+   │  console intents ─────┘                    ▼  core loop + lock + deadman
+   │                                            ▼  gateway (direct | adapi)
+   │                                   /control/command/*  or  /external/*
+   │                                            │
+   │  dashboard ◀── WS telemetry ◀── /vehicle/status/*  ◀─┘
+   │  (speed/steer/gear/turn/mode/diag)          │
+   │                          ◀── sim reports (test_mode=sim)
+```
+
+## 10. WebSocket Schema (FastAPI ↔ browser)
+
+### Intent (client → node)
 
 | Field | Type | Meaning |
 |---|---|---|
-| `throttle` / `brake` / `steer` | number | drive axes (−1..1 or normalized) |
-| `gear` | string | `PARK`, `DRIVE`, `REVERSE` |
-| `mode_cycle` / `toggle_auto` / `reset_pose` / `estop` | integer | monotonic counters; increment to trigger |
+| `throttle` / `brake` / `steer` | number | drive axes (−1..1) |
+| `gear` | string | PARK/DRIVE/REVERSE/NEUTRAL |
+| `turn_indicator` | string | NONE/LEFT/RIGHT |
+| `hazard` | bool | hazard on/off |
+| `operation_mode` | string | STOP/AUTO/LOCAL/REMOTE |
+| `manual_control_mode` | string | PEDALS/ACCELERATION/VELOCITY |
+| `engage` | bool | control lock |
+| `test_mode` | string | manual/auto/sim/mtr_only/ses_only/seb_only |
+| `bridge_params` | object | enable_mtr/ses/seb, sim_mode, diag, limits |
+| `mode_cycle` / `toggle_auto` / `reset_pose` / `estop` | int | monotonic counters |
 
-**Telemetry (node → client), every control tick:**
+### Telemetry (node → client)
 
 | Field | Meaning |
 |---|---|
-| `operation_mode` / `mode` / `mode_status` | operation mode, active drive mode, status |
-| `velocity` / `steer_angle` / `gear` | live vehicle state |
-| `target_velocity` / `target_acceleration` / `target_steer` | commanded values |
-| `shift_state` / `pending_gear` | gear-shift progress |
-| `info` | human-readable status / last error |
-| `watchdog_tripped` | deadman state |
-| `timestamp` | publish time (ms) |
+| `mode.{operation_mode,manual_control_mode,drive_mode,mode_status}` | modes |
+| `vehicle.{velocity,steer_angle,gear,turn_indicator,hazard}` | live state |
+| `target.{target_velocity,target_acceleration,target_steer}` | commanded |
+| `shift.{shift_state,pending_gear}` | gear shift progress |
+| `test_mode` | active profile |
+| `watchdog_tripped`, `info`, `timestamp` | safety + status |
 
-### 7.2 ROS Interfaces
+## 11. Safety
 
-See gateway sections above. The node exposes the standard Autoware vehicle
-interface topics, so it integrates with any compliant vehicle interface or the
-canonical external-command path.
+- **Control lock** — explicit engage gates all command output; a LOCKED overlay
+  shows in the UI. On signal loss, the lock engages automatically.
+- **Deadman watchdog** — `arrival_timeout_ms`; brakes on timeout.
+- **Emergency stop** — independent of mode; max braking + heartbeat stop on Path B.
+- **Lifecycle** — commands only emitted while active.
+- **Sim mode** — synthetic reports only; no real command output.
+- **Rate limits** — clamped to vehicle limits (E-Trike: ±3.0 m/s, ±0.747 rad).
 
-## 8. Safety
+## 12. Testing Strategy
 
-- **Deadman watchdog** — configurable `arrival_timeout_ms`; brakes on timeout.
-- **Emergency stop** — independent of drive mode; commands max braking (and, on
-  Path B, heartbeat stop).
-- **Lifecycle** — commands are only emitted while active; deactivation returns to
-  a safe state.
-- **Path B gate safety** — Autoware's `vehicle_cmd_gate` enforces STOP / engage /
-  heartbeat; the teleop node supplies the heartbeat it requires.
-- **Rate limits** — speed/accel/steering clamped by mode config, matching vehicle
-  limits (E-Trike: ±3.0 m/s, ±0.747 rad).
+- **Node unit tests** — gtest with mock gateway; verify lock, watchdog, estop,
+  mode transitions, sim reports.
+- **Web tests** — pytest for schemas (Zod↔Pydantic parity) + WS intent→publish.
+- **Frontend tests** — Vitest + RTL for console/dashboard; Playwright e2e.
+- **Integration** — node + web + UI on `vcan1` with `ecu_sim.py` (or sim mode);
+  WebSocket smoke via curl/websocat.
 
-## 9. Testing Strategy
+## 13. Out of Scope (Restated)
 
-- **Node unit tests** — gtest/pytest with a mock `AutowareGateway` and mock
-  intent sources; verify mode transitions, watchdog, estop, gear shift.
-- **Web backend tests** — pytest for the FastAPI bridge: validate schemas (Zod↔
-  Pydantic parity), WS intent→publish, telemetry→WS.
-- **Frontend tests** — Vitest + React Testing Library for components; Playwright
-  for end-to-end browser flows.
-- **Integration** — `ros2 run autoware_teleop` with `vcan1` + `ecu_sim.py`
-  against both bridges; WebSocket smoke test via curl/websocat.
-
-## 10. Out of Scope (Restated)
-
-- Vehicle-specific calibration and hardware mappings.
-- Perception / planning / mapping.
-- Production autonomous driving; this is a manual operator tool.
-- Zenoh transport (future axis; noted in the reference project).
+- Vehicle-specific hardware mappings.
+- Perception / planning / mapping integration.
+- Production autonomous operation; this is a manual operator tool.
+- Zenoh transport (future axis).

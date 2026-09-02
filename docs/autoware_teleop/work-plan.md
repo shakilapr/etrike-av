@@ -14,20 +14,24 @@ ADAPI external-command path.
   fits the existing kinect/web tooling.
 - **Architecture**: transport-blind core (pluggable intent/telemetry) behind an
   `AutowareGateway` seam (see `teleop-architecture.md`).
-- **Safety**: deadman watchdog, emergency stop, lifecycle-managed command
-  emission, operator heartbeat on the ADAPI path.
+- **Safety**: deadman watchdog, control lock (engage), emergency stop,
+  lifecycle-managed command emission, operator heartbeat on the ADAPI path.
+- **Autoware-topic-driven UI**: every dashboard panel maps to an Autoware
+  Universe status topic; absent topics degrade gracefully.
+- **Sim mode**: `test_mode=sim` synthesizes reports so the UI is demonstrable
+  with no bridge/hardware.
 - **LLM/test-script friendly**: typed schemas, headless node operation via
-  `ros2 run` + ROS params, one-command launch, easy `ros2 topic pub` / curl
-  smoke tests.
+  `ros2 run` + ROS params, easy `ros2 topic pub` / curl smoke tests.
 - **Docs live in** `docs/autoware_teleop/` (this repo tracks docs).
 
 ## 3. Deliverables
 
 | Deliverable | Description |
 |---|---|
-| `autoware_teleop` (ROS node) | rclcpp lifecycle node, control core, gateways, intent/telemetry plugins |
+| `autoware_teleop` (ROS node) | rclcpp lifecycle node, control core, gateways, lock, intent/telemetry plugins |
+| `autoware_teleop_msgs` | Intent message package |
 | `autoware_teleop_web` (FastAPI) | WebSocket bridge + Pydantic schema + static SPA serving |
-| `autoware_teleop_ui` (React) | Game-console + dashboard frontend |
+| `autoware_teleop_ui` (React) | Console + Autoware-topic dashboard (screen-fit) |
 | `ecu_sim.py` | vcan ECU simulator for closed-loop bench without hardware |
 | Docs + CI | Architecture, work plan, lint/format/CI |
 
@@ -48,9 +52,9 @@ ADAPI external-command path.
 2. Implement `core/` control loop at 10 Hz with `stop` / `physics` / `cruise` modes.
 3. Implement `gateway/direct.hpp` publishing `/control/command/{control_cmd,
    gear_cmd, emergency_cmd}` and subscribing `/vehicle/status/*`.
-4. Implement `intent/keyboard.hpp` (curses) + `telemetry/console.hpp`.
-5. Implement `core/watchdog.hpp` (deadman) + estop.
-6. Unit tests with a mock gateway; verify mode transitions, watchdog, estop.
+4. Implement `core/lock.hpp` (control lock / engage) + `core/watchdog.hpp` + estop.
+5. Implement `test_mode=sim` report synthesis (synthetic `/vehicle/status/*`).
+6. Unit tests with a mock gateway; verify lock, watchdog, estop, sim mode.
 7. Integration on `vcan1` with `ecu_sim.py` and the E-Trike bridges.
 
 **Acceptance:** `ros2 run autoware_teleop` drives both E-Trike bridges on `vcan1`
@@ -72,13 +76,18 @@ pytest passes.
 ### P3 — React Frontend
 
 1. Vite + React + TypeScript + Tailwind v4 + shadcn/ui scaffold.
-2. Game-console controls: throttle/brake/steering sliders + keyboard, gear D/N/R,
-   emergency toggle.
-3. Dashboard: speedometer, steering gauge, gear lamp from telemetry.
-4. Zustand store + Zod validation of WS payloads.
-5. Vitest + React Testing Library unit tests; Playwright end-to-end.
+2. Console: throttle/brake/steering sliders + **keyboard (WASD hold-to-move)**,
+   gear D/N/R, turn/hazard, operation/manual/test mode toggles, **control lock
+   (ENGAGE)** with LOCKED overlay, ESTOP.
+3. Dashboard: **Autoware-topic panels** — speed, steering, gear, turn/hazard,
+   operation mode, diagnostics, bridge params; absent topics degrade gracefully.
+4. **Sim mode** integration so the dashboard shows live movement without a bridge.
+5. **Screen-fit** single-viewport layout (no vertical scroll on core surface).
+6. Zustand store + Zod validation of WS payloads.
+7. Vitest + React Testing Library unit tests; Playwright end-to-end.
 
-**Acceptance:** browser UI drives the node and renders live telemetry; tests pass.
+**Acceptance:** browser UI drives the node (keyboard + sliders), renders live
+Autoware telemetry, shows LOCKED state, fits one screen; tests pass.
 
 ### P4 — ADAPI Path B (upstream-ready)
 
