@@ -3,6 +3,10 @@
 How to launch the **E-Trike Autoware Universe** planning simulation with RViz on
 the Jetson's physical display (`DISPLAY=:1`).
 
+> **For the full stack run (Autoware Universe + CANable USB-CAN + bridge in sim
+> mode), use the consolidated guide: [`docs/operations/ETRIKE_RUN.md`](ETRIKE_RUN.md).**
+> This page is the focused Autoware-Universe-on-monitor walkthrough.
+
 This is the documented E-Trike run
 (`docs/operations/ETRIKE_RUN.md`): `planning_simulator.launch.xml` with
 `vehicle_model:=etrike_vehicle sensor_model:=etrike_sensor_kit`. It is the
