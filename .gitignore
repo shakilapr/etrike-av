@@ -1,5 +1,7 @@
 /autoware/src/*
 !/autoware/src/our_packages/
+!/autoware/src/extensions/
+!/autoware/src/extensions/autoware_teleop/
 /autoware/build/
 /autoware/install/
 /autoware/log/
