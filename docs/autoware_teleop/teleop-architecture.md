@@ -121,6 +121,35 @@ The **E-Trike bridges** currently publish a subset (velocity/steering/gear/turn/
 hazard/control_mode/diagnostics). The dashboard degrades gracefully: panels whose
 topic is absent show a greyed "no data" state.
 
+### 4.3 Operation modes & Autoware conflict detection
+
+The console's operation mode is a **requested** intent with **node-enforced**
+behavior. The vehicle's *actual* authority comes from `/vehicle/status/control_mode`
+(`autoware_vehicle_msgs/msg/ControlModeReport`, published by the E-Trike bridge
+from RT ECU state) — the codebase's authoritative "who is driving" signal.
+
+| Requested mode | Meaning | Node `/control/command` behavior | Vehicle actual check |
+|---|---|---|---|
+| `STOP` | Safe stopped | publishes safe-control + neutral gear | — |
+| `FULL` | Autoware Universe drives; viewing only | command publishers **deactivated** (node leaves the topic graph) | expect `AUTONOMOUS`; else show "awaiting AUTO" |
+| `SIM` | Autoware sim (no hardware sensors); viewing only | command publishers **deactivated** | — |
+| `REMOTE` | Teleop drives **only when ENGAGED** | outputs when engaged | red conflict if `AUTONOMOUS` + engaged; amber warning if `AUTONOMOUS` + disengaged |
+
+**Conflict rules** (computed from `ControlModeReport` feedback, not topic-graph
+heuristics):
+- **red conflict** — REMOTE + engaged while vehicle reports `AUTONOMOUS` (a real
+  drive-authority fight over `/control/command/*`);
+- **amber warning** — REMOTE + disengaged while vehicle is `AUTONOMOUS`
+  (engaging would conflict);
+- **auto confirmed** — FULL/SIM while vehicle is `AUTONOMOUS` (Autoware has the
+  vehicle; viewing only).
+
+Telemetry carries both the **requested** mode (`mode.operation_mode`) and the
+**actual** vehicle mode (`mode.actual_vehicle_mode`). The old ADAPI
+`AUTONOMOUS/LOCAL/REMOTE` operation-mode values are not used here; the manual
+control mode uses real `ManualControlMode` constants (`DISABLED=1, PEDALS=2,
+ACCELERATION=3, VELOCITY=4`).
+
 ## 5. Repository Layout
 
 ```
@@ -380,8 +409,8 @@ absent topics show a greyed "no data".
 | Gear lamp | `/vehicle/status/gear_status` | D/R/N/P |
 | Turn lamps | `/vehicle/status/turn_indicators_status` | left/right |
 | Hazard lamp | `/vehicle/status/hazard_lights_status` | |
-| Operation mode | `/api/operation_mode/state` | STOP/AUTO/REMOTE/LOCAL |
-| Manual control | node-derived | PEDALS/ACCEL/VELOCITY |
+| Operation mode | requested intent (`operation_mode`) + `/vehicle/status/control_mode` | STOP/FULL/SIM/REMOTE requested → AUTO/MANUAL actual |
+| Manual control | node-derived | DISABLED/PEDALS/ACCEL/VELOCITY |
 | Diagnostics | `~/output/diagnostics` | strip of key diag values |
 | Target/effort | node-derived / `/vehicle/status/actuation_status` | commanded vs actual |
 | **Cmd vs fbk** | node-derived | paired rows — `cmd` target beside measured `fbk`, with freshness + age (§7.0) |
@@ -422,8 +451,8 @@ absent topics show a greyed "no data".
 | `gear` | string | PARK/DRIVE/REVERSE/NEUTRAL |
 | `turn_indicator` | string | NONE/LEFT/RIGHT |
 | `hazard` | bool | hazard on/off |
-| `operation_mode` | string | STOP/AUTO/LOCAL/REMOTE |
-| `manual_control_mode` | string | PEDALS/ACCELERATION/VELOCITY |
+| `operation_mode` | string | STOP/FULL/SIM/REMOTE — requested (§4.3) |
+| `manual_control_mode` | string | DISABLED/PEDALS/ACCELERATION/VELOCITY (real constants) |
 | `engage` | bool | control lock |
 | `input_mode` | string | `raw` \| `keyboard` — node-enforced (§6.3.3) |
 | `sequence` | int | monotonic, per source — stale/regressed rejected (§6.3.2) |
@@ -439,7 +468,8 @@ absent topics show a greyed "no data".
 
 | Field | Meaning |
 |---|---|
-| `mode.{operation_mode,manual_control_mode,drive_mode,mode_status}` | modes |
+| `mode.{operation_mode,actual_vehicle_mode,manual_control_mode,drive_mode,mode_status}` | modes — requested (`operation_mode`) vs vehicle actual (`actual_vehicle_mode`) |
+| `mode.{autoware_conflict,autoware_warning,autoware_auto_confirmed}` | bools — conflict/authority from `control_mode` feedback (§4.3) |
 | `vehicle.{velocity,steer_angle,gear,turn_indicator,hazard}` | live state |
 | `target.{target_velocity,target_acceleration,target_steer}` | commanded |
 | `shift.{shift_state,pending_gear}` | gear shift progress |
