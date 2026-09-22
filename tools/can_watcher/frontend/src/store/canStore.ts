@@ -15,6 +15,8 @@ interface CanState {
   filterAccess: 'all' | 'rx' | 'tx';
   filterBus: 'all' | 'high' | 'low';
   searchQuery: string;
+  zoomLevel: number;
+  zoomToast: string | null;
 
   // Actions
   setCatalog: (catalog: MessageDef[], source: string) => void;
@@ -24,6 +26,8 @@ interface CanState {
   setFilterAccess: (filter: 'all' | 'rx' | 'tx') => void;
   setFilterBus: (bus: 'all' | 'high' | 'low') => void;
   setSearchQuery: (query: string) => void;
+  setZoomLevel: (zoom: number | ((prev: number) => number)) => void;
+  setZoomToast: (toast: string | null) => void;
   initWebSocket: () => void;
 }
 
@@ -54,6 +58,15 @@ export const useCanStore = create<CanState>((set, get) => ({
   filterAccess: 'all',
   filterBus: 'all',
   searchQuery: '',
+  zoomLevel: (() => {
+    try {
+      const s = localStorage.getItem('can_watcher_zoom');
+      return s ? Math.min(Math.max(parseFloat(s), 0.6), 1.8) : 1.0;
+    } catch {
+      return 1.0;
+    }
+  })(),
+  zoomToast: null,
 
   setCatalog: (catalog, source) => {
     set({
@@ -71,6 +84,18 @@ export const useCanStore = create<CanState>((set, get) => ({
   setFilterAccess: (filterAccess) => set({ filterAccess }),
   setFilterBus: (filterBus) => set({ filterBus }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
+  setZoomLevel: (updater) => {
+    set((state) => {
+      const current = state.zoomLevel;
+      const next = typeof updater === 'function' ? updater(current) : updater;
+      const clamped = Math.round(Math.min(Math.max(next, 0.6), 1.8) * 100) / 100;
+      try {
+        localStorage.setItem('can_watcher_zoom', String(clamped));
+      } catch {}
+      return { zoomLevel: clamped, zoomToast: `${Math.round(clamped * 100)}%` };
+    });
+  },
+  setZoomToast: (zoomToast) => set({ zoomToast }),
 
   initWebSocket: () => {
     const isDev = window.location.port === '5173';

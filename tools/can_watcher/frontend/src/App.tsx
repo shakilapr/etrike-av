@@ -32,19 +32,62 @@ export const App: React.FC = () => {
     // 2. Initialize WebSocket stream
     initWebSocket();
 
-    // 3. Global hotkeys (Space to pause/freeze stream)
+    // 3. Global hotkeys (Space to pause, Ctrl +/-/0 to zoom)
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Space to toggle pause
       if (e.code === 'Space' && (e.target as HTMLElement).tagName !== 'INPUT') {
         e.preventDefault();
         togglePause();
+        return;
+      }
+
+      // Zoom Hotkeys: Ctrl + Plus / Ctrl + Minus / Ctrl + 0
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '=' || e.key === '+' || e.code === 'Equal' || e.code === 'NumpadAdd') {
+          e.preventDefault();
+          useCanStore.getState().setZoomLevel((z) => z + 0.1);
+        } else if (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract') {
+          e.preventDefault();
+          useCanStore.getState().setZoomLevel((z) => z - 0.1);
+        } else if (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') {
+          e.preventDefault();
+          useCanStore.getState().setZoomLevel(1.0);
+        }
       }
     };
+
+    // 4. Ctrl + MouseWheel Zoom
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.05 : -0.05;
+        useCanStore.getState().setZoomLevel((z) => z + delta);
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('wheel', handleWheel);
+    };
   }, [initWebSocket, setCatalog, togglePause]);
 
+  const { zoomLevel, zoomToast, setZoomToast } = useCanStore();
+
+  // Clear zoom toast after 1.5s
+  useEffect(() => {
+    if (zoomToast) {
+      const timer = setTimeout(() => setZoomToast(null), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [zoomToast, setZoomToast]);
+
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans select-none antialiased">
+    <div
+      className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans select-none antialiased relative"
+      style={{ zoom: zoomLevel } as React.CSSProperties}
+    >
       {/* Topbar */}
       <Topbar />
 
@@ -62,6 +105,14 @@ export const App: React.FC = () => {
           <SignalRoster />
         </div>
       </div>
+
+      {/* Floating Zoom Indicator Toast */}
+      {zoomToast && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900/95 text-cyan-300 font-mono text-xs px-3 py-1.5 rounded-lg border border-cyan-500/50 shadow-2xl flex items-center gap-2 pointer-events-none backdrop-blur animate-fade-in">
+          <span className="font-bold">Scale: {zoomToast}</span>
+          <span className="text-[10px] text-slate-400 font-sans">(Ctrl+0 resets)</span>
+        </div>
+      )}
     </div>
   );
 };

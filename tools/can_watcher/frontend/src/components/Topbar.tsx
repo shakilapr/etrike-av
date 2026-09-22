@@ -16,6 +16,8 @@ export const Topbar: React.FC = () => {
     setFilterBus,
     setSearchQuery,
     catalog,
+    zoomLevel,
+    setZoomLevel,
   } = useCanStore();
 
   const contractsDisplay = contractsSource.includes('contracts')
@@ -134,6 +136,34 @@ export const Topbar: React.FC = () => {
           {isPaused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
           <span>{isPaused ? 'RESUME' : 'FREEZE'}</span>
         </button>
+
+        {/* Zoom Controls (Ctrl + / Ctrl -) */}
+        <div
+          className="flex items-center rounded-md bg-slate-950 border border-slate-800 text-[11px] font-mono p-0.5"
+          title="UI Scale Zoom (Ctrl+ / Ctrl- / Ctrl+0)"
+        >
+          <button
+            onClick={() => setZoomLevel((z) => z - 0.1)}
+            className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors font-bold"
+            title="Zoom Out (Ctrl -)"
+          >
+            –
+          </button>
+          <button
+            onClick={() => setZoomLevel(1.0)}
+            className="px-1.5 h-6 flex items-center justify-center rounded text-slate-300 hover:text-cyan-300 text-[10px] font-bold transition-colors"
+            title="Reset Zoom to 100% (Ctrl 0)"
+          >
+            {Math.round(zoomLevel * 100)}%
+          </button>
+          <button
+            onClick={() => setZoomLevel((z) => z + 0.1)}
+            className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors font-bold"
+            title="Zoom In (Ctrl +)"
+          >
+            +
+          </button>
+        </div>
 
         {/* Frame Counter */}
         <div className="flex items-center gap-2 text-xs font-mono bg-slate-950 px-3 py-1 rounded-md border border-slate-800">
