@@ -85,7 +85,7 @@ export const App: React.FC = () => {
 
   return (
     <div
-      className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans select-none antialiased relative"
+      className="flex flex-col h-screen w-screen bg-black text-neutral-100 overflow-hidden font-sans select-none antialiased relative"
       style={{ zoom: zoomLevel } as React.CSSProperties}
     >
       {/* Topbar */}
@@ -100,7 +100,7 @@ export const App: React.FC = () => {
         <CanDirectoryTable />
 
         {/* Right Pane: 64-bit Payload Matrix & Signal Roster */}
-        <div className="w-[520px] flex flex-col min-h-0 border-l border-slate-800 shrink-0 bg-slate-950">
+        <div className="w-[520px] flex flex-col min-h-0 border-l border-neutral-800 shrink-0 bg-black">
           <BitMatrix64 />
           <SignalRoster />
         </div>
@@ -108,9 +108,9 @@ export const App: React.FC = () => {
 
       {/* Floating Zoom Indicator Toast */}
       {zoomToast && (
-        <div className="fixed bottom-5 right-5 z-50 bg-slate-900/95 text-cyan-300 font-mono text-xs px-3 py-1.5 rounded-lg border border-cyan-500/50 shadow-2xl flex items-center gap-2 pointer-events-none backdrop-blur animate-fade-in">
+        <div className="fixed bottom-5 right-5 z-50 bg-[#0d0d0d] text-cyan-300 font-mono text-xs px-3 py-1.5 rounded-lg border border-neutral-700 shadow-2xl flex items-center gap-2 pointer-events-none backdrop-blur animate-fade-in">
           <span className="font-bold">Scale: {zoomToast}</span>
-          <span className="text-[10px] text-slate-400 font-sans">(Ctrl+0 resets)</span>
+          <span className="text-[10px] text-neutral-400 font-sans">(Ctrl+0 resets)</span>
         </div>
       )}
     </div>

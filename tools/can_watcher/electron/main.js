@@ -111,13 +111,13 @@ async function ensureBackendRunning() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: 'CAN Watcher - E-Trike Telemetry & Bus Analyzer',
+    title: 'seer — e-trike av',
     width: 1560,
     height: 920,
     minWidth: 1200,
     minHeight: 700,
     center: true,
-    backgroundColor: '#020617',
+    backgroundColor: '#000000',
     show: true,
     autoHideMenuBar: false,
     webPreferences: {
@@ -167,12 +167,12 @@ function createWindow() {
           click: () => shell.openExternal(`${BACKEND_URL}/docs`),
         },
         {
-          label: 'About CAN Watcher',
+          label: 'About seer',
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: 'info',
-              title: 'About CAN Watcher',
-              message: 'CAN Watcher v2.0.0\nE-Trike AV Telemetry & Bus Protocol Analyzer',
+              title: 'seer',
+              message: 'seer — e-trike av\nEngineering CAN Bus & Telemetry Monitor',
               detail: 'Built with React 18, Vite, TypeScript, Tailwind CSS, Zustand, and Python FastAPI backend.',
             });
           },

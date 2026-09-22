@@ -100,7 +100,7 @@ export const CanDirectoryTable: React.FC = () => {
 
   const renderSortIndicator = (col: SortColumn) => {
     if (sortColumn !== col) {
-      return <span className="text-[8px] text-slate-600 ml-1">⇅</span>;
+      return <span className="text-[8px] text-neutral-600 ml-1">⇅</span>;
     }
     return (
       <span className="text-[9px] text-cyan-400 font-bold ml-1">
@@ -110,9 +110,9 @@ export const CanDirectoryTable: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-slate-950 border-r border-slate-800 h-full overflow-hidden">
+    <div className="flex-1 flex flex-col min-w-0 bg-black border-r border-neutral-800 h-full overflow-hidden">
       {/* Directory Table Header */}
-      <div className="h-8 bg-slate-900 border-b border-slate-800 px-3 flex items-center text-[10px] font-mono font-bold uppercase text-slate-300 select-none shrink-0 tracking-wider">
+      <div className="h-8 bg-[#0a0a0a] border-b border-neutral-800 px-3 flex items-center text-[10px] font-mono font-bold uppercase text-neutral-400 select-none shrink-0 tracking-wider">
         <div
           onClick={() => handleHeaderClick('access')}
           className="w-12 text-center cursor-pointer hover:text-cyan-300 flex items-center justify-center transition-colors"
@@ -173,9 +173,9 @@ export const CanDirectoryTable: React.FC = () => {
       </div>
 
       {/* Virtualized Rows */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto min-h-0 divide-y divide-slate-800/40">
+      <div ref={parentRef} className="flex-1 overflow-y-auto min-h-0 divide-y divide-neutral-900">
         {sortedMessages.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-xs font-mono text-slate-400">
+          <div className="h-48 flex items-center justify-center text-xs font-mono text-neutral-500">
             No CAN messages match the current filter
           </div>
         ) : (
@@ -222,8 +222,8 @@ export const CanDirectoryTable: React.FC = () => {
                   }}
                   className={`flex items-center px-3 text-xs font-mono cursor-pointer transition-colors border-l-4 ${
                     isSelected
-                      ? 'bg-cyan-950/60 text-slate-100 border-l-cyan-400 font-medium shadow-inner'
-                      : 'hover:bg-slate-900/70 text-slate-300 border-l-transparent'
+                      ? 'bg-[#141414] text-white border-l-cyan-400 font-medium'
+                      : 'hover:bg-[#0f0f0f] text-neutral-300 border-l-transparent'
                   }`}
                 >
                   {/* Access Badge */}
@@ -231,8 +231,8 @@ export const CanDirectoryTable: React.FC = () => {
                     <span
                       className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                         msg.access === 'RX'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                          : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
                       }`}
                     >
                       {msg.access}
@@ -241,16 +241,16 @@ export const CanDirectoryTable: React.FC = () => {
 
                   {/* CAN ID (Hex & Dec) */}
                   <div className="w-20 flex flex-col justify-center">
-                    <span className="font-bold text-slate-100 tracking-wide">{msg.id_hex}</span>
-                    <span className="text-[10px] text-slate-400">#{msg.id}</span>
+                    <span className="font-bold text-neutral-100 tracking-wide">{msg.id_hex}</span>
+                    <span className="text-[10px] text-neutral-500">#{msg.id}</span>
                   </div>
 
                   {/* Message Key & Topology */}
                   <div className="flex-1 min-w-[140px] truncate pr-2">
-                    <div className="truncate font-bold text-slate-100" title={msg.name}>
+                    <div className="truncate font-bold text-neutral-100" title={msg.name}>
                       {msg.key}
                     </div>
-                    <div className="text-[10px] text-slate-400 truncate">
+                    <div className="text-[10px] text-neutral-500 truncate">
                       {msg.sender} &rarr; {msg.receivers?.join(', ') || 'ALL'}
                     </div>
                   </div>
@@ -260,8 +260,8 @@ export const CanDirectoryTable: React.FC = () => {
                     <span
                       className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
                         msg.bus.toLowerCase() === 'high'
-                          ? 'bg-purple-950/80 text-purple-300 border border-purple-800'
-                          : 'bg-slate-800 text-slate-300 border border-slate-700'
+                          ? 'bg-purple-950/60 text-purple-300 border border-purple-800/60'
+                          : 'bg-neutral-900 text-neutral-300 border border-neutral-800'
                       }`}
                     >
                       {msg.bus.toUpperCase()}
@@ -269,7 +269,7 @@ export const CanDirectoryTable: React.FC = () => {
                   </div>
 
                   {/* Cycle Time */}
-                  <div className="w-14 text-right text-slate-300 text-[11px] tabular-nums font-semibold">
+                  <div className="w-14 text-right text-neutral-300 text-[11px] tabular-nums font-semibold">
                     {msg.cycle_ms ? `${msg.cycle_ms}ms` : '—'}
                   </div>
 
@@ -277,15 +277,15 @@ export const CanDirectoryTable: React.FC = () => {
                   <div className="w-14 text-right tabular-nums text-[11px]">
                     {frame && frame.rate_hz > 0 ? (
                       <span className="text-emerald-400 font-bold">
-                        {frame.rate_hz.toFixed(1)} <span className="text-[9px] text-slate-400 font-normal">Hz</span>
+                        {frame.rate_hz.toFixed(1)} <span className="text-[9px] text-neutral-500 font-normal">Hz</span>
                       </span>
                     ) : (
-                      <span className="text-slate-500">0.0</span>
+                      <span className="text-neutral-600">0.0</span>
                     )}
                   </div>
 
                   {/* Count */}
-                  <div className="w-16 text-right tabular-nums text-slate-300 text-[11px] font-medium">
+                  <div className="w-16 text-right tabular-nums text-neutral-400 text-[11px] font-medium">
                     {frame ? frame.count.toLocaleString() : '0'}
                   </div>
 
@@ -296,10 +296,10 @@ export const CanDirectoryTable: React.FC = () => {
                         key={idx}
                         className={`px-1 py-0.5 rounded text-center min-w-[20px] ${
                           byte === '--'
-                            ? 'text-slate-600 bg-slate-900/40'
+                            ? 'text-neutral-700 bg-neutral-950'
                             : isSelected
-                            ? 'text-cyan-200 font-bold bg-cyan-900/60 ring-1 ring-cyan-500/40'
-                            : 'text-slate-200 bg-slate-900 font-semibold border border-slate-800'
+                            ? 'text-cyan-200 font-bold bg-cyan-950 border border-cyan-800'
+                            : 'text-neutral-200 bg-[#121212] font-semibold border border-neutral-800'
                         }`}
                       >
                         {byte}
@@ -314,12 +314,12 @@ export const CanDirectoryTable: React.FC = () => {
       </div>
 
       {/* Directory Footer */}
-      <div className="h-6 bg-slate-900 border-t border-slate-800 px-3 flex items-center justify-between text-[10px] font-mono text-slate-400 select-none shrink-0">
+      <div className="h-6 bg-[#0a0a0a] border-t border-neutral-800 px-3 flex items-center justify-between text-[10px] font-mono text-neutral-400 select-none shrink-0">
         <span>
-          Showing <strong className="text-slate-200">{filteredMessages.length}</strong> of{' '}
-          <strong className="text-slate-200">{catalog.length}</strong> messages
+          Showing <strong className="text-neutral-200">{filteredMessages.length}</strong> of{' '}
+          <strong className="text-neutral-200">{catalog.length}</strong> messages
         </span>
-        <span className="text-slate-400">Click a message row to inspect payload matrix</span>
+        <span className="text-neutral-500">Click a message row to inspect payload matrix</span>
       </div>
     </div>
   );

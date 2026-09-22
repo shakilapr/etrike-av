@@ -7,11 +7,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        bgDarkest: "#090d13",
-        bgCard: "#121820",
-        bgCardHover: "#18222d",
-        bgCardActive: "#1f2b38",
-        borderDark: "#222e3c",
+        bgDarkest: "#000000",
+        bgCard: "#0a0a0a",
+        bgCardHover: "#121212",
+        bgCardActive: "#1a1a1a",
+        borderDark: "#1f1f1f",
         borderFocus: "#38bdf8",
       },
       fontFamily: {

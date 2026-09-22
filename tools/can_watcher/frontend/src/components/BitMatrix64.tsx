@@ -68,22 +68,22 @@ export const BitMatrix64: React.FC = () => {
   }
 
   return (
-    <div className="bg-slate-900 border-b border-slate-800 p-3 select-none shrink-0 shadow-sm">
+    <div className="bg-black border-b border-neutral-800 p-3 select-none shrink-0">
       {/* Selected Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+      <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
         <div className="flex items-center gap-2">
           <span className="text-sm font-black text-cyan-400 font-mono tracking-wide">
             {selectedMsg?.id_hex || '0x000'}
           </span>
-          <span className="text-sm font-bold text-slate-100 font-mono">
+          <span className="text-sm font-bold text-neutral-100 font-mono">
             {selectedMsg?.key || 'SELECT A MESSAGE'}
           </span>
           {selectedMsg && (
             <span
               className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                 selectedMsg.access === 'RX'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
               }`}
             >
               {selectedMsg.access}
@@ -91,21 +91,21 @@ export const BitMatrix64: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-3 text-[11px] font-mono text-slate-300">
+        <div className="flex items-center gap-3 text-[11px] font-mono text-neutral-300">
           <div>
             Rate:{' '}
             <span className="text-emerald-400 font-bold tabular-nums">
               {currentFrame?.rate_hz ? `${currentFrame.rate_hz.toFixed(1)} Hz` : '0.0 Hz'}
             </span>
           </div>
-          <div className="text-slate-600">|</div>
+          <div className="text-neutral-700">|</div>
           <div>
-            DLC: <span className="text-slate-100 font-bold">{dlc}</span>
+            DLC: <span className="text-neutral-100 font-bold">{dlc}</span>
           </div>
-          <div className="text-slate-600">|</div>
+          <div className="text-neutral-700">|</div>
           <div>
             Count:{' '}
-            <span className="text-slate-100 font-bold tabular-nums">
+            <span className="text-neutral-100 font-bold tabular-nums">
               {currentFrame?.count.toLocaleString() || '0'}
             </span>
           </div>
@@ -114,8 +114,8 @@ export const BitMatrix64: React.FC = () => {
 
       {/* Bit Matrix Title & Orientation Guide */}
       <div className="flex items-center justify-between mt-2.5 mb-1.5 text-[10px] font-mono">
-        <div className="font-bold text-slate-200 tracking-wider">64-BIT PAYLOAD MATRIX (8 BYTES &times; 8 BITS)</div>
-        <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
+        <div className="font-bold text-neutral-300 tracking-wider">64-BIT PAYLOAD MATRIX (8 BYTES &times; 8 BITS)</div>
+        <div className="flex items-center gap-1.5 text-neutral-500 font-semibold">
           <span>&larr; MSB (Bit 7)</span>
           <span>&bull;</span>
           <span>LSB (Bit 0) &rarr;</span>
@@ -123,10 +123,10 @@ export const BitMatrix64: React.FC = () => {
       </div>
 
       {/* 8x8 Grid */}
-      <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+      <div className="bg-[#080808] p-2.5 rounded-lg border border-neutral-800">
         {/* Column Headers: Bit 7 down to Bit 0 */}
-        <div className="grid grid-cols-[68px_repeat(8,1fr)] gap-1 mb-1 text-center font-mono text-[10px] text-slate-400 font-bold">
-          <div className="text-left text-slate-400 pl-1">BYTE</div>
+        <div className="grid grid-cols-[68px_repeat(8,1fr)] gap-1 mb-1 text-center font-mono text-[10px] text-neutral-500 font-bold">
+          <div className="text-left text-neutral-500 pl-1">BYTE</div>
           <div>b7</div>
           <div>b6</div>
           <div>b5</div>
@@ -154,12 +154,12 @@ export const BitMatrix64: React.FC = () => {
                 <div
                   className={`flex items-center justify-between text-[10px] px-1.5 py-1 rounded border font-semibold ${
                     isBeyondDlc
-                      ? 'bg-slate-900/40 text-slate-500 border-slate-800/50'
-                      : 'bg-slate-900 text-slate-300 border-slate-700'
+                      ? 'bg-neutral-950 text-neutral-600 border-neutral-900'
+                      : 'bg-[#0f0f0f] text-neutral-300 border-neutral-800'
                   }`}
                   title={isBeyondDlc ? `Byte ${byteIdx} is beyond DLC ${dlc} (Padding)` : `Byte ${byteIdx}: 0x${rawByteHex}`}
                 >
-                  <span className="text-slate-400 text-[9px] font-mono">B{byteIdx}</span>
+                  <span className="text-neutral-500 text-[9px] font-mono">B{byteIdx}</span>
                   <span className="text-cyan-300 font-bold text-[11px] font-mono">{rawByteHex}</span>
                 </div>
 
@@ -167,7 +167,7 @@ export const BitMatrix64: React.FC = () => {
                 {rowCells.map((cell) => {
                   const isHovered = !isBeyondDlc && !!hoveredSignal && cell.owner === hoveredSignal;
                   const hasOwner = !!cell.owner && !isBeyondDlc;
-                  const cellColor = cell.color || '#334155';
+                  const cellColor = cell.color || '#262626';
 
                   return (
                     <div
@@ -179,17 +179,17 @@ export const BitMatrix64: React.FC = () => {
                           ? `${cellColor}ee`
                           : hasOwner
                           ? `${cellColor}40`
-                          : '#0f172a',
+                          : '#0c0c0c',
                         borderColor: isHovered
                           ? '#ffffff'
                           : hasOwner
                           ? `${cellColor}cc`
-                          : '#1e293b',
+                          : '#1c1c1c',
                       }}
                       className={`h-7 rounded flex items-center justify-center text-xs font-mono transition-all border cursor-pointer select-none tabular-nums ${
                         cell.val === 1
-                          ? 'text-white font-black drop-shadow-[0_0_4px_rgba(255,255,255,0.6)]'
-                          : 'text-slate-300 font-bold'
+                          ? 'text-white font-black drop-shadow-[0_0_4px_rgba(255,255,255,0.7)]'
+                          : 'text-neutral-400 font-bold'
                       } ${isHovered ? 'scale-110 shadow-lg shadow-cyan-500/30 z-10 ring-2 ring-white' : ''}`}
                       title={
                         isBeyondDlc
@@ -213,13 +213,13 @@ export const BitMatrix64: React.FC = () => {
       <div className="mt-2 h-6 flex items-center justify-between text-[11px] font-mono px-1">
         {hoveredSignal ? (
           <div className="flex items-center gap-2">
-            <span className="text-slate-400 font-medium">Highlighted Signal:</span>
-            <span className="font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-700/80">
+            <span className="text-neutral-400 font-medium">Highlighted Signal:</span>
+            <span className="font-bold text-cyan-300 bg-[#141414] px-2 py-0.5 rounded border border-cyan-800">
               {hoveredSignal}
             </span>
           </div>
         ) : (
-          <span className="text-slate-400">
+          <span className="text-neutral-500">
             Hover any bit or signal below to inspect bit-field mapping
           </span>
         )}

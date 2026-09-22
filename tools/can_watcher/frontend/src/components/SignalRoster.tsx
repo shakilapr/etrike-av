@@ -75,24 +75,24 @@ export const SignalRoster: React.FC = () => {
   }, [signals, hoveredSignal, setHoveredSignal]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-slate-950 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 bg-black overflow-hidden">
       {/* Header */}
-      <div className="h-8 bg-slate-900 border-b border-slate-800 px-3 flex items-center justify-between select-none shrink-0">
+      <div className="h-8 bg-[#0a0a0a] border-b border-neutral-800 px-3 flex items-center justify-between select-none shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono font-bold uppercase text-slate-300 tracking-wider">
+          <span className="text-[10px] font-mono font-bold uppercase text-neutral-300 tracking-wider">
             DECODED SIGNALS ({signals.length})
           </span>
-          <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/60 font-medium">
+          <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/60 font-medium">
             [↑/↓] Select • [Esc] Clear
           </span>
         </div>
-        <span className="text-[10px] font-mono text-slate-400 font-medium">
+        <span className="text-[10px] font-mono text-neutral-500 font-medium">
           Bi-Directional Bit Matrix Mapping
         </span>
       </div>
 
       {/* Signal List Table Header */}
-      <div className="h-7 bg-slate-900/60 border-b border-slate-800 px-3 flex items-center text-[10px] font-mono font-bold uppercase text-slate-400 select-none shrink-0">
+      <div className="h-7 bg-[#0a0a0a]/90 border-b border-neutral-800 px-3 flex items-center text-[10px] font-mono font-bold uppercase text-neutral-400 select-none shrink-0">
         <div className="w-5"></div>
         <div className="w-40">SIGNAL NAME</div>
         <div className="w-28 text-right pr-2">PHYS VALUE</div>
@@ -104,9 +104,9 @@ export const SignalRoster: React.FC = () => {
 
 
       {/* Signal Rows */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-800/50">
+      <div className="flex-1 overflow-y-auto divide-y divide-neutral-900 bg-black">
         {signals.length === 0 ? (
-          <div className="h-32 flex items-center justify-center text-xs font-mono text-slate-400">
+          <div className="h-32 flex items-center justify-center text-xs font-mono text-neutral-500">
             No signals mapped for this message key
           </div>
         ) : (
@@ -148,8 +148,8 @@ export const SignalRoster: React.FC = () => {
                 onMouseLeave={() => setHoveredSignal(null)}
                 className={`flex items-center px-3 py-1.5 text-xs font-mono transition-all cursor-pointer ${
                   isHovered
-                    ? 'bg-cyan-950/70 text-slate-100 ring-1 ring-cyan-400/50 border-l-4 border-cyan-400 shadow-inner'
-                    : 'hover:bg-slate-900/60 text-slate-300 border-l-4 border-transparent'
+                    ? 'bg-[#141414] text-white ring-1 ring-cyan-500/50 border-l-4 border-cyan-400'
+                    : 'hover:bg-[#0d0d0d] text-neutral-300 border-l-4 border-transparent'
                 }`}
               >
                 {/* Color Dot */}
@@ -164,11 +164,11 @@ export const SignalRoster: React.FC = () => {
 
                 {/* Signal Name */}
                 <div className="w-40 truncate pr-2 font-medium" title={sig.name}>
-                  <span className={isHovered ? 'text-cyan-300 font-bold' : 'text-slate-100 font-semibold'}>
+                  <span className={isHovered ? 'text-cyan-300 font-bold' : 'text-neutral-200 font-semibold'}>
                     {sig.name}
                   </span>
                   {sig.comment && (
-                    <span className="block text-[9px] text-slate-400 truncate font-normal">
+                    <span className="block text-[9px] text-neutral-500 truncate font-normal">
                       {sig.comment}
                     </span>
                   )}
@@ -180,29 +180,29 @@ export const SignalRoster: React.FC = () => {
                     {formattedValue}
                   </span>
                   {unit && (
-                    <span className="ml-1 text-[10px] text-slate-400 font-medium">
+                    <span className="ml-1 text-[10px] text-neutral-500 font-medium">
                       {unit}
                     </span>
                   )}
                 </div>
 
                 {/* Raw Value */}
-                <div className="w-16 text-right pr-2 text-slate-300 text-[11px] tabular-nums font-semibold">
+                <div className="w-16 text-right pr-2 text-neutral-300 text-[11px] tabular-nums font-semibold">
                   {rawDisplay}
                 </div>
 
                 {/* Bit Range */}
-                <div className="w-24 text-[10px] text-slate-300">
+                <div className="w-24 text-[10px] text-neutral-300">
                   <span className="font-bold">
                     B{sig.byte}:b{sig.bit}
                   </span>
-                  <span className="text-slate-400 text-[9px] ml-1">
+                  <span className="text-neutral-500 text-[9px] ml-1">
                     ({sig.bits}b)
                   </span>
                 </div>
 
                 {/* Endian & Sign */}
-                <div className="w-14 text-[10px] text-slate-400 uppercase font-semibold">
+                <div className="w-14 text-[10px] text-neutral-400 uppercase font-semibold">
                   <span className={sig.endian === 'big' ? 'text-purple-300' : 'text-blue-300'}>
                     {sig.endian === 'big' ? 'BE' : 'LE'}
                   </span>{' '}
@@ -213,16 +213,16 @@ export const SignalRoster: React.FC = () => {
 
 
                 {/* Formula & Range */}
-                <div className="flex-1 text-[10px] text-slate-300 truncate pl-1">
+                <div className="flex-1 text-[10px] text-neutral-300 truncate pl-1">
                   {sig.scale === 1 && sig.offset === 0 ? (
-                    <span className="text-slate-400">1:1</span>
+                    <span className="text-neutral-500">1:1</span>
                   ) : (
-                    <span className="text-slate-300">
+                    <span className="text-neutral-300">
                       &times;{sig.scale} + {sig.offset}
                     </span>
                   )}
                   {sig.min_val !== null && sig.max_val !== null && (
-                    <span className="ml-2 text-slate-400 text-[9px]">
+                    <span className="ml-2 text-neutral-500 text-[9px]">
                       [{sig.min_val}, {sig.max_val}]
                     </span>
                   )}
