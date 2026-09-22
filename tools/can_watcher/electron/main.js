@@ -8,6 +8,7 @@ const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
+const fs = require('fs');
 
 let mainWindow = null;
 let pythonProcess = null;
@@ -21,11 +22,25 @@ function checkBackendHealth() {
       resolve(res.statusCode === 200);
     });
     req.on('error', () => resolve(false));
-    req.setTimeout(500, () => {
+    req.setTimeout(600, () => {
       req.destroy();
       resolve(false);
     });
   });
+}
+
+// Find Python executable on Windows
+function getPythonCommand() {
+  if (process.platform !== 'win32') return 'python3';
+  const candidates = [
+    process.env.PYTHON,
+    'E:\\miniconda\\python.exe',
+    'python.exe',
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
+  return 'python';
 }
 
 // Spawn Python backend process if not already alive
@@ -37,10 +52,10 @@ async function ensureBackendRunning() {
   }
 
   const workspaceRoot = path.resolve(__dirname, '../../..');
-  console.log(`[Electron] Spawning Python backend from ${workspaceRoot}...`);
+  const pythonCmd = getPythonCommand();
+  console.log(`[Electron] Spawning Python backend via '${pythonCmd}' from ${workspaceRoot}...`);
 
-  const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
-  pythonProcess = spawn(pythonCmd, ['-m', 'tools.can_watcher.backend.server', '--sim'], {
+  pythonProcess = spawn(pythonCmd, ['-m', 'tools.can_watcher.backend.server', '--sim', '--port', String(BACKEND_PORT)], {
     cwd: workspaceRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PYTHONPATH: workspaceRoot },
@@ -59,8 +74,8 @@ async function ensureBackendRunning() {
     pythonProcess = null;
   });
 
-  // Poll until backend is healthy (up to 5s)
-  for (let i = 0; i < 20; i++) {
+  // Poll until backend is healthy (up to 8s)
+  for (let i = 0; i < 32; i++) {
     await new Promise((r) => setTimeout(r, 250));
     if (await checkBackendHealth()) {
       console.log('[Electron] Backend connection confirmed!');
@@ -77,12 +92,12 @@ function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     backgroundColor: '#020617',
-    show: false,
+    show: true, // Show immediately to prevent blank/hidden window states
     autoHideMenuBar: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false, // Ensure local WebSocket and Fetch are unrestricted
     },
   });
 
@@ -143,11 +158,24 @@ function createWindow() {
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
 
-  mainWindow.loadURL(BACKEND_URL);
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+  // Error handling and console logging
+  mainWindow.webContents.on('did-fail-load', (e, code, desc, validatedURL) => {
+    console.error(`[Electron] Failed to load ${validatedURL}: [${code}] ${desc}`);
+    setTimeout(() => {
+      if (mainWindow) {
+        console.log(`[Electron] Retrying loadURL(${BACKEND_URL})...`);
+        mainWindow.loadURL(BACKEND_URL);
+      }
+    }, 1500);
   });
+
+  mainWindow.webContents.on('console-message', (e, level, message) => {
+    console.log(`[Renderer] ${message}`);
+  });
+
+  console.log(`[Electron] Loading ${BACKEND_URL}...`);
+  mainWindow.loadURL(BACKEND_URL);
+  mainWindow.focus();
 
   mainWindow.on('closed', () => {
     mainWindow = null;

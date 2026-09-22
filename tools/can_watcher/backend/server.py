@@ -170,70 +170,75 @@ async def ingest_can_loop() -> None:
     pending_updates: Dict[int, Dict[str, Any]] = {}
 
 
-    try:
-        async for frame in transport.frames():
-            now = time.time()
-            total_frames += 1
-            can_id = frame.can_id
-            frame_counts[can_id] = frame_counts.get(can_id, 0) + 1
+    while True:
+        try:
+            async for frame in transport.frames():
+                now = time.time()
+                total_frames += 1
+                can_id = frame.can_id
+                frame_counts[can_id] = frame_counts.get(can_id, 0) + 1
 
-            if can_id not in recent_timestamps:
-                recent_timestamps[can_id] = []
-            q = recent_timestamps[can_id]
-            q.append(now)
-            while q and (now - q[0]) > 1.0:
-                q.pop(0)
-            rate_hz = round(len(q) / 1.0, 1) if len(q) > 1 else 1.0
-            frame_rates[can_id] = rate_hz
-            frame_timestamps[can_id] = now
+                if can_id not in recent_timestamps:
+                    recent_timestamps[can_id] = []
+                q = recent_timestamps[can_id]
+                q.append(now)
+                while q and (now - q[0]) > 1.0:
+                    q.pop(0)
+                rate_hz = round(len(q) / 1.0, 1) if len(q) > 1 else 1.0
+                frame_rates[can_id] = rate_hz
+                frame_timestamps[can_id] = now
 
-            decoded_signals, bit_cells = registry.decode_frame(can_id, frame.data)
-            update_telemetry_summary(can_id, decoded_signals, frame.data)
+                decoded_signals, bit_cells = registry.decode_frame(can_id, frame.data)
+                update_telemetry_summary(can_id, decoded_signals, frame.data)
 
-            frame_entry = {
-                "id": can_id,
-                "id_hex": f"0x{can_id:03X}",
-                "data_hex": frame.to_hex_raw(),
-                "data_hex_display": frame.to_hex_string(),
-                "dlc": frame.dlc,
-                "count": frame_counts[can_id],
-                "rate_hz": rate_hz,
-                "timestamp": now,
-                "signals": decoded_signals,
-                "bit_cells": bit_cells,
-            }
+                frame_entry = {
+                    "id": can_id,
+                    "id_hex": f"0x{can_id:03X}",
+                    "data_hex": frame.to_hex_raw(),
+                    "data_hex_display": frame.to_hex_string(),
+                    "dlc": frame.dlc,
+                    "count": frame_counts[can_id],
+                    "rate_hz": rate_hz,
+                    "timestamp": now,
+                    "signals": decoded_signals,
+                    "bit_cells": bit_cells,
+                }
 
+                latest_frames[can_id] = frame_entry
+                pending_updates[can_id] = frame_entry
 
-            latest_frames[can_id] = frame_entry
-            pending_updates[can_id] = frame_entry
+                # Throttle broadcast to ~25 Hz (every 40ms)
+                if (now - last_broadcast) >= 0.040:
+                    last_broadcast = now
+                    if active_websockets and pending_updates:
+                        payload = {
+                            "type": "batch",
+                            "total_frames": total_frames,
+                            "uptime_sec": round(now - start_time, 1),
+                            "frames": list(pending_updates.values()),
+                            "telemetry": telemetry_summary,
+                        }
+                        msg_text = json.dumps(payload)
+                        pending_updates.clear()
 
-            # Throttle broadcast to ~25 Hz (every 40ms)
-            if (now - last_broadcast) >= 0.040:
-                last_broadcast = now
-                if active_websockets and pending_updates:
-                    payload = {
-                        "type": "batch",
-                        "total_frames": total_frames,
-                        "uptime_sec": round(now - start_time, 1),
-                        "frames": list(pending_updates.values()),
-                        "telemetry": telemetry_summary,
-                    }
-                    msg_text = json.dumps(payload)
-                    pending_updates.clear()
+                        stale_sockets: List[WebSocket] = []
+                        # Iterate copy to prevent 'Set changed size during iteration'
+                        for ws in list(active_websockets):
+                            try:
+                                await ws.send_text(msg_text)
+                            except Exception:
+                                stale_sockets.append(ws)
+                        for ws in stale_sockets:
+                            active_websockets.discard(ws)
 
-                    stale_sockets: List[WebSocket] = []
-                    for ws in active_websockets:
-                        try:
-                            await ws.send_text(msg_text)
-                        except Exception:
-                            stale_sockets.append(ws)
-                    for ws in stale_sockets:
-                        active_websockets.discard(ws)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[CAN Ingest] Recovering from error: {e}")
+            await asyncio.sleep(0.1)
 
-    except asyncio.CancelledError:
-        pass
-    finally:
-        await transport.stop()
+    await transport.stop()
+
 
 
 @app.on_event("startup")
