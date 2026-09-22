@@ -24,8 +24,12 @@ class CanFrame:
     def to_hex_string(self) -> str:
         return " ".join(f"{b:02X}" for b in self.data)
 
+    def to_hex_raw(self) -> str:
+        return "".join(f"{b:02X}" for b in self.data)
+
     def __repr__(self) -> str:
         return f"CanFrame(0x{self.can_id:03X}, [{self.to_hex_string()}])"
+
 
 
 class BaseCanTransport:

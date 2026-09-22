@@ -2,6 +2,26 @@ import React from 'react';
 import { useCanStore } from '../store/canStore';
 import { MessageDef, SignalDef } from '../types/can';
 
+// Helper to infer unit from naming convention if not explicitly in contract
+function inferUnit(sigName: string, definedUnit: string): string {
+  if (definedUnit && definedUnit.trim().length > 0) {
+    return definedUnit;
+  }
+  const lower = sigName.toLowerCase();
+  if (lower.endsWith('_mmps')) return 'mm/s';
+  if (lower.endsWith('_mrad_s')) return 'mrad/s';
+  if (lower.endsWith('_kpa')) return 'kPa';
+  if (lower.endsWith('_deg')) return 'deg';
+  if (lower.endsWith('_kmh')) return 'km/h';
+  if (lower.endsWith('_mv')) return 'mV';
+  if (lower.endsWith('_ma')) return 'mA';
+  if (lower.endsWith('_c')) return '°C';
+  if (lower.endsWith('_pct') || lower.endsWith('_percent')) return '%';
+  if (lower.endsWith('_count') || lower.endsWith('_counter')) return 'cnt';
+  if (lower.startsWith('light_') || lower.endsWith('_ok') || lower.endsWith('_valid') || lower.endsWith('_active')) return 'flag';
+  return '';
+}
+
 export const SignalRoster: React.FC = () => {
   const {
     catalog,
@@ -16,32 +36,33 @@ export const SignalRoster: React.FC = () => {
   const signals = selectedMsg?.signals || [];
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-slate-950/90 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-950 overflow-hidden">
       {/* Header */}
-      <div className="h-8 bg-slate-900/90 border-b border-slate-800 px-3 flex items-center justify-between select-none shrink-0">
-        <span className="text-[10px] font-mono font-semibold uppercase text-slate-400">
+      <div className="h-8 bg-slate-900 border-b border-slate-800 px-3 flex items-center justify-between select-none shrink-0">
+        <span className="text-[10px] font-mono font-bold uppercase text-slate-300 tracking-wider">
           DECODED SIGNALS ({signals.length})
         </span>
-        <span className="text-[10px] font-mono text-slate-500">
+        <span className="text-[10px] font-mono text-slate-400 font-medium">
           Bi-Directional Bit Matrix Mapping
         </span>
       </div>
 
       {/* Signal List Table Header */}
-      <div className="h-7 bg-slate-900/40 border-b border-slate-800/80 px-3 flex items-center text-[9px] font-mono font-semibold uppercase text-slate-500 select-none shrink-0">
-        <div className="w-4"></div>
-        <div className="w-44">SIGNAL NAME</div>
-        <div className="w-32 text-right pr-2">PHYSICAL VALUE</div>
-        <div className="w-20 text-right pr-2">RAW</div>
+      <div className="h-7 bg-slate-900/60 border-b border-slate-800 px-3 flex items-center text-[10px] font-mono font-bold uppercase text-slate-400 select-none shrink-0">
+        <div className="w-5"></div>
+        <div className="w-40">SIGNAL NAME</div>
+        <div className="w-28 text-right pr-2">PHYS VALUE</div>
+        <div className="w-16 text-right pr-2">RAW</div>
         <div className="w-24">BIT RANGE</div>
-        <div className="w-16">ENDIAN</div>
-        <div className="flex-1">FORMULA / RANGE</div>
+        <div className="w-14">ENDIAN</div>
+        <div className="flex-1 pl-1 whitespace-nowrap">SCALE / RANGE</div>
       </div>
 
+
       {/* Signal Rows */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-800/40">
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-800/50">
         {signals.length === 0 ? (
-          <div className="h-32 flex items-center justify-center text-xs font-mono text-slate-500">
+          <div className="h-32 flex items-center justify-center text-xs font-mono text-slate-400">
             No signals mapped for this message key
           </div>
         ) : (
@@ -60,9 +81,19 @@ export const SignalRoster: React.FC = () => {
               }
             }
 
-            const rawDisplay = liveData && liveData.raw !== undefined
-              ? `0x${liveData.raw.toString(16).toUpperCase()}`
-              : '—';
+            // Proper two's complement hex formatting for negative raw values
+            let rawDisplay = '—';
+            if (liveData && liveData.raw !== undefined) {
+              const rawVal = Number(liveData.raw);
+              if (sig.signed && rawVal < 0) {
+                const mask = (1 << sig.bits) - 1;
+                rawDisplay = `0x${((rawVal & mask) >>> 0).toString(16).toUpperCase()}`;
+              } else {
+                rawDisplay = `0x${rawVal.toString(16).toUpperCase()}`;
+              }
+            }
+
+            const unit = inferUnit(sig.name, sig.unit);
 
             return (
               <div
@@ -71,70 +102,81 @@ export const SignalRoster: React.FC = () => {
                 onMouseLeave={() => setHoveredSignal(null)}
                 className={`flex items-center px-3 py-1.5 text-xs font-mono transition-colors cursor-default ${
                   isHovered
-                    ? 'bg-slate-800/80 text-slate-100'
-                    : 'hover:bg-slate-900/50 text-slate-300'
+                    ? 'bg-cyan-950/40 text-slate-100 ring-1 ring-cyan-500/30'
+                    : 'hover:bg-slate-900/60 text-slate-300'
                 }`}
               >
                 {/* Color Dot */}
-                <div className="w-4 flex items-center">
+                <div className="w-5 flex items-center">
                   <span
-                    className="w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-sm"
+                    className={`w-3 h-3 rounded-full inline-block shrink-0 shadow-sm transition-transform ${
+                      isHovered ? 'scale-125 ring-2 ring-white' : ''
+                    }`}
                     style={{ backgroundColor: sig.color }}
                   />
                 </div>
 
                 {/* Signal Name */}
-                <div className="w-44 truncate pr-2 font-medium" title={sig.name}>
-                  <span className={isHovered ? 'text-cyan-300 font-bold' : 'text-slate-200'}>
+                <div className="w-40 truncate pr-2 font-medium" title={sig.name}>
+                  <span className={isHovered ? 'text-cyan-300 font-bold' : 'text-slate-100 font-semibold'}>
                     {sig.name}
                   </span>
                   {sig.comment && (
-                    <span className="block text-[9px] text-slate-500 truncate">
+                    <span className="block text-[9px] text-slate-400 truncate font-normal">
                       {sig.comment}
                     </span>
                   )}
                 </div>
 
                 {/* Physical Value + Unit */}
-                <div className="w-32 text-right pr-2">
-                  <span className="text-emerald-400 font-bold tabular-nums">
+                <div className="w-28 text-right pr-2">
+                  <span className="text-emerald-400 font-black tabular-nums text-[13px]">
                     {formattedValue}
                   </span>
-                  {sig.unit && (
-                    <span className="ml-1 text-[10px] text-slate-400 font-normal">
-                      {sig.unit}
+                  {unit && (
+                    <span className="ml-1 text-[10px] text-slate-400 font-medium">
+                      {unit}
                     </span>
                   )}
                 </div>
 
                 {/* Raw Value */}
-                <div className="w-20 text-right pr-2 text-slate-400 text-[11px] tabular-nums">
+                <div className="w-16 text-right pr-2 text-slate-300 text-[11px] tabular-nums font-semibold">
                   {rawDisplay}
                 </div>
 
                 {/* Bit Range */}
-                <div className="w-24 text-[10px] text-slate-400">
-                  <span>
+                <div className="w-24 text-[10px] text-slate-300">
+                  <span className="font-bold">
                     B{sig.byte}:b{sig.bit}
                   </span>
-                  <span className="text-slate-500 text-[9px] ml-1">
+                  <span className="text-slate-400 text-[9px] ml-1">
                     ({sig.bits}b)
                   </span>
                 </div>
 
                 {/* Endian & Sign */}
-                <div className="w-16 text-[9px] text-slate-500 uppercase">
-                  {sig.endian === 'big' ? 'BE' : 'LE'}{' '}
-                  {sig.signed ? 'S' : 'U'}
+                <div className="w-14 text-[10px] text-slate-400 uppercase font-semibold">
+                  <span className={sig.endian === 'big' ? 'text-purple-300' : 'text-blue-300'}>
+                    {sig.endian === 'big' ? 'BE' : 'LE'}
+                  </span>{' '}
+                  <span className={sig.signed ? 'text-amber-300' : 'text-emerald-300'}>
+                    {sig.signed ? 'S' : 'U'}
+                  </span>
                 </div>
 
+
                 {/* Formula & Range */}
-                <div className="flex-1 text-[10px] text-slate-400 truncate">
-                  <span className="text-slate-500">
-                    &times;{sig.scale} + {sig.offset}
-                  </span>
+                <div className="flex-1 text-[10px] text-slate-300 truncate pl-1">
+                  {sig.scale === 1 && sig.offset === 0 ? (
+                    <span className="text-slate-400">1:1</span>
+                  ) : (
+                    <span className="text-slate-300">
+                      &times;{sig.scale} + {sig.offset}
+                    </span>
+                  )}
                   {sig.min_val !== null && sig.max_val !== null && (
-                    <span className="ml-2 text-slate-600 text-[9px]">
+                    <span className="ml-2 text-slate-400 text-[9px]">
                       [{sig.min_val}, {sig.max_val}]
                     </span>
                   )}

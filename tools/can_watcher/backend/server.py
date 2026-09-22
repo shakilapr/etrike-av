@@ -193,7 +193,8 @@ async def ingest_can_loop() -> None:
             frame_entry = {
                 "id": can_id,
                 "id_hex": f"0x{can_id:03X}",
-                "data_hex": frame.to_hex_string(),
+                "data_hex": frame.to_hex_raw(),
+                "data_hex_display": frame.to_hex_string(),
                 "dlc": frame.dlc,
                 "count": frame_counts[can_id],
                 "rate_hz": rate_hz,
@@ -201,6 +202,7 @@ async def ingest_can_loop() -> None:
                 "signals": decoded_signals,
                 "bit_cells": bit_cells,
             }
+
 
             latest_frames[can_id] = frame_entry
             pending_updates[can_id] = frame_entry

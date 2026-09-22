@@ -13,6 +13,7 @@ export const BitMatrix64: React.FC = () => {
 
   const selectedMsg = catalog.find((m: MessageDef) => m.id === selectedCanId);
   const currentFrame = framesById[selectedCanId];
+  const dlc = selectedMsg?.dlc ?? 8;
 
   // Organize bit cells into 8 rows (Byte 0 to Byte 7), each row having 8 bits (Bit 7 down to Bit 0)
   const bitCellsByByte: BitCell[][] = Array.from({ length: 8 }, () => []);
@@ -26,11 +27,9 @@ export const BitMatrix64: React.FC = () => {
     const signals = selectedMsg?.signals || [];
     for (let byte = 0; byte < 8; byte++) {
       for (let bit = 0; bit < 8; bit++) {
-        // Find owner signal if any
         let owner: string | null = null;
         let color: string | null = null;
         for (const sig of signals) {
-          // Check if bit falls in this signal range
           if (sig.endian === 'big') {
             const sigStart = sig.byte * 8 + (7 - sig.bit);
             const sigEnd = sigStart + sig.bits;
@@ -69,23 +68,33 @@ export const BitMatrix64: React.FC = () => {
     bitCellsByByte[b].sort((a, bCell) => bCell.bit - a.bit);
   }
 
+  // Parse raw bytes cleanly
+  let rawHexList: string[] = [];
+  if (currentFrame && currentFrame.data_hex) {
+    if (currentFrame.data_hex.includes(' ')) {
+      rawHexList = currentFrame.data_hex.trim().split(/\s+/);
+    } else {
+      rawHexList = currentFrame.data_hex.match(/.{1,2}/g) || [];
+    }
+  }
+
   return (
-    <div className="bg-slate-900/90 border-b border-slate-800 p-3 select-none shrink-0">
+    <div className="bg-slate-900 border-b border-slate-800 p-3 select-none shrink-0 shadow-sm">
       {/* Selected Header */}
       <div className="flex items-center justify-between pb-2 border-b border-slate-800">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-cyan-400 font-mono">
+          <span className="text-sm font-black text-cyan-400 font-mono tracking-wide">
             {selectedMsg?.id_hex || '0x000'}
           </span>
-          <span className="text-xs font-bold text-slate-100 font-mono">
+          <span className="text-sm font-bold text-slate-100 font-mono">
             {selectedMsg?.key || 'SELECT A MESSAGE'}
           </span>
           {selectedMsg && (
             <span
-              className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
+              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                 selectedMsg.access === 'RX'
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
               }`}
             >
               {selectedMsg.access}
@@ -93,21 +102,21 @@ export const BitMatrix64: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-3 text-[10px] font-mono text-slate-400">
+        <div className="flex items-center gap-3 text-[11px] font-mono text-slate-300">
           <div>
             Rate:{' '}
-            <span className="text-emerald-400 font-semibold tabular-nums">
+            <span className="text-emerald-400 font-bold tabular-nums">
               {currentFrame?.rate_hz ? `${currentFrame.rate_hz.toFixed(1)} Hz` : '0.0 Hz'}
             </span>
           </div>
           <div className="text-slate-600">|</div>
           <div>
-            DLC: <span className="text-slate-200">{selectedMsg?.dlc ?? 8}</span>
+            DLC: <span className="text-slate-100 font-bold">{dlc}</span>
           </div>
           <div className="text-slate-600">|</div>
           <div>
             Count:{' '}
-            <span className="text-slate-200 tabular-nums">
+            <span className="text-slate-100 font-bold tabular-nums">
               {currentFrame?.count.toLocaleString() || '0'}
             </span>
           </div>
@@ -115,9 +124,9 @@ export const BitMatrix64: React.FC = () => {
       </div>
 
       {/* Bit Matrix Title & Orientation Guide */}
-      <div className="flex items-center justify-between mt-2 mb-1 text-[10px] font-mono text-slate-400">
-        <div className="font-semibold text-slate-300">64-BIT PAYLOAD MATRIX (8 BYTES × 8 BITS)</div>
-        <div className="flex items-center gap-1.5 text-slate-500">
+      <div className="flex items-center justify-between mt-2.5 mb-1.5 text-[10px] font-mono">
+        <div className="font-bold text-slate-200 tracking-wider">64-BIT PAYLOAD MATRIX (8 BYTES &times; 8 BITS)</div>
+        <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
           <span>&larr; MSB (Bit 7)</span>
           <span>&bull;</span>
           <span>LSB (Bit 0) &rarr;</span>
@@ -125,10 +134,10 @@ export const BitMatrix64: React.FC = () => {
       </div>
 
       {/* 8x8 Grid */}
-      <div className="bg-slate-950 p-2 rounded border border-slate-800">
+      <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
         {/* Column Headers: Bit 7 down to Bit 0 */}
-        <div className="grid grid-cols-[50px_repeat(8,1fr)] gap-1 mb-1 text-center font-mono text-[9px] text-slate-500">
-          <div className="text-left text-slate-600 pl-1">BYTE</div>
+        <div className="grid grid-cols-[68px_repeat(8,1fr)] gap-1 mb-1 text-center font-mono text-[10px] text-slate-400 font-bold">
+          <div className="text-left text-slate-400 pl-1">BYTE</div>
           <div>b7</div>
           <div>b6</div>
           <div>b5</div>
@@ -142,25 +151,33 @@ export const BitMatrix64: React.FC = () => {
         {/* 8 Byte Rows */}
         <div className="space-y-1">
           {bitCellsByByte.map((rowCells, byteIdx) => {
-            const rawByteHex = currentFrame?.data_hex
-              ? currentFrame.data_hex.substring(byteIdx * 2, byteIdx * 2 + 2)
-              : '00';
+            const rawByteHex = (rawHexList[byteIdx] || '00').padStart(2, '0').toUpperCase();
+            const isBeyondDlc = byteIdx >= dlc;
 
             return (
               <div
                 key={byteIdx}
-                className="grid grid-cols-[50px_repeat(8,1fr)] gap-1 items-center font-mono"
+                className={`grid grid-cols-[68px_repeat(8,1fr)] gap-1 items-center font-mono transition-opacity ${
+                  isBeyondDlc ? 'opacity-35' : 'opacity-100'
+                }`}
               >
                 {/* Byte Label & Hex Value */}
-                <div className="flex items-center justify-between text-[10px] pl-1 pr-1 bg-slate-900/60 rounded py-0.5 border border-slate-800/80">
-                  <span className="text-slate-400 text-[9px]">B{byteIdx}</span>
-                  <span className="text-cyan-400 font-bold text-[10px]">{rawByteHex}</span>
+                <div
+                  className={`flex items-center justify-between text-[10px] px-1.5 py-1 rounded border font-semibold ${
+                    isBeyondDlc
+                      ? 'bg-slate-900/40 text-slate-500 border-slate-800/50'
+                      : 'bg-slate-900 text-slate-300 border-slate-700'
+                  }`}
+                  title={isBeyondDlc ? `Byte ${byteIdx} is beyond DLC ${dlc} (Padding)` : `Byte ${byteIdx}: 0x${rawByteHex}`}
+                >
+                  <span className="text-slate-400 text-[9px] font-mono">B{byteIdx}</span>
+                  <span className="text-cyan-300 font-bold text-[11px] font-mono">{rawByteHex}</span>
                 </div>
 
                 {/* 8 Bits */}
                 {rowCells.map((cell) => {
                   const isHovered = hoveredSignal && cell.owner === hoveredSignal;
-                  const hasOwner = !!cell.owner;
+                  const hasOwner = !!cell.owner && !isBeyondDlc;
                   const cellColor = cell.color || '#334155';
 
                   return (
@@ -170,21 +187,25 @@ export const BitMatrix64: React.FC = () => {
                       onMouseLeave={() => setHoveredSignal(null)}
                       style={{
                         backgroundColor: isHovered
-                          ? `${cellColor}dd`
+                          ? `${cellColor}ee`
                           : hasOwner
-                          ? `${cellColor}33`
+                          ? `${cellColor}40`
                           : '#0f172a',
                         borderColor: isHovered
                           ? '#ffffff'
                           : hasOwner
-                          ? `${cellColor}aa`
+                          ? `${cellColor}cc`
                           : '#1e293b',
                       }}
-                      className={`h-6 rounded flex items-center justify-center text-xs font-bold transition-all border cursor-pointer select-none tabular-nums ${
-                        cell.val === 1 ? 'text-slate-100' : 'text-slate-400'
-                      } ${isHovered ? 'scale-105 shadow-md shadow-cyan-500/20 z-10' : ''}`}
+                      className={`h-7 rounded flex items-center justify-center text-xs font-mono transition-all border cursor-pointer select-none tabular-nums ${
+                        cell.val === 1
+                          ? 'text-white font-black drop-shadow-[0_0_4px_rgba(255,255,255,0.6)]'
+                          : 'text-slate-300 font-bold'
+                      } ${isHovered ? 'scale-110 shadow-lg shadow-cyan-500/30 z-10 ring-2 ring-white' : ''}`}
                       title={
-                        cell.owner
+                        isBeyondDlc
+                          ? `Byte ${cell.byte}, Bit ${cell.bit} [Beyond DLC ${dlc}]`
+                          : cell.owner
                           ? `Byte ${cell.byte}, Bit ${cell.bit} | Signal: ${cell.owner} | Val: ${cell.val}`
                           : `Byte ${cell.byte}, Bit ${cell.bit} | Unmapped | Val: ${cell.val}`
                       }
@@ -200,15 +221,17 @@ export const BitMatrix64: React.FC = () => {
       </div>
 
       {/* Signal Hover Status Bar */}
-      <div className="mt-2 h-5 flex items-center justify-between text-[10px] font-mono px-1">
+      <div className="mt-2 h-6 flex items-center justify-between text-[11px] font-mono px-1">
         {hoveredSignal ? (
           <div className="flex items-center gap-2">
-            <span className="text-slate-400">Highlighted Signal:</span>
-            <span className="font-bold text-cyan-400">{hoveredSignal}</span>
+            <span className="text-slate-400 font-medium">Highlighted Signal:</span>
+            <span className="font-bold text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-700/80">
+              {hoveredSignal}
+            </span>
           </div>
         ) : (
-          <span className="text-slate-500">
-            Hover any bit or signal below to trace owner bit-fields
+          <span className="text-slate-400">
+            Hover any bit or signal below to inspect bit-field mapping
           </span>
         )}
       </div>
