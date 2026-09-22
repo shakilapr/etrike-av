@@ -1,0 +1,12 @@
+{
+  "name": "canbyte-watcher-desktop",
+  "version": "2.0.0",
+  "description": "CANByte Watcher - Ergonomic Desktop CAN Monitor for E-Trike AV",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": ["can", "autoware", "telemetry", "electron", "react"],
+  "author": "Autonomous Systems",
+  "license": "Apache-2.0"
+}

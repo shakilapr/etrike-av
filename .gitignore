@@ -69,3 +69,8 @@ download/
 # Bridge output logs captured by scripts/log_bridge_outputs.py (temp data)
 /data/bridge_logs/
 /autoware/bridge_logs/
+
+# Node / Frontend
+node_modules/
+.pnpm-store/
+
