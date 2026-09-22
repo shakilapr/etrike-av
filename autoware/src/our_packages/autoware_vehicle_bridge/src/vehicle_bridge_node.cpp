@@ -79,6 +79,10 @@ constexpr canid_t CAN_DIAG_RPT = messages::SysDiagRpt::kHighId;
 constexpr canid_t CAN_MOTOR_FBK = messages::MtrMotorFbk::kHighId;
 constexpr canid_t CAN_HOST_HB = messages::HostHeartbeat::kHighId;
 constexpr canid_t CAN_RT_HB = messages::RtHeartbeat::kHighId;
+constexpr canid_t CAN_RT_NODE_STATUS = messages::RtNodeStatus::kHighId;
+constexpr canid_t CAN_SYS_NODE_STATUS = messages::SysNodeStatus::kHighId;
+constexpr canid_t CAN_RT_DIAG_RPT = messages::RtDiagRpt::kHighId;
+constexpr canid_t CAN_ESTOP_RESET_RSP = messages::SysEstopResetRsp::kHighId;
 
 // =====================================================================
 //  Gear constants (Autoware Universe <-> CAN)
@@ -451,6 +455,24 @@ bool CanEncoder::encode_mode_request(bool autonomous, struct can_frame & frame)
          to_socket_frame(encoded, frame);
 }
 
+bool CanEncoder::encode_estop_reset(uint8_t seq, struct can_frame & frame)
+{
+  // Reset token is fixed 0x5253 ('R', 'S') as required by SYS firmware (BUG-10)
+  constexpr uint16_t kResetTokenMagic = 0x5253;
+  messages::HostEstopResetReq message{seq, kResetTokenMagic, estop_reset_ctr_++};
+  protocol::Frame encoded;
+  return messages::encode(message, encoded) == protocol::CodecStatus::Ok &&
+         to_socket_frame(encoded, frame);
+}
+
+bool CanEncoder::encode_power_request(bool power_on, struct can_frame & frame)
+{
+  messages::HmiPwrReq message{power_on, power_request_ctr_++};
+  protocol::Frame encoded;
+  return messages::encode(message, encoded) == protocol::CodecStatus::Ok &&
+         to_socket_frame(encoded, frame);
+}
+
 // =====================================================================
 //  CanDecoder
 // =====================================================================
@@ -583,6 +605,64 @@ bool CanDecoder::decode_motion(
     case gear::CAN_R: gear_msg.report = gear::REVERSE; break;
     default: return false;
   }
+  return true;
+}
+
+bool CanDecoder::decode_rt_node_status(
+  const struct can_frame & frame,
+  uint8_t & node_state, uint16_t & block_mask, bool & output_enabled) const
+{
+  messages::RtNodeStatus value{};
+  if (messages::decode(protocol_view(frame), value) != protocol::CodecStatus::Ok) {
+    return false;
+  }
+  node_state = value.node_state;
+  block_mask = value.block_mask;
+  output_enabled = value.output_enabled;
+  return true;
+}
+
+bool CanDecoder::decode_sys_node_status(
+  const struct can_frame & frame,
+  uint8_t & node_state, uint16_t & block_mask) const
+{
+  messages::SysNodeStatus value{};
+  if (messages::decode(protocol_view(frame), value) != protocol::CodecStatus::Ok) {
+    return false;
+  }
+  node_state = value.node_state;
+  block_mask = value.block_mask;
+  return true;
+}
+
+bool CanDecoder::decode_rt_diag(
+  const struct can_frame & frame,
+  uint8_t & tec, uint8_t & rec, uint8_t & eflg, bool & bus_off,
+  uint8_t & spi_faults) const
+{
+  messages::RtDiagRpt value{};
+  if (messages::decode(protocol_view(frame), value) != protocol::CodecStatus::Ok) {
+    return false;
+  }
+  tec = value.mcp_tec;
+  rec = value.mcp_rec;
+  eflg = value.mcp_eflg;
+  bus_off = value.mcp_bus_off;
+  spi_faults = value.spi_fault_delta;
+  return true;
+}
+
+bool CanDecoder::decode_estop_reset_rsp(
+  const struct can_frame & frame,
+  uint8_t & seq, bool & result, uint16_t & blocker_mask) const
+{
+  messages::SysEstopResetRsp value{};
+  if (messages::decode(protocol_view(frame), value) != protocol::CodecStatus::Ok) {
+    return false;
+  }
+  seq = value.request_seq;
+  result = value.result;
+  blocker_mask = value.blocker_mask;
   return true;
 }
 
@@ -920,9 +1000,17 @@ void VehicleBridgeNode::on_control_mode(
     return;
   }
 
-  struct can_frame frame;
-  response->success = encoder_->encode_mode_request(request->mode == Request::AUTONOMOUS, frame) &&
-    can_->send(frame);
+  // Send 3 counter-advancing frames in burst so SYS RollingValidator accepts mode request
+  bool ok = true;
+  for (int i = 0; i < 3; ++i) {
+    struct can_frame frame;
+    if (encoder_->encode_mode_request(request->mode == Request::AUTONOMOUS, frame)) {
+      ok = can_->send(frame) && ok;
+    } else {
+      ok = false;
+    }
+  }
+  response->success = ok;
   if (response->success && request->mode == Request::MANUAL) {
     engaged_.store(false, std::memory_order_relaxed);
     accepting_control_.store(false, std::memory_order_relaxed);
@@ -933,12 +1021,22 @@ void VehicleBridgeNode::on_control_mode(
 void VehicleBridgeNode::on_emergency(
   const tier4_vehicle_msgs::msg::VehicleEmergencyStamped::SharedPtr msg)
 {
-  software_emergency_.store(msg->emergency, std::memory_order_relaxed);
+  const bool was_emergency = software_emergency_.exchange(msg->emergency, std::memory_order_relaxed);
   // SIM mode: the simulator's emergency pipeline is authoritative; the bridge is
   // a pure passthrough and must not assert its own ESTOP / drop control.
   if (params_.sim_mode) {return;}
   if (!msg->emergency) {
-    // Stop asserting ESTOP. Physical recovery remains exclusively with SYS/operator input.
+    // When transitioning from emergency to clear, send ESTOP reset burst to request clearance
+    if (was_emergency && encoder_ && can_->is_open()) {
+      RCLCPP_INFO(get_logger(), "Emergency cleared — sending ESTOP reset burst (0x114)");
+      const uint8_t seq = ++reset_seq_;
+      for (int i = 0; i < 3; ++i) {
+        struct can_frame frame;
+        if (encoder_->encode_estop_reset(seq, frame)) {
+          can_->send(frame);
+        }
+      }
+    }
     return;
   }
   engaged_.store(false, std::memory_order_relaxed);
@@ -1155,6 +1253,29 @@ void VehicleBridgeNode::tick_diagnostics()
   add("SYS Heartbeat", hb == 1, hb ? "alive" : "timeout");
   add("SYS ESTOP", estop == 0, estop ? "ACTIVE" : "clear");
 
+  const uint8_t rt_state = rt_node_state_.load(std::memory_order_relaxed);
+  const uint16_t rt_mask = rt_block_mask_.load(std::memory_order_relaxed);
+  const bool rt_out = rt_output_enabled_.load(std::memory_order_relaxed);
+  add(
+    "RT Node State", rt_state != messages::RtNodeStatus::kNodeStateEstop,
+    "state=" + std::to_string(rt_state) + " mask=0x" + std::to_string(rt_mask) +
+    (rt_out ? " out=ON" : " out=OFF"));
+
+  const uint8_t sys_state = sys_node_state_.load(std::memory_order_relaxed);
+  const uint16_t sys_mask = sys_block_mask_.load(std::memory_order_relaxed);
+  add(
+    "SYS Node State", sys_state != messages::SysNodeStatus::kNodeStateEstop,
+    "state=" + std::to_string(sys_state) + " mask=0x" + std::to_string(sys_mask));
+
+  const bool bus_off = mcp_bus_off_.load(std::memory_order_relaxed);
+  const uint8_t tec = mcp_tec_.load(std::memory_order_relaxed);
+  const uint8_t rec = mcp_rec_.load(std::memory_order_relaxed);
+  const uint8_t spi_faults = mcp_spi_faults_.load(std::memory_order_relaxed);
+  add(
+    "RT MCP2515 Health", !bus_off && tec < 128 && rec < 128,
+    "bus_off=" + std::string(bus_off ? "YES" : "NO") + " tec=" + std::to_string(tec) +
+    " rec=" + std::to_string(rec) + " spi_faults=" + std::to_string(spi_faults));
+
   pub_diag_->publish(diag);
 }
 
@@ -1312,6 +1433,55 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
         messages::RtHeartbeat value{};
         if (messages::decode(protocol_view(frame), value) == protocol::CodecStatus::Ok) {
           rt_heartbeat_.feed(value.alive_ctr, now());
+        }
+        break;
+      }
+
+    case CAN_RT_NODE_STATUS: {
+        uint8_t state = 0;
+        uint16_t mask = 0;
+        bool out_enabled = false;
+        if (decoder_->decode_rt_node_status(frame, state, mask, out_enabled)) {
+          rt_node_state_.store(state, std::memory_order_relaxed);
+          rt_block_mask_.store(mask, std::memory_order_relaxed);
+          rt_output_enabled_.store(out_enabled, std::memory_order_relaxed);
+        }
+        break;
+      }
+
+    case CAN_SYS_NODE_STATUS: {
+        uint8_t state = 0;
+        uint16_t mask = 0;
+        if (decoder_->decode_sys_node_status(frame, state, mask)) {
+          sys_node_state_.store(state, std::memory_order_relaxed);
+          sys_block_mask_.store(mask, std::memory_order_relaxed);
+        }
+        break;
+      }
+
+    case CAN_RT_DIAG_RPT: {
+        uint8_t tec = 0, rec = 0, eflg = 0, spi_faults = 0;
+        bool bus_off = false;
+        if (decoder_->decode_rt_diag(frame, tec, rec, eflg, bus_off, spi_faults)) {
+          mcp_tec_.store(tec, std::memory_order_relaxed);
+          mcp_rec_.store(rec, std::memory_order_relaxed);
+          mcp_eflg_.store(eflg, std::memory_order_relaxed);
+          mcp_bus_off_.store(bus_off, std::memory_order_relaxed);
+          mcp_spi_faults_.store(spi_faults, std::memory_order_relaxed);
+        }
+        break;
+      }
+
+    case CAN_ESTOP_RESET_RSP: {
+        uint8_t seq = 0;
+        bool result = false;
+        uint16_t blocker_mask = 0;
+        if (decoder_->decode_estop_reset_rsp(frame, seq, result, blocker_mask)) {
+          RCLCPP_INFO(
+            get_logger(),
+            "ESTOP Reset Rsp: seq=%u result=%s blocker_mask=0x%04X",
+            seq, (result == messages::SysEstopResetRsp::kResultAccepted ? "ACCEPTED" : "REJECTED"),
+            blocker_mask);
         }
         break;
       }

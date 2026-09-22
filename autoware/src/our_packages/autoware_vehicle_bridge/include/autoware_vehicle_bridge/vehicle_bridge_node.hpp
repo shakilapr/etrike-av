@@ -134,12 +134,16 @@ public:
   bool encode_heartbeat(struct can_frame & frame);
   bool encode_estop(struct can_frame & frame);
   bool encode_mode_request(bool autonomous, struct can_frame & frame);
+  bool encode_estop_reset(uint8_t seq, struct can_frame & frame);
+  bool encode_power_request(bool power_on, struct can_frame & frame);
 
 private:
   const VehicleParams & params_;
   uint8_t host_alive_ctr_{0};
   uint8_t mode_request_ctr_{0};
   uint8_t steering_ctr_{0};
+  uint8_t estop_reset_ctr_{0};
+  uint8_t power_request_ctr_{0};
 
   int32_t speed_to_mmps(float speed_ms) const;
   int32_t steering_to_yaw(float angle_rad, float speed_ms) const;
@@ -168,6 +172,23 @@ public:
     const struct can_frame & frame,
     diagnostic_msgs::msg::DiagnosticArray & msg,
     const rclcpp::Time & now) const;
+
+  bool decode_rt_node_status(
+    const struct can_frame & frame,
+    uint8_t & node_state, uint16_t & block_mask, bool & output_enabled) const;
+
+  bool decode_sys_node_status(
+    const struct can_frame & frame,
+    uint8_t & node_state, uint16_t & block_mask) const;
+
+  bool decode_rt_diag(
+    const struct can_frame & frame,
+    uint8_t & tec, uint8_t & rec, uint8_t & eflg, bool & bus_off,
+    uint8_t & spi_faults) const;
+
+  bool decode_estop_reset_rsp(
+    const struct can_frame & frame,
+    uint8_t & seq, bool & result, uint16_t & blocker_mask) const;
 
   uint8_t motion_counter() const {return last_motion_counter_;}
 
@@ -272,6 +293,19 @@ private:
   // ---- SYS liveness (from 0x011, written in RX thread, read in executor thread) ----
   std::atomic<uint8_t> sys_estop_active_{1};
   std::atomic<uint8_t> sys_heartbeat_ok_{0};
+
+  // ---- Node status & ECU telemetry snapshots ----
+  std::atomic<uint8_t> rt_node_state_{0};
+  std::atomic<uint16_t> rt_block_mask_{0};
+  std::atomic<bool> rt_output_enabled_{false};
+  std::atomic<uint8_t> sys_node_state_{0};
+  std::atomic<uint16_t> sys_block_mask_{0};
+  std::atomic<uint8_t> mcp_tec_{0};
+  std::atomic<uint8_t> mcp_rec_{0};
+  std::atomic<uint8_t> mcp_eflg_{0};
+  std::atomic<bool> mcp_bus_off_{false};
+  std::atomic<uint8_t> mcp_spi_faults_{0};
+  std::atomic<uint8_t> reset_seq_{0};
 
   // ---- Rate limiting ----
   rclcpp::Time last_estop_tx_{0, 0, RCL_ROS_TIME};

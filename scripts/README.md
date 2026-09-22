@@ -42,9 +42,11 @@ This directory contains utility scripts for workspace management, testing, diagn
    - [fix_and_rebuild.py](file:///E:/work/av_project/scripts/fix_and_rebuild.py)
    - [fix_launch.py](file:///E:/work/av_project/scripts/fix_launch.py)
    - [fix_yaml.py](file:///E:/work/av_project/scripts/fix_yaml.py)
-9. [Protocol Synchronization](#9-protocol-synchronization)
+9. [Protocol Synchronization & Verification](#9-protocol-synchronization--verification)
    - [update-protocol.sh](file:///E:/work/av_project/scripts/update-protocol.sh)
    - [update-protocol.ps1](file:///E:/work/av_project/scripts/update-protocol.ps1)
+   - [check_bridge_protocol_gaps.py](file:///E:/work/av_project/scripts/check_bridge_protocol_gaps.py)
+   - [bit_diff_analyzer.py](file:///E:/work/av_project/scripts/bit_diff_analyzer.py)
 
 ---
 
@@ -818,3 +820,65 @@ This directory contains utility scripts for workspace management, testing, diagn
   FINALLY:
       REMOVE temporary directory recursively
   ```
+
+### [check_bridge_protocol_gaps.py](file:///E:/work/av_project/scripts/check_bridge_protocol_gaps.py)
+* **Description**: Programmatic auditor comparing workspace CAN definitions (`etrike_protocol` and `autoware_vehicle_bridge`) against upstream firmware contracts and actual RT/SYS implementation (`etrike/main`). Detects DLC length mismatches, signal bounds discrepancies, missing telemetry handlers, and supervision dropouts.
+* **Pseudo-code**:
+  ```python
+  PARSE arguments (workspace_root, remote_ref="etrike/main")
+  LOAD upstream YAML contracts from git ref (network, host, rt, sys, hmi, mtr)
+  BUILD map of High CAN bus messages and expected signal specifications
+
+  # 1. Audit etrike_protocol.hpp
+  CHECK SysSafetySts DLC (3 vs 5)
+  CHECK RtStateRpt estop_reason range (<= 7 vs <= 15)
+  CHECK presence of new High bus structs (RtNodeStatus 0x501, RtDiagRpt 0x620, HostEstopResetReq 0x114, SysEstopResetRsp 0x115)
+
+  # 2. Audit protocol core headers
+  CHECK endian.hpp for read_be_i16 and write_be_i16 helpers
+
+  # 3. Audit vehicle_bridge_node.cpp
+  CHECK RX frame handling in publish_vehicle_reports for all High bus messages
+  CHECK on_control_mode for multi-frame burst requirement (RollingValidator baseline)
+  CHECK for remote ESTOP reset (0x114) and power request (0x112) capabilities
+
+  PRINT formatted colorized audit report
+  EXIT with code 1 if CRITICAL findings exist, otherwise 0
+  ```
+
+### [bit_diff_analyzer.py](file:///E:/work/av_project/scripts/bit_diff_analyzer.py)
+* **Description**: Detailed bit-by-bit comparator and matrix visualizer for CAN bus messages between workspace headers and upstream firmware. Generates visual byte/bit tables highlighting exact bit allocation differences, bounds changes, and payload growths.
+* **Pseudo-code**:
+  ```python
+  PARSE arguments (--remote-ref, --message, --markdown)
+  EXTRACT local and upstream struct definitions, DLCs, and Meta bit specifications
+  FOR each target message:
+      FOR each byte b IN [0..max_dlc-1]:
+          FOR each bit IN [7..0]:
+              COMPARE local signal ownership vs upstream signal ownership
+      COMPARE signal bounds, bit widths, and bit shifts
+      IF differences detected:
+          PRINT detailed bit differences
+          IF --markdown requested:
+              RENDER side-by-side byte-by-byte, bit-by-bit comparison grid
+  ```
+
+---
+
+## 10. CAN Watcher (Ergonomic Single-Page Monitor)
+
+### [run_can_watcher.sh](file:///E:/work/av_project/scripts/run_can_watcher.sh)
+* **Description**: One-click launcher for the Linux host (`med1@172.16.25.67`) to start CAN Watcher on `can2` (or specified interface). Serves the single-page ergonomic dashboard on port 8080.
+* **Usage**:
+  ```bash
+  ./scripts/run_can_watcher.sh [interface=can2] [port=8080]
+  ```
+
+### [run_can_watcher.ps1](file:///E:/work/av_project/scripts/run_can_watcher.ps1)
+* **Description**: Windows launcher for CAN Watcher. Starts the server and automatically opens the browser at `http://localhost:8080`.
+* **Usage**:
+  ```powershell
+  pwsh -File scripts/run_can_watcher.ps1 [-Interface can2] [-Port 8080] [-Sim]
+  ```
+
+
