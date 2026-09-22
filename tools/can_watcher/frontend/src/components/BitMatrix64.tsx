@@ -30,24 +30,13 @@ export const BitMatrix64: React.FC = () => {
         let owner: string | null = null;
         let color: string | null = null;
         for (const sig of signals) {
-          if (sig.endian === 'big') {
-            const sigStart = sig.byte * 8 + (7 - sig.bit);
-            const sigEnd = sigStart + sig.bits;
-            const bitIndex = byte * 8 + (7 - bit);
-            if (bitIndex >= sigStart && bitIndex < sigEnd) {
-              owner = sig.name;
-              color = sig.color;
-              break;
-            }
-          } else {
-            const bitIndex = byte * 8 + bit;
-            const sigStart = sig.byte * 8 + sig.bit;
-            const sigEnd = sigStart + sig.bits;
-            if (bitIndex >= sigStart && bitIndex < sigEnd) {
-              owner = sig.name;
-              color = sig.color;
-              break;
-            }
+          const bitIndex = byte * 8 + bit;
+          const sigStart = sig.byte * 8 + sig.bit;
+          const sigEnd = sigStart + sig.bits;
+          if (bitIndex >= sigStart && bitIndex < sigEnd) {
+            owner = sig.name;
+            color = sig.color;
+            break;
           }
         }
 
@@ -176,14 +165,14 @@ export const BitMatrix64: React.FC = () => {
 
                 {/* 8 Bits */}
                 {rowCells.map((cell) => {
-                  const isHovered = hoveredSignal && cell.owner === hoveredSignal;
+                  const isHovered = !isBeyondDlc && !!hoveredSignal && cell.owner === hoveredSignal;
                   const hasOwner = !!cell.owner && !isBeyondDlc;
                   const cellColor = cell.color || '#334155';
 
                   return (
                     <div
                       key={cell.bit}
-                      onMouseEnter={() => cell.owner && setHoveredSignal(cell.owner)}
+                      onMouseEnter={() => !isBeyondDlc && cell.owner && setHoveredSignal(cell.owner)}
                       onMouseLeave={() => setHoveredSignal(null)}
                       style={{
                         backgroundColor: isHovered

@@ -35,13 +35,57 @@ export const SignalRoster: React.FC = () => {
   const currentFrame = framesById[selectedCanId];
   const signals = selectedMsg?.signals || [];
 
+  // Keyboard arrow navigation between signals
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't hijack keys when user is typing in inputs or search
+      const targetTag = (e.target as HTMLElement)?.tagName;
+      if (targetTag === 'INPUT' || targetTag === 'TEXTAREA') {
+        return;
+      }
+
+      if (signals.length === 0) return;
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const currentIndex = signals.findIndex((s) => s.name === hoveredSignal);
+        let nextIndex = 0;
+
+        if (e.key === 'ArrowDown') {
+          nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % signals.length;
+        } else if (e.key === 'ArrowUp') {
+          nextIndex = currentIndex <= 0 ? signals.length - 1 : currentIndex - 1;
+        }
+
+        const nextSig = signals[nextIndex];
+        if (nextSig) {
+          setHoveredSignal(nextSig.name);
+          const el = document.getElementById(`signal-row-${nextSig.name}`);
+          if (el) {
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }
+      } else if (e.key === 'Escape') {
+        setHoveredSignal(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [signals, hoveredSignal, setHoveredSignal]);
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-950 overflow-hidden">
       {/* Header */}
       <div className="h-8 bg-slate-900 border-b border-slate-800 px-3 flex items-center justify-between select-none shrink-0">
-        <span className="text-[10px] font-mono font-bold uppercase text-slate-300 tracking-wider">
-          DECODED SIGNALS ({signals.length})
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono font-bold uppercase text-slate-300 tracking-wider">
+            DECODED SIGNALS ({signals.length})
+          </span>
+          <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/60 font-medium">
+            [↑/↓] Select • [Esc] Clear
+          </span>
+        </div>
         <span className="text-[10px] font-mono text-slate-400 font-medium">
           Bi-Directional Bit Matrix Mapping
         </span>
@@ -98,12 +142,14 @@ export const SignalRoster: React.FC = () => {
             return (
               <div
                 key={sig.name}
+                id={`signal-row-${sig.name}`}
+                onClick={() => setHoveredSignal(isHovered ? null : sig.name)}
                 onMouseEnter={() => setHoveredSignal(sig.name)}
                 onMouseLeave={() => setHoveredSignal(null)}
-                className={`flex items-center px-3 py-1.5 text-xs font-mono transition-colors cursor-default ${
+                className={`flex items-center px-3 py-1.5 text-xs font-mono transition-all cursor-pointer ${
                   isHovered
-                    ? 'bg-cyan-950/40 text-slate-100 ring-1 ring-cyan-500/30'
-                    : 'hover:bg-slate-900/60 text-slate-300'
+                    ? 'bg-cyan-950/70 text-slate-100 ring-1 ring-cyan-400/50 border-l-4 border-cyan-400 shadow-inner'
+                    : 'hover:bg-slate-900/60 text-slate-300 border-l-4 border-transparent'
                 }`}
               >
                 {/* Color Dot */}
