@@ -28,11 +28,11 @@ export const Topbar: React.FC = () => {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-blue-500 flex items-center justify-center font-black text-white text-sm shadow-md shadow-cyan-500/25 ring-1 ring-cyan-400/30">
-            CB
+            CW
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold tracking-wider text-slate-100 uppercase font-sans">CANByte Watcher</span>
+              <span className="text-sm font-bold tracking-wider text-slate-100 uppercase font-sans">CAN Watcher</span>
               <span className="text-[10px] uppercase font-mono font-semibold px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
                 E-Trike AV
               </span>
@@ -41,6 +41,7 @@ export const Topbar: React.FC = () => {
               Live Payload Matrix & Telemetry Analyzer
             </p>
           </div>
+
         </div>
 
         <div className="h-6 w-px bg-slate-800 mx-2" />

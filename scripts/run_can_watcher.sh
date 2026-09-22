@@ -10,7 +10,7 @@ PORT="${2:-8000}"
 HOST="0.0.0.0"
 
 echo "======================================================================"
-echo " Starting CANByte Watcher on $INTERFACE (Port $PORT)"
+echo " Starting CAN Watcher on $INTERFACE (Port $PORT)"
 echo " URL: http://localhost:$PORT"
 echo "======================================================================"
 

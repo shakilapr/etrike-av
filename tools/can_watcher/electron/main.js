@@ -1,5 +1,5 @@
 /**
- * Electron Main Process for CANByte Watcher.
+ * Electron Main Process for CAN Watcher.
  * Conforms to canonical boundary:
  * Window management, system menus, updater, native dialogs, and Python child process lifecycle management only.
  */
@@ -10,10 +10,35 @@ const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 
+const logFile = path.join(__dirname, 'electron_debug.log');
+function log(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  try { fs.appendFileSync(logFile, line); } catch (_) {}
+}
+
+const origLog = console.log;
+const origErr = console.error;
+console.log = (...args) => {
+  origLog.apply(console, args);
+  log(args.join(' '));
+};
+console.error = (...args) => {
+  origErr.apply(console, args);
+  log('[ERROR] ' + args.join(' '));
+};
+
+process.on('uncaughtException', (err) => {
+  log(`UncaughtException: ${err.stack || err}`);
+});
+process.on('unhandledRejection', (reason) => {
+  log(`UnhandledRejection: ${reason}`);
+});
+
 let mainWindow = null;
 let pythonProcess = null;
 const BACKEND_PORT = 8000;
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
+
 
 // Check if Python backend is already running on port 8000
 function checkBackendHealth() {
@@ -86,18 +111,19 @@ async function ensureBackendRunning() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: 'CANByte Watcher - E-Trike Telemetry & Bus Analyzer',
+    title: 'CAN Watcher - E-Trike Telemetry & Bus Analyzer',
     width: 1560,
     height: 920,
     minWidth: 1200,
     minHeight: 700,
+    center: true,
     backgroundColor: '#020617',
-    show: true, // Show immediately to prevent blank/hidden window states
+    show: true,
     autoHideMenuBar: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false, // Ensure local WebSocket and Fetch are unrestricted
+      sandbox: false,
     },
   });
 
@@ -141,12 +167,12 @@ function createWindow() {
           click: () => shell.openExternal(`${BACKEND_URL}/docs`),
         },
         {
-          label: 'About CANByte Watcher',
+          label: 'About CAN Watcher',
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: 'info',
-              title: 'About CANByte Watcher',
-              message: 'CANByte Watcher v2.0.0\nE-Trike AV Telemetry & Bus Protocol Analyzer',
+              title: 'About CAN Watcher',
+              message: 'CAN Watcher v2.0.0\nE-Trike AV Telemetry & Bus Protocol Analyzer',
               detail: 'Built with React 18, Vite, TypeScript, Tailwind CSS, Zustand, and Python FastAPI backend.',
             });
           },
@@ -158,31 +184,60 @@ function createWindow() {
   const menu = Menu.buildFromTemplate(menuTemplate);
   Menu.setApplicationMenu(menu);
 
-  // Error handling and console logging
+  // Lifecycle & diagnostic listeners
+  mainWindow.webContents.on('did-start-loading', () => {
+    log('[Electron] webContents did-start-loading');
+  });
+
+  mainWindow.webContents.on('dom-ready', () => {
+    log('[Electron] webContents dom-ready');
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    log('[Electron] webContents did-finish-load successfully');
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
   mainWindow.webContents.on('did-fail-load', (e, code, desc, validatedURL) => {
-    console.error(`[Electron] Failed to load ${validatedURL}: [${code}] ${desc}`);
+    log(`[Electron] Failed to load ${validatedURL}: [${code}] ${desc}`);
     setTimeout(() => {
       if (mainWindow) {
-        console.log(`[Electron] Retrying loadURL(${BACKEND_URL})...`);
+        log(`[Electron] Retrying loadURL(${BACKEND_URL})...`);
         mainWindow.loadURL(BACKEND_URL);
       }
     }, 1500);
   });
 
   mainWindow.webContents.on('console-message', (e, level, message) => {
-    console.log(`[Renderer] ${message}`);
+    log(`[Renderer Console] ${message}`);
   });
 
-  console.log(`[Electron] Loading ${BACKEND_URL}...`);
-  mainWindow.loadURL(BACKEND_URL);
-  mainWindow.focus();
+  mainWindow.on('ready-to-show', () => {
+    log('[Electron] mainWindow ready-to-show');
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  mainWindow.on('show', () => {
+    log('[Electron] mainWindow shown');
+  });
 
   mainWindow.on('closed', () => {
+    log('[Electron] mainWindow closed');
     mainWindow = null;
   });
+
+  log(`[Electron] Loading ${BACKEND_URL}...`);
+  mainWindow.loadURL(BACKEND_URL);
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 app.whenReady().then(async () => {
+  log('[Electron] app.whenReady fired');
   await ensureBackendRunning();
   createWindow();
 
@@ -194,15 +249,18 @@ app.whenReady().then(async () => {
 });
 
 app.on('will-quit', () => {
+  log('[Electron] app.will-quit fired');
   if (pythonProcess) {
-    console.log('[Electron] Terminating Python child process...');
+    log('[Electron] Terminating Python child process...');
     pythonProcess.kill();
     pythonProcess = null;
   }
 });
 
 app.on('window-all-closed', () => {
+  log('[Electron] window-all-closed fired');
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
+
