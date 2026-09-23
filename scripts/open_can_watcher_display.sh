@@ -78,6 +78,7 @@ nohup "$BROWSER_CMD" \
     --enable-webgl \
     --enable-unsafe-swiftshader \
     --disable-gpu-sandbox \
+    --test-type \
     < /dev/null > "/tmp/can_watcher_browser.log" 2>&1 &
 
 echo "  [OK] CAN Watcher launched on monitor!"
