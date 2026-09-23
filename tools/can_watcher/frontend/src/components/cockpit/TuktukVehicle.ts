@@ -76,17 +76,6 @@ export class TuktukVehicle {
     this.frontWheelMesh = createWheel() as unknown as THREE.Mesh;
     this.frontWheelPivot.add(this.frontWheelMesh);
 
-    // Front Fork / Steering Column
-    const forkMat = new THREE.MeshStandardMaterial({ color: 0x52525b, metalness: 0.8, roughness: 0.3 });
-    const forkGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.55, 12);
-    forkGeo.rotateX(0.25); // Slight rake angle
-    const leftFork = new THREE.Mesh(forkGeo, forkMat);
-    leftFork.position.set(-0.07, 0.22, 0.04);
-    const rightFork = new THREE.Mesh(forkGeo, forkMat);
-    rightFork.position.set(0.07, 0.22, 0.04);
-    this.frontWheelPivot.add(leftFork);
-    this.frontWheelPivot.add(rightFork);
-
     this.group.add(this.frontWheelPivot);
 
     // 2. Rear Left Wheel (X = -0.575m, Z = +1.0m, Y = wheelRadius)
