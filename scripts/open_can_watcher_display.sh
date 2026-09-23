@@ -78,7 +78,7 @@ nohup "$BROWSER_CMD" \
     --enable-webgl \
     --enable-unsafe-swiftshader \
     --disable-gpu-sandbox \
-    > "/tmp/can_watcher_browser.log" 2>&1 &
+    < /dev/null > "/tmp/can_watcher_browser.log" 2>&1 &
 
 echo "  [OK] CAN Watcher launched on monitor!"
 echo "  URL: $URL (Accessible also from other devices on network: http://172.16.25.67:${PORT})"
