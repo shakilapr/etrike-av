@@ -25,13 +25,19 @@ export const DriveCockpit3D: React.FC = () => {
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 300);
     camera.position.set(0, 2.8, 6.2);
 
-    // 3. Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(renderer.domElement);
+    // 3. Renderer with WebGL error safeguard
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
+      container.appendChild(renderer.domElement);
+    } catch (err) {
+      console.error('[DriveCockpit3D] WebGL context initialization failed:', err);
+      return;
+    }
 
     // 4. Orbit Controls (Used in Orbit mode)
     const orbitControls = new OrbitControls(camera, renderer.domElement);
