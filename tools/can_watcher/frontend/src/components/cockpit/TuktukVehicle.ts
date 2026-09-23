@@ -96,6 +96,19 @@ export class TuktukVehicle {
     rearAxle.position.set(0, this.wheelRadius, 1.0);
     this.group.add(rearAxle);
 
+    // Ground Contact Shadow (high performance baked ambient shadow under chassis)
+    const shadowGeo = new THREE.PlaneGeometry(1.45, 2.6);
+    shadowGeo.rotateX(-Math.PI / 2);
+    const shadowMat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+    const contactShadow = new THREE.Mesh(shadowGeo, shadowMat);
+    contactShadow.position.set(0, 0.005, 0.45);
+    this.group.add(contactShadow);
+
     // ================= LIGHTING & TAILLIGHTS =================
     // 5. Headlights at Front Cowl (Z = -0.79, Y = 0.65, X = ±0.28)
     const createHeadlight = (x: number) => {

@@ -21,14 +21,11 @@ export class RoadEnvironment {
     // 1. Asphalt Road Plane
     const roadGeo = new THREE.PlaneGeometry(this.roadWidth, this.roadLength, 1, 1);
     roadGeo.rotateX(-Math.PI / 2);
-    const roadMat = new THREE.MeshStandardMaterial({
+    const roadMat = new THREE.MeshBasicMaterial({
       color: 0x0a0a0a,
-      roughness: 0.95,
-      metalness: 0.05,
     });
     this.roadMesh = new THREE.Mesh(roadGeo, roadMat);
     this.roadMesh.position.set(0, -0.01, -40);
-    this.roadMesh.receiveShadow = true;
     this.group.add(this.roadMesh);
 
     // 2. Road Side Curbs / Boundaries (Glowing faint lines)

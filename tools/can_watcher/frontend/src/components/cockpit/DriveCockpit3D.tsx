@@ -28,11 +28,16 @@ export const DriveCockpit3D: React.FC = () => {
     // 3. Renderer with WebGL error safeguard
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({
+        antialias: false,
+        powerPreference: 'high-performance',
+        precision: 'mediump',
+        stencil: false,
+        depth: true,
+      });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFShadowMap;
+      renderer.setPixelRatio(1.0);
+      renderer.shadowMap.enabled = false;
       container.appendChild(renderer.domElement);
     } catch (err) {
       console.error('[DriveCockpit3D] WebGL context initialization failed:', err);
@@ -50,13 +55,12 @@ export const DriveCockpit3D: React.FC = () => {
     orbitControls.enabled = false;
 
     // 5. Lighting: High-contrast automotive studio lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
 
     // Key light from front-left illuminating vehicle nose and flank
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
     keyLight.position.set(-12, 18, -15);
-    keyLight.castShadow = true;
     scene.add(keyLight);
 
     // Fill light from rear-right
