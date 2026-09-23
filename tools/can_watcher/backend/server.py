@@ -299,6 +299,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 # Serve built React frontend if dist exists
 if FRONTEND_DIST.is_dir():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+    if (FRONTEND_DIST / "models").is_dir():
+        app.mount("/models", StaticFiles(directory=str(FRONTEND_DIST / "models")), name="models")
+
+    @app.get("/")
+    async def serve_root():
+        return FileResponse(FRONTEND_DIST / "index.html")
 
     @app.get("/{full_path:path}")
     async def serve_react_app(full_path: str):
