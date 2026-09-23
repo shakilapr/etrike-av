@@ -2,6 +2,11 @@
 
 Here is your simple everyday checklist to get up and running on the AV Project.
 
+> **[Troubleshooting] How to find the correct IP if it changes:**
+> If you suspect the IP of the Linux machine has changed, run `ip -4 a` (or `hostname -I`) on it. 
+> - **DO NOT USE** `172.17.x.x` (This is an internal Docker IP and cannot be reached from Windows).
+> - **DO NOT USE** `127.0.x.x` (This is the local loopback address).
+> - **DO USE** `172.16.x.x` (This is the real local network IP you need for SSH and Syncthing).
 ## 1. Check Windows Sync
 Your Windows computer automatically syncs your files in the background. To check if it's working:
 - Open your web browser and go to: [http://127.0.0.1:8384](http://127.0.0.1:8384)
