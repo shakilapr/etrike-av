@@ -83,10 +83,14 @@ export const App: React.FC = () => {
     }
   }, [zoomToast, setZoomToast]);
 
+  // Apply zoom factor to document root so UI stretches to screen boundaries like Obsidian
+  useEffect(() => {
+    document.documentElement.style.zoom = String(zoomLevel);
+  }, [zoomLevel]);
+
   return (
     <div
-      className="flex flex-col h-screen w-screen bg-black text-neutral-100 overflow-hidden font-sans select-none antialiased relative"
-      style={{ zoom: zoomLevel } as React.CSSProperties}
+      className="flex flex-col h-full w-full bg-black text-neutral-100 overflow-hidden font-sans select-none antialiased relative"
     >
       {/* Topbar */}
       <Topbar />

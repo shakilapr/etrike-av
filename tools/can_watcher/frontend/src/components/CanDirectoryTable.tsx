@@ -115,7 +115,7 @@ export const CanDirectoryTable: React.FC = () => {
       <div className="h-8 bg-[#0a0a0a] border-b border-neutral-800 px-3 flex items-center text-[10px] font-mono font-bold uppercase text-neutral-400 select-none shrink-0 tracking-wider">
         <div
           onClick={() => handleHeaderClick('access')}
-          className="w-12 text-center cursor-pointer hover:text-cyan-300 flex items-center justify-center transition-colors"
+          className="w-12 shrink-0 text-center cursor-pointer hover:text-cyan-300 flex items-center justify-center transition-colors"
           title="Sort by Access (TX/RX)"
         >
           <span>ACC</span>
@@ -123,7 +123,7 @@ export const CanDirectoryTable: React.FC = () => {
         </div>
         <div
           onClick={() => handleHeaderClick('id')}
-          className="w-20 cursor-pointer hover:text-cyan-300 flex items-center transition-colors"
+          className="w-20 shrink-0 cursor-pointer hover:text-cyan-300 flex items-center transition-colors"
           title="Sort by CAN Identifier"
         >
           <span>CAN ID</span>
@@ -139,7 +139,7 @@ export const CanDirectoryTable: React.FC = () => {
         </div>
         <div
           onClick={() => handleHeaderClick('bus')}
-          className="w-14 text-center cursor-pointer hover:text-cyan-300 flex items-center justify-center transition-colors"
+          className="w-14 shrink-0 text-center cursor-pointer hover:text-cyan-300 flex items-center justify-center transition-colors"
           title="Sort by CAN Bus"
         >
           <span>BUS</span>
@@ -147,7 +147,7 @@ export const CanDirectoryTable: React.FC = () => {
         </div>
         <div
           onClick={() => handleHeaderClick('cycle_ms')}
-          className="w-14 text-right cursor-pointer hover:text-cyan-300 flex items-center justify-end transition-colors"
+          className="w-14 shrink-0 text-right cursor-pointer hover:text-cyan-300 flex items-center justify-end transition-colors"
           title="Sort by Cycle Time (ms)"
         >
           <span>CYC</span>
@@ -155,7 +155,7 @@ export const CanDirectoryTable: React.FC = () => {
         </div>
         <div
           onClick={() => handleHeaderClick('rate')}
-          className="w-14 text-right cursor-pointer hover:text-cyan-300 flex items-center justify-end transition-colors"
+          className="w-14 shrink-0 text-right cursor-pointer hover:text-cyan-300 flex items-center justify-end transition-colors"
           title="Sort by Live Frequency (Hz)"
         >
           <span>RATE</span>
@@ -163,13 +163,13 @@ export const CanDirectoryTable: React.FC = () => {
         </div>
         <div
           onClick={() => handleHeaderClick('count')}
-          className="w-16 text-right cursor-pointer hover:text-cyan-300 flex items-center justify-end transition-colors"
+          className="w-16 shrink-0 text-right cursor-pointer hover:text-cyan-300 flex items-center justify-end transition-colors"
           title="Sort by Total Frame Count"
         >
           <span>COUNT</span>
           {renderSortIndicator('count')}
         </div>
-        <div className="w-52 pl-3">DATA PAYLOAD (HEX)</div>
+        <div className="w-52 shrink-0 pl-3">DATA PAYLOAD (HEX)</div>
       </div>
 
       {/* Virtualized Rows */}
@@ -227,7 +227,7 @@ export const CanDirectoryTable: React.FC = () => {
                   }`}
                 >
                   {/* Access Badge */}
-                  <div className="w-12 text-center">
+                  <div className="w-12 shrink-0 text-center">
                     <span
                       className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                         msg.access === 'RX'
@@ -240,7 +240,7 @@ export const CanDirectoryTable: React.FC = () => {
                   </div>
 
                   {/* CAN ID (Hex & Dec) */}
-                  <div className="w-20 flex flex-col justify-center">
+                  <div className="w-20 shrink-0 flex flex-col justify-center">
                     <span className="font-bold text-neutral-100 tracking-wide">{msg.id_hex}</span>
                     <span className="text-[10px] text-neutral-500">#{msg.id}</span>
                   </div>
@@ -256,7 +256,7 @@ export const CanDirectoryTable: React.FC = () => {
                   </div>
 
                   {/* Bus */}
-                  <div className="w-14 text-center">
+                  <div className="w-14 shrink-0 text-center">
                     <span
                       className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
                         msg.bus.toLowerCase() === 'high'
@@ -269,12 +269,12 @@ export const CanDirectoryTable: React.FC = () => {
                   </div>
 
                   {/* Cycle Time */}
-                  <div className="w-14 text-right text-neutral-300 text-[11px] tabular-nums font-semibold">
+                  <div className="w-14 shrink-0 text-right text-neutral-300 text-[11px] tabular-nums font-semibold">
                     {msg.cycle_ms ? `${msg.cycle_ms}ms` : '—'}
                   </div>
 
                   {/* Live Rate */}
-                  <div className="w-14 text-right tabular-nums text-[11px]">
+                  <div className="w-14 shrink-0 text-right tabular-nums text-[11px]">
                     {frame && frame.rate_hz > 0 ? (
                       <span className="text-emerald-400 font-bold">
                         {frame.rate_hz.toFixed(1)} <span className="text-[9px] text-neutral-500 font-normal">Hz</span>
@@ -285,12 +285,12 @@ export const CanDirectoryTable: React.FC = () => {
                   </div>
 
                   {/* Count */}
-                  <div className="w-16 text-right tabular-nums text-neutral-400 text-[11px] font-medium">
+                  <div className="w-16 shrink-0 text-right tabular-nums text-neutral-400 text-[11px] font-medium">
                     {frame ? frame.count.toLocaleString() : '0'}
                   </div>
 
                   {/* 8 Hex Bytes */}
-                  <div className="w-52 pl-3 flex items-center gap-1 font-mono text-[11px]">
+                  <div className="w-52 shrink-0 pl-3 flex items-center gap-1 font-mono text-[11px]">
                     {paddedBytes.map((byte, idx) => (
                       <span
                         key={idx}

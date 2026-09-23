@@ -27,10 +27,10 @@ export const Topbar: React.FC = () => {
   return (
     <header className="h-12 bg-black border-b border-neutral-800 px-4 flex items-center justify-between select-none shrink-0 z-20">
       {/* Title & Tool Identifier */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-baseline gap-2">
+      <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-baseline gap-2 shrink-0 whitespace-nowrap">
           <span className="text-base font-black tracking-tight text-white font-mono lowercase">seer</span>
-          <span className="text-[11px] text-neutral-400 font-mono font-medium lowercase">e-trike av</span>
+          <span className="text-[11px] text-neutral-400 font-mono font-medium lowercase whitespace-nowrap">e-trike av</span>
         </div>
 
         <div className="h-4 w-px bg-neutral-800 mx-1" />
@@ -107,7 +107,7 @@ export const Topbar: React.FC = () => {
       </div>
 
       {/* Right Controls: Stream Stats & Actions */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 shrink-0">
         {/* Pause/Resume Button */}
         <button
           onClick={togglePause}
