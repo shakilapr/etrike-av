@@ -202,30 +202,30 @@ export const CockpitHud: React.FC = () => {
           </div>
         </div>
 
-        {/* ================= MIDDLE INSTRUMENT PODS ================= */}
-        <div className="flex justify-between items-center px-2">
-          {/* Left Wing: Chassis & Steering Dynamics (with Real CAN Diagnostics) */}
-          <div className="w-80 lg:w-84 bg-[#080808]/85 backdrop-blur-xl border border-neutral-800/90 rounded-2xl p-5 space-y-3.5 pointer-events-auto shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+        {/* ================= MIDDLE INSTRUMENT PODS (FLOATING IN-SPACE HUD) ================= */}
+        <div className="flex justify-between items-center px-4">
+          {/* Left Wing: Chassis & Steering Dynamics (Floating HUD) */}
+          <div className="w-72 lg:w-80 space-y-3 pointer-events-auto drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
+            <div className="flex items-center justify-between border-b border-neutral-800/60 pb-1.5">
               <span className="text-xs uppercase font-black text-neutral-400 tracking-wider">
                 CHASSIS DYNAMICS
               </span>
-              <span className="text-[10px] text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800 font-bold">
+              <span className="text-[10px] text-cyan-400 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/60 font-bold">
                 3-WHEELER
               </span>
             </div>
 
-            {/* Steering Angle with Bi-Directional High-Contrast Bar */}
+            {/* Steering Angle with Floating Bi-Directional Light-Tube Bar */}
             <div>
               <div className="flex justify-between items-baseline mb-1">
                 <span className="text-sm font-semibold text-neutral-300">Steering</span>
-                <span className="text-2xl font-black tabular-nums text-emerald-400">
+                <span className="text-2xl font-black tabular-nums text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">
                   {steerActual > 0 ? `+${steerActual.toFixed(1)}°` : `${steerActual.toFixed(1)}°`}
                 </span>
               </div>
-              {/* 16px Solid Gauge Bar with Center Detent */}
-              <div className="h-4 bg-neutral-950 rounded-full relative overflow-hidden border border-neutral-700/80 shadow-inner">
-                <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-neutral-400 -translate-x-1/2 z-10" />
+              {/* Floating Gauge Bar with Center Detent */}
+              <div className="h-3.5 bg-neutral-900/90 rounded-full relative overflow-hidden border border-neutral-700/60 shadow-inner">
+                <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-neutral-300 -translate-x-1/2 z-10" />
                 {/* Target Command Marker */}
                 <div
                   className="absolute top-0 bottom-0 w-1.5 bg-cyan-300 -translate-x-1/2 z-20 shadow-[0_0_8px_rgba(6,182,212,1)]"
@@ -234,7 +234,7 @@ export const CockpitHud: React.FC = () => {
                 />
                 {/* Actual Steer Fill */}
                 <div
-                  className="h-full bg-emerald-400 transition-all duration-75 absolute top-0"
+                  className="h-full bg-emerald-400 transition-all duration-75 absolute top-0 shadow-[0_0_10px_rgba(52,211,153,0.8)]"
                   style={{
                     left: steerActual < 0 ? `${50 + (steerActual / 45) * 50}%` : '50%',
                     width: `${(Math.abs(steerActual) / 45) * 50}%`,
@@ -248,14 +248,14 @@ export const CockpitHud: React.FC = () => {
               </div>
             </div>
 
-            {/* Steering Actuator Diagnostics (CAN 0x310) */}
-            <div className="flex justify-between items-center text-xs py-1 px-2.5 rounded-lg bg-neutral-950/60 border border-neutral-800 font-mono">
+            {/* Steering Actuator Diagnostics (Floating Telemetry Row) */}
+            <div className="flex justify-between items-center text-xs py-1 border-b border-neutral-900/80 font-mono">
               <span className="text-neutral-400">EPS Current: <span className="text-cyan-300 font-bold">{steerCurrent}A</span></span>
               <span className="text-neutral-400">ECU: <span className="text-amber-300 font-bold">{steerTemp}°C</span></span>
             </div>
 
             {/* Yaw Rate */}
-            <div className="flex justify-between items-baseline pt-1 border-t border-neutral-900">
+            <div className="flex justify-between items-baseline pt-0.5">
               <span className="text-sm font-semibold text-neutral-300">Yaw Rate</span>
               <div>
                 <span className="text-2xl font-black text-white tabular-nums">
@@ -265,23 +265,23 @@ export const CockpitHud: React.FC = () => {
               </div>
             </div>
 
-            {/* Hydraulic Brake Bar (14px thickness) */}
-            <div className="pt-1 border-t border-neutral-900">
+            {/* Hydraulic Brake Bar (Floating Light-Tube) */}
+            <div className="pt-0.5 border-t border-neutral-900/80">
               <div className="flex justify-between items-baseline mb-1">
                 <span className="text-sm font-semibold text-neutral-300">Hydraulic Brake</span>
                 <span
                   className={`text-2xl font-black tabular-nums ${
-                    brakePressure > 50 ? 'text-rose-400' : 'text-neutral-200'
+                    brakePressure > 50 ? 'text-rose-400 drop-shadow-[0_0_10px_rgba(244,63,94,0.6)]' : 'text-neutral-200'
                   }`}
                 >
                   {brakePressure} <span className="text-xs font-normal text-neutral-400">kPa</span>
                 </span>
               </div>
-              <div className="h-3.5 bg-neutral-950 rounded-full overflow-hidden border border-neutral-700/80 shadow-inner">
+              <div className="h-3 bg-neutral-900/90 rounded-full overflow-hidden border border-neutral-700/60 shadow-inner">
                 <div
                   className={`h-full transition-all duration-75 ${
                     brakePressure > 100
-                      ? 'bg-gradient-to-r from-amber-500 to-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.8)]'
+                      ? 'bg-gradient-to-r from-amber-500 to-rose-500 shadow-[0_0_14px_rgba(244,63,94,0.9)]'
                       : 'bg-neutral-600'
                   }`}
                   style={{ width: `${brakePercent}%` }}
@@ -289,57 +289,57 @@ export const CockpitHud: React.FC = () => {
               </div>
               <div className="flex justify-between text-xs text-neutral-400 mt-1 font-mono">
                 <span>Brake ECU: <span className="text-neutral-300">{brakeTemp}°C</span></span>
-                <span className={brakeFault ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                <span className={brakeFault ? 'text-rose-400 font-bold' : 'text-emerald-400 font-semibold'}>
                   {brakeFault ? 'BRAKE FAULT' : 'NORMAL'}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Right Wing: Powertrain & CAN Bus Telemetry */}
-          <div className="w-80 lg:w-84 bg-[#080808]/85 backdrop-blur-xl border border-neutral-800/90 rounded-2xl p-5 space-y-3.5 pointer-events-auto shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+          {/* Right Wing: Powertrain & CAN Bus Telemetry (Floating HUD) */}
+          <div className="w-72 lg:w-80 space-y-3 pointer-events-auto drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
+            <div className="flex items-center justify-between border-b border-neutral-800/60 pb-1.5">
               <span className="text-xs uppercase font-black text-neutral-400 tracking-wider">
                 POWERTRAIN & BUS
               </span>
-              <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800 font-bold">
+              <span className="text-[10px] text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/60 font-bold">
                 ACTIVE
               </span>
             </div>
 
-            {/* Motor RPM & Demand Bar */}
+            {/* Motor RPM & Floating Throttle Power Bar */}
             <div>
               <div className="flex justify-between items-baseline mb-1">
                 <span className="text-sm font-semibold text-neutral-300">Electric Motor</span>
-                <span className="text-2xl font-black tabular-nums text-cyan-300">
+                <span className="text-2xl font-black tabular-nums text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
                   {motorRpm.toLocaleString()} <span className="text-xs font-normal text-neutral-400">RPM</span>
                 </span>
               </div>
-              {/* 16px Throttle Power Bar */}
-              <div className="h-4 bg-neutral-950 rounded-full overflow-hidden border border-neutral-700/80 shadow-inner">
+              {/* Floating Throttle Tube */}
+              <div className="h-3.5 bg-neutral-900/90 rounded-full overflow-hidden border border-neutral-700/60 shadow-inner">
                 <div
-                  className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-75 shadow-[0_0_10px_rgba(6,182,212,0.6)]"
+                  className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-75 shadow-[0_0_12px_rgba(6,182,212,0.8)]"
                   style={{ width: `${throttlePercent}%` }}
                 />
               </div>
               <div className="flex justify-between text-xs text-neutral-400 mt-1 font-mono">
                 <span>IDLE</span>
-                <span className="text-neutral-300">{throttlePercent}% DEMAND</span>
+                <span className="text-neutral-300 font-bold">{throttlePercent}% DEMAND</span>
                 <span>PEAK</span>
               </div>
             </div>
 
             {/* CAN Bus Update Rate */}
-            <div className="flex justify-between items-baseline pt-1 border-t border-neutral-900">
+            <div className="flex justify-between items-baseline pt-0.5 border-t border-neutral-900/80">
               <span className="text-sm font-semibold text-neutral-300">Bus Rate</span>
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-cyan-400 animate-pulse" />
-                <span className="text-2xl font-black text-emerald-400 tabular-nums">28.0 Hz</span>
+                <span className="text-2xl font-black text-emerald-400 tabular-nums drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">28.0 Hz</span>
               </div>
             </div>
 
-            {/* CAN Controller Counters (0x211) */}
-            <div className="flex justify-between items-center text-xs py-1 px-2.5 rounded-lg bg-neutral-950/60 border border-neutral-800 font-mono">
+            {/* CAN Controller Counters (Floating Diagnostic Row) */}
+            <div className="flex justify-between items-center text-xs py-1 border-b border-neutral-900/80 font-mono">
               <span className="text-neutral-400">TEC: <span className="text-emerald-400 font-bold">{mcpTec}</span></span>
               <span className="text-neutral-400">REC: <span className="text-emerald-400 font-bold">{mcpRec}</span></span>
               <span className={mcpBusOff ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
@@ -348,7 +348,7 @@ export const CockpitHud: React.FC = () => {
             </div>
 
             {/* Total Frames */}
-            <div className="flex justify-between items-baseline pt-1 border-t border-neutral-900">
+            <div className="flex justify-between items-baseline pt-0.5">
               <span className="text-sm font-semibold text-neutral-300">CAN Telemetry Frames</span>
               <span className="text-base font-bold text-neutral-200 tabular-nums">
                 {totalFrames.toLocaleString()}
