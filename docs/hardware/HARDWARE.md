@@ -51,7 +51,11 @@
 
 ## 4. Vehicle Control Interface
 * **Interface:** RT (Real-Time) through CAN
-* **Hardware Controllers:** 2x MTTCAN interfaces (`can0`, `can1` @ 50MHz clock)
+* **Hardware Controllers:** 
+  * 2x MTTCAN native interfaces (`can0`, `can1` @ 50MHz clock)
+  * External USB-to-CAN Adapters (`can2` / `canable0`):
+    * [CANalyst-II Dual-Channel USB Adapter](CANALYST_II_SETUP.md) (`04d8:0053`) — Bench, HIL testing, and middleman sniffing.
+    * [CANable Pro USB Adapter](CANABLE_PRO_SETUP.md) (`1d50:606f` / gs_usb) — Direct hardware SocketCAN.
 * **Target:** Chassis Electronic Control Units (ECUs)
 * **I/O Functions:**
   * **TX:** Actuation commands (steering, acceleration, braking).
