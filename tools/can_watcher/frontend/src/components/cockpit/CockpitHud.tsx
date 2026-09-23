@@ -144,34 +144,25 @@ export const CockpitHud: React.FC = () => {
             </div>
           </div>
 
-          {/* Top-Center: Speedometer & Autonomy State (Primary Driving Glance) */}
+          {/* Top-Center Primary Horizon: PRND Transmission & Speedometer */}
           <div className="absolute left-1/2 -translate-x-1/2 top-0 flex flex-col items-center">
-            {/* Autonomy Badge & Target Cruise Speed */}
-            <div className="flex items-center gap-3 mb-1.5">
-              {/* Target Cruise Speed Pill */}
-              <div
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#080808]/90 border border-neutral-700/80 text-sm shadow-md"
-                title="Target Commanded Cruise Speed"
-              >
-                <span className="text-xs uppercase text-neutral-400 font-bold tracking-wider">CRUISE</span>
-                <span className="font-black tabular-nums text-white text-base">
-                  {targetSpeedVal.toFixed(0)}
-                </span>
-              </div>
-
-              {/* Mode & Drive Status Pill (Strictly NO 'Autoware Auto') */}
-              <div
-                className={`flex items-center gap-2 px-3.5 py-1 rounded-full border transition-all ${
-                  isAuto
-                    ? 'bg-cyan-950/90 text-cyan-300 border-cyan-400 shadow-[0_0_18px_rgba(6,182,212,0.6)]'
-                    : 'bg-[#080808]/90 text-neutral-400 border-neutral-800'
-                }`}
-              >
-                <Layers className={`w-4 h-4 ${isAuto ? 'animate-pulse text-cyan-300' : 'text-neutral-500'}`} />
-                <span className="text-xs font-black uppercase tracking-wider">
-                  {isAuto ? 'AUTONOMOUS' : 'MANUAL'}
-                </span>
-              </div>
+            {/* PRND Transmission Selector */}
+            <div className="flex items-center gap-2 bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 px-3 py-1 rounded-xl shadow-xl mb-1 pointer-events-auto">
+              {['P', 'R', 'N', 'D', 'S'].map((gearLetter) => {
+                const isSelected = telemetry.gear === gearLetter;
+                return (
+                  <div
+                    key={gearLetter}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-black transition-all ${
+                      isSelected
+                        ? 'bg-cyan-500 text-black shadow-[0_0_14px_rgba(6,182,212,0.9)] scale-110 border border-cyan-300'
+                        : 'text-neutral-500 hover:text-neutral-400 bg-neutral-900/50'
+                    }`}
+                  >
+                    {gearLetter}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Primary Speedometer Digits (Automotive Glance Sizing: 80-96px) */}
@@ -386,29 +377,9 @@ export const CockpitHud: React.FC = () => {
             ))}
           </div>
 
-          {/* Bottom-Center: PRND Transmission Selector (48px glowing gear pills) */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-0 flex flex-col items-center">
-            {/* PRND Pills */}
-            <div className="flex items-center gap-3 bg-[#080808]/95 backdrop-blur-xl border border-neutral-800/95 px-4 py-2 rounded-2xl shadow-2xl mb-2 pointer-events-auto">
-              {['P', 'R', 'N', 'D', 'S'].map((gearLetter) => {
-                const isSelected = telemetry.gear === gearLetter;
-                return (
-                  <div
-                    key={gearLetter}
-                    className={`w-12 h-12 flex items-center justify-center rounded-xl text-xl font-black transition-all ${
-                      isSelected
-                        ? 'bg-cyan-500 text-black shadow-[0_0_18px_rgba(6,182,212,0.9)] scale-110 border-2 border-cyan-300'
-                        : 'text-neutral-500 hover:text-neutral-300 bg-neutral-900/60'
-                    }`}
-                  >
-                    {gearLetter}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Clean Autonomous Subtitle (No Autoware Auto) */}
-            <span className="text-xs text-neutral-300 uppercase tracking-widest font-bold">
+          {/* Bottom-Center: Clean Road Corridor Status */}
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 flex flex-col items-center pointer-events-none">
+            <span className="text-[11px] text-neutral-400 uppercase tracking-widest font-bold drop-shadow-md">
               {isAuto ? 'AUTONOMOUS DRIVING SYSTEM • DRIVE-BY-WIRE ACTIVE' : 'MANUAL DRIVE OVERRIDE'}
             </span>
           </div>
