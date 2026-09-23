@@ -27,7 +27,7 @@ How to run the full E-Trike stack on the Jetson for bench / simulator work:
 
 ```bash
 # On the Jetson host
-DISPLAY=:1 xhost +local:docker
+DISPLAY=:1 XAUTHORITY=/run/user/1000/gdm/Xauthority xhost +local:docker
 
 docker rm -f autoware_test 2>/dev/null || true
 

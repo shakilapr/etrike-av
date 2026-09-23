@@ -36,7 +36,7 @@ start_container() {
     echo "  already running."
   else
     docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-    DISPLAY=:1 xhost +local:docker >/dev/null 2>&1 || true
+    DISPLAY=:1 XAUTHORITY=/run/user/1000/gdm/Xauthority xhost +local:docker >/dev/null 2>&1 || true
     docker run -d --name "$CONTAINER" \
       --privileged --runtime=nvidia --gpus all \
       --net=host --ipc=host \

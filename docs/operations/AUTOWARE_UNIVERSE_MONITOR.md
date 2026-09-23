@@ -37,7 +37,7 @@ Run this on the **Jetson host** (not inside the container), every time the X
 server has restarted:
 
 ```bash
-DISPLAY=:1 xhost +local:docker
+DISPLAY=:1 XAUTHORITY=/run/user/1000/gdm/Xauthority xhost +local:docker
 ```
 
 ### 3. (Re)create the container with the X socket mounted
@@ -121,3 +121,14 @@ Pre-engage messages such as `Fixed Frame [map] does not exist` and
 - This is the planning simulator: the `autoware_vehicle_bridge` CAN node is
   **not** launched here (`vehicle_simulation=true`). The bridge is tested
   separately (see `autoware_vehicle_bridge/README.md`).
+
+## 6. Stop / Close Everything
+
+```bash
+# Stop the planning simulator and RViz
+docker exec autoware_test bash -c 'pkill -9 -f planning_simulator; pkill -9 -f rviz2'
+
+# (Optional) Stop and remove the container
+docker rm -f autoware_test
+```
+
