@@ -4,6 +4,7 @@ import { TelemetrySidebar } from './components/TelemetrySidebar';
 import { CanDirectoryTable } from './components/CanDirectoryTable';
 import { BitMatrix64 } from './components/BitMatrix64';
 import { SignalRoster } from './components/SignalRoster';
+import { DriveCockpit3D } from './components/cockpit/DriveCockpit3D';
 import { useCanStore } from './store/canStore';
 
 export const App: React.FC = () => {
@@ -32,13 +33,31 @@ export const App: React.FC = () => {
     // 2. Initialize WebSocket stream
     initWebSocket();
 
-    // 3. Global hotkeys (Space to pause, Ctrl +/-/0 to zoom)
+    // 3. Global hotkeys (Space to pause, Ctrl +/-/0 to zoom, Tab to toggle 3D view)
     const handleKeyDown = (e: KeyboardEvent) => {
       // Space to toggle pause
       if (e.code === 'Space' && (e.target as HTMLElement).tagName !== 'INPUT') {
         e.preventDefault();
         togglePause();
         return;
+      }
+
+      // Tab to toggle between CAN Monitor and 3D Cockpit
+      if (e.key === 'Tab' && (e.target as HTMLElement).tagName !== 'INPUT') {
+        e.preventDefault();
+        useCanStore.getState().toggleActiveView();
+        return;
+      }
+
+      // Camera preset hotkeys (1: Chase, 2: Cabin, 3: 360° Orbit)
+      if (useCanStore.getState().activeView === 'cockpit' && (e.target as HTMLElement).tagName !== 'INPUT') {
+        if (e.key === '1') {
+          useCanStore.getState().setCameraMode('chase');
+        } else if (e.key === '2') {
+          useCanStore.getState().setCameraMode('cabin');
+        } else if (e.key === '3') {
+          useCanStore.getState().setCameraMode('orbit');
+        }
       }
 
       // Zoom Hotkeys: Ctrl + Plus / Ctrl + Minus / Ctrl + 0
@@ -73,7 +92,7 @@ export const App: React.FC = () => {
     };
   }, [initWebSocket, setCatalog, togglePause]);
 
-  const { zoomLevel, zoomToast, setZoomToast } = useCanStore();
+  const { zoomLevel, zoomToast, setZoomToast, activeView } = useCanStore();
 
   // Clear zoom toast after 1.5s
   useEffect(() => {
@@ -95,20 +114,28 @@ export const App: React.FC = () => {
       {/* Topbar */}
       <Topbar />
 
-      {/* Main Cockpit Layout: 3 Panes */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Pane: Gauges & ISO 2575 Telltales */}
-        <TelemetrySidebar />
-
-        {/* Center Pane: Virtualized CAN Directory Table */}
-        <CanDirectoryTable />
-
-        {/* Right Pane: 64-bit Payload Matrix & Signal Roster */}
-        <div className="w-[520px] flex flex-col min-h-0 border-l border-neutral-800 shrink-0 bg-black">
-          <BitMatrix64 />
-          <SignalRoster />
+      {/* View Routing */}
+      {activeView === 'cockpit' ? (
+        /* Full-Screen 3D Driving Cockpit */
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
+          <DriveCockpit3D />
         </div>
-      </div>
+      ) : (
+        /* Main Cockpit Layout: 3 Panes (CAN Monitor) */
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          {/* Left Pane: Gauges & ISO 2575 Telltales */}
+          <TelemetrySidebar />
+
+          {/* Center Pane: Virtualized CAN Directory Table */}
+          <CanDirectoryTable />
+
+          {/* Right Pane: 64-bit Payload Matrix & Signal Roster */}
+          <div className="w-[520px] flex flex-col min-h-0 border-l border-neutral-800 shrink-0 bg-black">
+            <BitMatrix64 />
+            <SignalRoster />
+          </div>
+        </div>
+      )}
 
       {/* Floating Zoom Indicator Toast */}
       {zoomToast && (

@@ -17,8 +17,15 @@ interface CanState {
   searchQuery: string;
   zoomLevel: number;
   zoomToast: string | null;
+  activeView: 'monitor' | 'cockpit';
+  cameraMode: 'chase' | 'cabin' | 'orbit';
+  speedUnit: 'km/h' | 'mph';
 
   // Actions
+  setActiveView: (view: 'monitor' | 'cockpit') => void;
+  toggleActiveView: () => void;
+  setCameraMode: (mode: 'chase' | 'cabin' | 'orbit') => void;
+  setSpeedUnit: (unit: 'km/h' | 'mph') => void;
   setCatalog: (catalog: MessageDef[], source: string) => void;
   selectMessage: (canId: number) => void;
   setHoveredSignal: (sigName: string | null) => void;
@@ -67,6 +74,32 @@ export const useCanStore = create<CanState>((set, get) => ({
     }
   })(),
   zoomToast: null,
+  activeView: (() => {
+    try {
+      const v = localStorage.getItem('seer_active_view');
+      return v === 'cockpit' ? 'cockpit' : 'monitor';
+    } catch {
+      return 'monitor';
+    }
+  })(),
+  cameraMode: 'chase',
+  speedUnit: 'km/h',
+
+  setActiveView: (activeView) => {
+    try {
+      localStorage.setItem('seer_active_view', activeView);
+    } catch {}
+    set({ activeView });
+  },
+  toggleActiveView: () => {
+    const next = get().activeView === 'monitor' ? 'cockpit' : 'monitor';
+    try {
+      localStorage.setItem('seer_active_view', next);
+    } catch {}
+    set({ activeView: next });
+  },
+  setCameraMode: (cameraMode) => set({ cameraMode }),
+  setSpeedUnit: (speedUnit) => set({ speedUnit }),
 
   setCatalog: (catalog, source) => {
     set({
