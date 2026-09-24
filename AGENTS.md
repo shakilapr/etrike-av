@@ -8,3 +8,14 @@
 - Python code: 4-space indent, snake_case methods, PascalCase classes, strict type hints
 - ROS2 nodes: Must be LifecycleNodes, fail-closed, with timeouts on all subscriptions
 - Commits: Use format `type(scope): message`
+
+# Embedded HMI & Display Rules (Waveshare ESP32-S3-Touch-LCD-4.3B SKU 28141)
+- DISPLAY: Target Waveshare ESP32-S3-Touch-LCD-4.3B. Resolution: exactly 800x480 landscape. RGB565 (16-bit). LVGL only. Never modify proven BSP/display/touch timings without explicit reason.
+- TYPOGRAPHY: Hero: 96 px. Major: 48 px. Heading: 28 px. Body: 20 px. Secondary: 16 px. Metadata: 14 px. No arbitrary font sizes. Use tabular figures / fixed width alignment to avoid jitter.
+- LAYOUT: Outer margin: 16 px. Standard gap: 8 px. Section gap: 16 px. Card padding: 12-16 px. Minimum touch target: 48x48 px. Prefer 56+ px for interactive controls.
+- STYLE: Flat/minimal. No gradients. No decorative continuous animation. No blur. Avoid transparency/opacity. Use semantic colors only. Never communicate status using color alone (always Symbol/Icon + Text + Color).
+- PERFORMANCE: CAN tasks never directly manipulate LVGL. CAN updates VehicleState struct. UI reads VehicleState. UI refresh target: ~20-30 Hz for live vehicle data. Update widgets only when values/state change. Avoid full-screen redraws. Avoid large raster assets. Prefer LVGL primitives. Lazy-create complex secondary screens where useful.
+- THREADING: LVGL calls only from UI context or under the required LVGL lock. LVGL is not thread-safe.
+- ARCHITECTURE: CAN/TWAI -> Decoder -> VehicleState -> UI Binding -> LVGL Widgets.
+- SAFETY: Touch UI is informational/control HMI, not the sole safety mechanism. Critical state must remain visible. Faults override noncritical visual information. Never hide an active critical warning behind navigation.
+- DEPENDENCIES: Pin LVGL version. Generated UI must use the same LVGL major/minor API expected by firmware. Do not replace Waveshare BSP merely to simplify generated code.

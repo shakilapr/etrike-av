@@ -295,3 +295,61 @@ To guarantee glanceability and error-free thumb touch interaction while driving 
 | **Numeric Action Target** | Narrow $180 \times 44\text{ px}$ button | Bottom row split buttons | **Full-width $784 \times 58\text{ px}$** | $93\text{ mm}$ reach; ambidextrous thumb target |
 | **Plot Header Layout** | Crammed $26\text{ pt}$ title | Title + 2 metrics | **Distributed $18\text{ pt}$ Bold + Aux Metric** | Prevents overlap between back button and auxiliary metric |
 | **Watchdog Deck** | 4-column compact cards | 4-column compact cards | **5-column $146 \times 170\text{ px}$ cards** | Full visibility of all low-bus ECUs with active status tags |
+
+---
+
+## 8. Embedded HMI Design Specification & Coding Rules
+
+To prevent web-dashboard anti-patterns and enforce automotive-grade embedded practices on the **Waveshare ESP32-S3-Touch-LCD-4.3B (SKU 28141)**, all firmware and simulation code must comply with these codified rules:
+
+### 8.1 Display & Hardware Foundation
+* **Target Hardware**: Waveshare ESP32-S3-Touch-LCD-4.3B (SKU 28141).
+* **Resolution & Color**: Exactly $800 \times 480\text{ px}$ landscape, 16-bit RGB565 ($65,536$ colors).
+* **Display Engine**: LVGL (pinned version, never mixed between LVGL 8 and LVGL 9 APIs).
+* **BSP Integrity**: Never modify proven BSP display timings (ST7262 12.5 MHz PCLK), GT911 touch timings, or CH422G GPIO expander routines without explicit hardware reason.
+
+### 8.2 Semantic Typography Hierarchy (6-Tier Fixed System)
+Instead of arbitrary font sizes, all UI widgets strictly use semantic typography tokens:
+| Token | Size | Intended Purpose | Embedded Weight |
+| :--- | :--- | :--- | :--- |
+| `FONT_HERO` | **$96\text{ px}$** | Vehicle Speed / Dominant focus metric | Medium / SemiBold |
+| `FONT_MAJOR` | **$48\text{ px}$** | Command & Feedback hero values, Gear indicator, E-Stop state | SemiBold |
+| `FONT_HEADING` | **$28\text{ px}$** | Window titles, section headings, major status badges | SemiBold |
+| `FONT_BODY` | **$20\text{ px}$** | Touch button labels, normal telemetry values, unit labels | Medium |
+| `FONT_SECONDARY` | **$16\text{ px}$** | Card subtitles, metadata, auxiliary rates | Regular |
+| `FONT_METADATA` | **$14\text{ px}$** | Bus addresses, cycle times, qualitative tags | Regular |
+
+*Tabular Figures*: All numeric labels use tabular figures or fixed width containers with center alignment to prevent visual jitter during high-speed CAN updates.
+
+### 8.3 Semantic Design Tokens (Color Palette)
+No raw hex values scattered across the codebase; all styles reference semantic tokens:
+* `UI_COLOR_BG`: `#000000` (Pure engineering black canvas)
+* `UI_COLOR_SURFACE`: `#0D0D0D` (Dark card background)
+* `UI_COLOR_SURFACE_ALT`: `#1E293B` (Selected / active button fill)
+* `UI_COLOR_BORDER`: `#262626` (Subtle 1–2px card borders)
+* `UI_COLOR_BORDER_ACTIVE`: `#38BDF8` (Active selection highlight)
+* `UI_COLOR_TEXT_PRIMARY`: `#FFFFFF` (High-luma primary text)
+* `UI_COLOR_TEXT_SECONDARY`: `#888888` (Muted metadata label)
+* `UI_COLOR_STATE_OK`: `#10B981` (Emerald green - normal / cleared)
+* `UI_COLOR_STATE_WARN`: `#F59E0B` (Amber warning / driver override)
+* `UI_COLOR_STATE_FAULT`: `#F43F5E` (Rose red critical fault / E-Stop trip)
+* `UI_COLOR_STATE_OFFLINE`: `#64748B` (Slate offline / node timeout)
+* `UI_COLOR_ACCENT_CMD`: `#06B6D4` (Cyan target command)
+* `UI_COLOR_ACCENT_ACT`: `#10B981` (Emerald actual feedback)
+
+### 8.4 Multi-Channel Status Display Rule
+**Status must NEVER rely on color alone.** Color deficiency, daylight glare, and low angles require multi-channel communication:
+* `[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR` (Symbol + Text + Emerald)
+* `[ ! ] E-STOP ACTIVE • SYSTEM LATCHED` (Symbol + Text + Rose)
+* `[ OK ] ACTIVE` vs. `[ ! ] TIMEOUT`
+* `[ OK ] TRACKING OK` vs. `[ ! ] TRACKING LAG`
+* `[ OK ] BRAKE PRIORITY OK` vs. `[ ! ] INHIBITED`
+
+### 8.5 Performance, Plotting & Threading Architecture
+* **Strict Decoupling**: CAN tasks *never* manipulate LVGL objects directly.
+  $$\text{CAN RX Task (Core 0, 100 Hz)} \longrightarrow \text{VehicleState} \longrightarrow \text{UI Task (Core 1, 20–30 Hz)} \longrightarrow \text{LVGL Widgets}$$
+* **Thread Safety**: LVGL is not thread-safe. All LVGL API calls (`lv_timer_handler`, widget updates, screen loads) must be guarded with `board_display_lock()` and `board_display_unlock()`.
+* **Plotting Subsystem**:
+  * Sampling rate capped at $10–20\text{ Hz}$ ($150\text{ points}$ for 15 seconds).
+  * Line thickness: $2–3\text{ px}$; Grid: $1\text{ px}$; No point markers on continuous streaming data.
+  * Maximum $1–3\text{ series}$ per chart (e.g. Command, Feedback, Torque).

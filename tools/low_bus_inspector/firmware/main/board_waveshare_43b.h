@@ -33,6 +33,12 @@ esp_err_t board_lcd_init(esp_lcd_panel_handle_t *panel_handle);
 esp_err_t board_set_backlight(uint8_t percent);
 esp_err_t board_twai_init(void);
 
+/**
+ * @brief Thread-safe LVGL display mutex locking (per Waveshare & LVGL guidelines)
+ */
+bool board_display_lock(uint32_t timeout_ms);
+void board_display_unlock(void);
+
 #ifdef __cplusplus
 }
 #endif

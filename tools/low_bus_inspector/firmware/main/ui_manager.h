@@ -14,6 +14,34 @@
 extern "C" {
 #endif
 
+/* =========================================================================
+ * Semantic Design Tokens for Waveshare 4.3B (800x480 RGB565 Flat Minimalist)
+ * ========================================================================= */
+#define UI_COLOR_BG              0x000000  // Pure engineering black canvas
+#define UI_COLOR_SURFACE         0x0D0D0D  // Dark surface card
+#define UI_COLOR_SURFACE_ALT     0x1E293B  // Highlighted / active button
+#define UI_COLOR_BORDER          0x262626  // Subtle divider / border (1-2px)
+#define UI_COLOR_BORDER_ACTIVE   0x38BDF8  // Active selection border
+#define UI_COLOR_TEXT_PRIMARY    0xFFFFFF  // High luma primary text
+#define UI_COLOR_TEXT_SECONDARY  0x888888  // Muted secondary label
+#define UI_COLOR_TEXT_DISABLED   0x444444  // Inactive / disabled text
+#define UI_COLOR_STATE_OK        0x10B981  // Emerald green (normal / clear)
+#define UI_COLOR_STATE_WARN      0xF59E0B  // Amber warning / override
+#define UI_COLOR_STATE_FAULT     0xF43F5E  // Rose red critical / E-Stop
+#define UI_COLOR_STATE_OFFLINE   0x64748B  // Slate offline / timeout
+#define UI_COLOR_ACCENT_CMD      0x06B6D4  // Cyan command target
+#define UI_COLOR_ACCENT_ACT      0x10B981  // Emerald actual feedback
+
+/* =========================================================================
+ * Semantic Typography Tokens (Fixed 6-Tier Hierarchy - Montserrat/Inter)
+ * ========================================================================= */
+#define UI_FONT_SIZE_HERO        96  // Speed / primary focus metric
+#define UI_FONT_SIZE_MAJOR       48  // Command & Feedback values, Gear, E-Stop state
+#define UI_FONT_SIZE_HEADING     28  // Section titles, header labels, primary badges
+#define UI_FONT_SIZE_BODY        20  // Touch button labels, normal values, unit labels
+#define UI_FONT_SIZE_SECONDARY   16  // Card titles, telemetry labels, auxiliary rates
+#define UI_FONT_SIZE_METADATA    14  // Bus addresses, cycle times, qualitative tags
+
 typedef enum {
     WIN_BUS_SAFETY     = 0,
     WIN_STEER_DIGITS   = 1,

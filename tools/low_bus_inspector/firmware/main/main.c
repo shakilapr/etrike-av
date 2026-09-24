@@ -36,8 +36,11 @@ static void can_rx_low_bus_task(void *arg) {
 static void lvgl_render_task(void *arg) {
     ESP_LOGI(TAG, "LVGL Render task running on Core %d", xPortGetCoreID());
 
-    lv_init();
-    ui_manager_init();
+    if (board_display_lock(portMAX_DELAY)) {
+        lv_init();
+        ui_manager_init();
+        board_display_unlock();
+    }
 
     low_bus_telemetry_t t;
     int64_t last_100ms_tick = esp_timer_get_time();
@@ -50,11 +53,16 @@ static void lvgl_render_task(void *arg) {
         }
 
         low_bus_decoder_get_telemetry(&t);
-        ui_manager_update(&t);
 
-        uint32_t delay_ms = lv_timer_handler();
-        if (delay_ms < 5) delay_ms = 5;
-        if (delay_ms > 20) delay_ms = 20;
+        uint32_t delay_ms = 16;
+        if (board_display_lock(20)) {
+            ui_manager_update(&t);
+            delay_ms = lv_timer_handler();
+            board_display_unlock();
+        }
+
+        if (delay_ms < 10) delay_ms = 10;
+        if (delay_ms > 33) delay_ms = 33; // Target ~30 Hz UI refresh
 
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }

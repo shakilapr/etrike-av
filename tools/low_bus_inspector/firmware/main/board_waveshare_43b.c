@@ -15,11 +15,14 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_check.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "driver/i2c.h"
 #include "esp_lcd_panel_rgb.h"
 #include "esp_lcd_panel_ops.h"
 
 static const char *TAG = "LOW_BUS_BOARD";
+static SemaphoreHandle_t s_lvgl_mutex = NULL;
 
 #define CH422G_I2C_ADDR 0x24
 
@@ -143,6 +146,23 @@ esp_err_t board_hardware_init(void) {
     // 3. TWAI CAN controller on GPIO15/16
     ESP_RETURN_ON_ERROR(board_twai_init(), TAG, "CAN init failed");
 
+    // 4. Thread-safe LVGL Mutex
+    if (!s_lvgl_mutex) {
+        s_lvgl_mutex = xSemaphoreCreateMutex();
+    }
+
     ESP_LOGI(TAG, "All hardware subsystems active.");
     return ESP_OK;
+}
+
+bool board_display_lock(uint32_t timeout_ms) {
+    if (!s_lvgl_mutex) return true;
+    TickType_t ticks = (timeout_ms == UINT32_MAX) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    return xSemaphoreTake(s_lvgl_mutex, ticks) == pdTRUE;
+}
+
+void board_display_unlock(void) {
+    if (s_lvgl_mutex) {
+        xSemaphoreGive(s_lvgl_mutex);
+    }
 }

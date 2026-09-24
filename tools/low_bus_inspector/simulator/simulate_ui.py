@@ -162,7 +162,7 @@ def render_screen0_general():
 
     # 1. E-Stop & Master Interlock Card (Height 100px)
     draw.rounded_rectangle([8, 56, 792, 156], radius=8, fill=(6, 40, 24), outline=C_EMERALD, width=2)
-    draw.text((400, 92), "● E-STOP DISENGAGED • SYSTEM ARMED", font=font_large, fill=(52, 211, 153), anchor="mm")
+    draw.text((400, 92), "[ OK ] E-STOP DISENGAGED • SYSTEM ARMED", font=font_large, fill=(52, 211, 153), anchor="mm")
     draw.text((400, 128), "LOW-BUS LOOP MASTER ACTIVE (500 kbps)  •  INTERLOCK PIN: HIGH", font=font_bold, fill=(167, 243, 208), anchor="mm")
 
     # 2. 5-Node Watchdog Array (Height 114px)
