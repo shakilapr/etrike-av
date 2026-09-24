@@ -1,0 +1,34 @@
+<view name="view_steer_plot" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- Top Scope Info Header (48px) -->
+    <lv_obj name="scope_header" width="784" height="48" align="top_mid" y="6" style="tool_card"
+            layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
+        <lv_label text="STEERING (SES) 15s SCOPE" style="field_label" text_font="montserrat_14" />
+        <lv_obj bg_opa="0" border_width="0" layout="flex" flex_flow="row" pad_column="14">
+            <lv_label name="lbl_plot_cmd" text="CMD: +15.0°" text_color="#06b6d4" text_font="montserrat_14" />
+            <lv_label name="lbl_plot_act" text="ACT: +14.7°" text_color="#10b981" text_font="montserrat_14" />
+            <lv_label name="lbl_plot_delta" text="Δ: 0.3°" text_color="#34d399" text_font="montserrat_14" />
+            <lv_label name="lbl_plot_torque" text="TORQUE: 0.2 Nm" text_color="#f59e0b" text_font="montserrat_14" />
+        </lv_obj>
+        <lv_button name="btn_back_digits" style="nav_tab_default" width="130" height="38">
+            <lv_label text="&lt; NUMERICS" align="center" />
+        </lv_button>
+    </lv_obj>
+
+    <!-- Main 15-Second Rolling Chart (784x350) -->
+    <lv_obj name="chart_container" width="784" height="350" align="top_mid" y="60" style="tool_card">
+        <lv_chart name="chart_steer" width="760" height="326" align="center"
+                  type="line" point_count="150" range_min="-450" range_max="450" style="scope_chart" />
+    </lv_obj>
+
+    <!-- Bottom Scope Controls (54px) -->
+    <lv_obj name="scope_controls" width="784" height="54" align="bottom_mid" y="-6" style="tool_card"
+            layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
+        <lv_label text="Angle: -45°..+45° [CYAN/EMERALD] | Driver Torque: -10..+10 Nm [AMBER]" style="field_sub" />
+        <lv_button name="btn_pause_steer" style="nav_tab_active" width="180" height="42">
+            <lv_label name="lbl_btn_pause" text="PAUSE / FREEZE" align="center" />
+        </lv_button>
+        <lv_button name="btn_next_brake_plot" style="nav_tab_default" width="180" height="42">
+            <lv_label text="BRAKE PLOT &gt;" align="center" />
+        </lv_button>
+    </lv_obj>
+</view>

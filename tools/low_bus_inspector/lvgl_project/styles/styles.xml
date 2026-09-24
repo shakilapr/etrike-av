@@ -1,0 +1,145 @@
+<styles>
+    <!-- True Black background for outdoor sunlight contrast -->
+    <style name="inspector_bg"
+           bg_color="#000000"
+           bg_opa="255"
+           border_width="0"
+           pad_all="0"
+           radius="0" />
+
+    <!-- High-Contrast Tool Card -->
+    <style name="tool_card"
+           bg_color="#0d0d0d"
+           bg_opa="255"
+           border_color="#262626"
+           border_width="1"
+           radius="10"
+           pad_all="12" />
+
+    <!-- Top Navigation Bar Container -->
+    <style name="nav_bar_container"
+           bg_color="#080808"
+           bg_opa="255"
+           border_color="#262626"
+           border_width="1"
+           border_side="bottom"
+           pad_hor="8"
+           pad_ver="4" />
+
+    <!-- Navigation Tab Buttons (52px Touch Target for Vehicle Vibration) -->
+    <style name="nav_tab_default"
+           bg_color="#141414"
+           border_color="#333333"
+           border_width="1"
+           radius="8"
+           text_color="#94a3b8"
+           text_font="montserrat_14"
+           min_width="130"
+           min_height="52" />
+
+    <style name="nav_tab_active"
+           bg_color="#1e293b"
+           border_color="#38bdf8"
+           border_width="2"
+           radius="8"
+           text_color="#38bdf8"
+           text_font="montserrat_14"
+           min_width="130"
+           min_height="52" />
+
+    <style name="nav_tab_fault"
+           bg_color="#4c0519"
+           border_color="#f43f5e"
+           border_width="2"
+           radius="8"
+           text_color="#ffffff"
+           text_font="montserrat_14"
+           min_width="130"
+           min_height="52" />
+
+    <!-- Giant Hero Digits (Glanceable from 1 Meter) -->
+    <style name="hero_val_cyan"
+           text_color="#06b6d4"
+           text_font="montserrat_48"
+           text_align="center" />
+
+    <style name="hero_val_emerald"
+           text_color="#10b981"
+           text_font="montserrat_48"
+           text_align="center" />
+
+    <style name="hero_val_rose"
+           text_color="#f43f5e"
+           text_font="montserrat_48"
+           text_align="center" />
+
+    <style name="hero_val_white"
+           text_color="#ffffff"
+           text_font="montserrat_48"
+           text_align="center" />
+
+    <style name="hero_val_amber"
+           text_color="#f59e0b"
+           text_font="montserrat_48"
+           text_align="center" />
+
+    <!-- Field Labels (Glanceable Typography, Minimum 13-14px) -->
+    <style name="field_label"
+           text_color="#94a3b8"
+           text_font="montserrat_14"
+           text_letter_space="1" />
+
+    <style name="field_sub"
+           text_color="#cbd5e1"
+           text_font="montserrat_13" />
+
+    <!-- Delta Tracking Badges (20-22px Prominent Readout) -->
+    <style name="badge_delta_ok"
+           bg_color="#064e3b"
+           border_color="#10b981"
+           border_width="2"
+           radius="8"
+           pad_hor="14"
+           pad_ver="8"
+           text_color="#34d399"
+           text_font="montserrat_20" />
+
+    <style name="badge_delta_err"
+           bg_color="#4c0519"
+           border_color="#f43f5e"
+           border_width="2"
+           radius="8"
+           pad_hor="14"
+           pad_ver="8"
+           text_color="#f43f5e"
+           text_font="montserrat_20" />
+
+    <!-- Node Watchdog Pills -->
+    <style name="watchdog_ok"
+           bg_color="#052e16"
+           border_color="#15803d"
+           border_width="1"
+           radius="6"
+           pad_hor="8"
+           pad_ver="4"
+           text_color="#4ade80"
+           text_font="montserrat_12" />
+
+    <style name="watchdog_timeout"
+           bg_color="#450a0a"
+           border_color="#b91c1c"
+           border_width="2"
+           radius="6"
+           pad_hor="8"
+           pad_ver="4"
+           text_color="#fca5a5"
+           text_font="montserrat_12" />
+
+    <!-- 15s Scope Chart Styles -->
+    <style name="scope_chart"
+           bg_color="#080808"
+           border_color="#262626"
+           border_width="1"
+           radius="8"
+           line_width="2" />
+</styles>

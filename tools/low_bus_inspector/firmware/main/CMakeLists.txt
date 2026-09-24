@@ -1,0 +1,15 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "board_waveshare_43b.c"
+        "low_bus_decoder.c"
+        "ui_manager.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        lvgl
+        esp_lcd
+        driver
+        esp_timer
+        freertos
+)

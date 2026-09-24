@@ -1,0 +1,67 @@
+<view name="view_brake_digits" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- Top Persistent Navigation Header -->
+    <lv_obj name="top_nav" width="800" height="52" align="top_mid" style="nav_bar_container"
+            layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
+        <lv_button name="btn_nav_gen" style="nav_tab_default" width="180" height="44">
+            <lv_label text="0. BUS &amp; SAFETY" align="center" />
+        </lv_button>
+        <lv_button name="btn_nav_steer" style="nav_tab_default" width="180" height="44">
+            <lv_label text="1. STEER (SES)" align="center" />
+        </lv_button>
+        <lv_button name="btn_nav_brake" style="nav_tab_active" width="180" height="44">
+            <lv_label text="2. BRAKE (SEB)" align="center" />
+        </lv_button>
+        <lv_button name="btn_nav_drive" style="nav_tab_default" width="180" height="44">
+            <lv_label text="3. DRIVE (MTR)" align="center" />
+        </lv_button>
+    </lv_obj>
+
+    <!-- Main Content Area -->
+    <lv_obj name="content_area" width="784" height="415" align="bottom_mid" y="-6"
+            bg_opa="0" border_width="0" pad_all="0" layout="flex" flex_flow="column" pad_row="10">
+
+        <!-- 3-Column Actuation Metrics Card -->
+        <lv_obj name="row_metrics" width="784" height="240" bg_opa="0" border_width="0" pad_all="0"
+                layout="flex" flex_flow="row" flex_align_main="space_between">
+
+            <!-- Card 1: Command (0x7B9 / 0x205) -->
+            <lv_obj name="card_cmd" width="250" height="240" style="tool_card"
+                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="COMMAND (0x7B9 VCU_SEB_REQ)" style="field_label" />
+                <lv_label name="val_brake_cmd" text="450 kPa" style="hero_val_cyan" text_font="montserrat_48" />
+                <lv_label name="sub_brake_cmd_stroke" text="Target Stroke: 18.0 mm" style="field_sub" />
+                <lv_label name="sub_brake_chk" text="Checksum: VALID (0xA2)" style="field_sub" text_color="#10b981" />
+            </lv_obj>
+
+            <!-- Card 2: Actual Feedback (0x721) -->
+            <lv_obj name="card_act" width="250" height="240" style="tool_card"
+                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="FEEDBACK (0x721 SEB_STATUS)" style="field_label" />
+                <lv_label name="val_brake_act" text="442 kPa" style="hero_val_emerald" text_font="montserrat_48" />
+                <lv_label name="sub_brake_act_stroke" text="Piston Stroke: 17.8 mm" style="field_sub" />
+                <lv_label name="sub_brake_act_temp" text="Motor Temp: 41 °C" style="field_sub" />
+            </lv_obj>
+
+            <!-- Card 3: Delta & Error Status (0x731) -->
+            <lv_obj name="card_delta" width="260" height="240" style="tool_card"
+                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="HYDRAULIC DELTA (Δ)" style="field_label" />
+                <lv_obj name="badge_delta" style="badge_delta_ok">
+                    <lv_label name="val_brake_delta" text="Δ: -8 kPa [OK]" text_font="montserrat_24" />
+                </lv_obj>
+                <lv_label text="VENDOR FAULT CODE (0x731)" style="field_label" />
+                <lv_label name="val_brake_fault_str" text="STATUS: 0x00 (NORMAL)" text_font="montserrat_14" text_color="#10b981" />
+                <lv_label text="Max Allowed Error: ±100 kPa" style="field_sub" />
+            </lv_obj>
+        </lv_obj>
+
+        <!-- Bottom Action Bar: Jump to 15s Scope Plot -->
+        <lv_obj name="bottom_actions" width="784" height="60" style="tool_card"
+                layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
+            <lv_label text="Swipe DOWN or tap button to inspect 15-second pressure build curve" style="field_label" />
+            <lv_button name="btn_open_brake_plot" style="nav_tab_active" width="260" height="46">
+                <lv_label text="OPEN 15s SCOPE PLOT &gt;" align="center" />
+            </lv_button>
+        </lv_obj>
+    </lv_obj>
+</view>
