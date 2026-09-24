@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Waveshare ESP32-S3-Touch-LCD-4.3B-BOX Simulator</title>
+<title>Waveshare ESP32-S3-Touch-LCD-4.3B-BOX LVGL XML Simulator</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
   body {
@@ -15,11 +15,11 @@
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    padding: 24px;
+    padding: 20px;
   }
   header {
     text-align: center;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
   h1 {
     font-size: 20px;
@@ -39,8 +39,8 @@
   }
   .toolbar {
     display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 10px;
+    margin-bottom: 14px;
     flex-wrap: wrap;
     justify-content: center;
   }
@@ -48,7 +48,7 @@
     background: #1e293b;
     border: 1px solid #334155;
     color: #f1f5f9;
-    padding: 8px 16px;
+    padding: 8px 14px;
     border-radius: 6px;
     font-size: 13px;
     font-weight: 600;
@@ -57,13 +57,16 @@
   }
   .tool-btn:hover { background: #334155; border-color: #06b6d4; }
   .tool-btn.active { background: #0891b2; border-color: #22d3ee; color: #fff; }
+  .tool-btn.xml-btn { background: #312e81; border-color: #6366f1; color: #e0e7ff; }
+  .tool-btn.xml-btn:hover { background: #4338ca; }
+  .tool-btn.xml-btn.active { background: #4f46e5; border-color: #818cf8; }
   
   /* Enclosure Box Container */
   .device-enclosure {
     background: #1c1d21;
     border: 3px solid #3e424c;
     border-radius: 28px;
-    padding: 38px 42px;
+    padding: 34px 38px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 2px 4px rgba(255, 255, 255, 0.1);
     position: relative;
     transition: all 0.3s ease;
@@ -122,11 +125,63 @@
     border: 1px solid #22242a;
   }
   .instructions {
-    margin-top: 16px;
+    margin-top: 14px;
     font-size: 12px;
     color: #64748b;
     text-align: center;
-    max-width: 650px;
+    max-width: 750px;
+  }
+
+  /* LVGL XML Inspector Drawer */
+  #xmlInspectorDrawer {
+    display: none;
+    width: 880px;
+    margin-top: 16px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+  }
+  #xmlInspectorDrawer.visible {
+    display: block;
+  }
+  .xml-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .xml-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #38bdf8;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .xml-select {
+    background: #1e293b;
+    border: 1px solid #475569;
+    color: #f8fafc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .xml-code-block {
+    background: #020617;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: #cbd5e1;
+    overflow-x: auto;
+    max-height: 280px;
+    user-select: text;
+    white-space: pre;
+    line-height: 1.5;
   }
 </style>
 </head>
@@ -134,36 +189,56 @@
 
 <header>
   <h1>WAVESHARE ESP32-S3-Touch-LCD-4.3B-BOX (SKU: 28141)</h1>
-  <div class="specs-badge">4.3" IPS • 800 × 480 (5:3) • 550 cd/m² Sunlight-Readable • GT911 5-Point Touch</div>
+  <div class="specs-badge">LVGL XML Native Format • 4.3" IPS • 800 × 480 (5:3) • RGB565 Flat • GT911 5-Point Touch</div>
 </header>
 
 <div class="toolbar">
-  <button class="tool-btn active" id="btnModeBox">Hardware Enclosure Mode</button>
-  <button class="tool-btn" id="btnModeRaw">Raw 800×480 Canvas</button>
-  <button class="tool-btn" id="btnEstopToggle">Trigger E-Stop Interlock</button>
-  <button class="tool-btn" id="btnDriverTakeover">Simulate Driver Takeover</button>
-  <button class="tool-btn" id="btnPauseScope">Pause / Freeze Scope</button>
-  <button class="tool-btn" id="btnExportPng">📸 Export 800×480 PNG</button>
+  <button class="tool-btn active" id="btnModeBox">Hardware Enclosure</button>
+  <button class="tool-btn" id="btnModeRaw">Raw 800×480 Framebuffer</button>
+  <button class="tool-btn" id="btnEstopToggle">⚡ Trip E-Stop</button>
+  <button class="tool-btn" id="btnDriverTakeover">Steering Override</button>
+  <button class="tool-btn" id="btnPauseScope">⏸ Freeze 15s Scope</button>
+  <button class="tool-btn xml-btn" id="btnXmlToggle">📜 LVGL XML Inspector</button>
+  <button class="tool-btn" id="btnExportPng">📷 Snapshot Framebuffer</button>
 </div>
 
 <div class="device-enclosure" id="enclosure">
   <div class="enclosure-header">
     <span>WAVESHARE ESP32-S3-Touch-LCD-4.3B-BOX (SKU: 28141)</span>
-    <span>4.3" IPS 800×480 | 550 cd/m² | RGB565 65K</span>
+    <span>4.3" IPS 800x480 | 550 cd/m² | RGB565 65K</span>
   </div>
-
   <div class="tempered-glass">
     <canvas id="lcdCanvas" width="800" height="480"></canvas>
   </div>
-
   <div class="enclosure-footer">
-    <span>GT911 CAPACITIVE MULTI-TOUCH • PARALLEL RGB ST7262 • ISOLATED CAN 500k</span>
-    <span style="color: #06b6d4; font-weight: 700;">LOW-BUS ACTUATOR INSPECTOR</span>
+    <span>GT911 CAPACITIVE TOUCH • PARALLEL RGB ST7262 • ISOLATED CAN 500k</span>
+    <span style="color:#06b6d4; font-weight:700;">LOW-BUS ACTUATOR INSPECTOR</span>
   </div>
 </div>
 
+<!-- LVGL XML Live Inspector -->
+<div id="xmlInspectorDrawer">
+  <div class="xml-header">
+    <div class="xml-title">
+      <span>📜 LVGL XML Declarative View Definition (LVGL 9 / LVGL Pro Specification)</span>
+    </div>
+    <select id="xmlFileSelect" class="xml-select">
+      <option value="view_general_bus">views/view_general_bus.xml (Screen 0)</option>
+      <option value="view_steer_digits">views/view_steer_digits.xml (Screen 1A)</option>
+      <option value="view_steer_plot">views/view_steer_plot.xml (Screen 1B)</option>
+      <option value="view_brake_digits">views/view_brake_digits.xml (Screen 2A)</option>
+      <option value="view_brake_plot">views/view_brake_plot.xml (Screen 2B)</option>
+      <option value="view_drive_digits">views/view_drive_digits.xml (Screen 3A)</option>
+      <option value="view_drive_plot">views/view_drive_plot.xml (Screen 3B)</option>
+      <option value="styles">styles/styles.xml (Design Tokens)</option>
+      <option value="project_json">project.json (Hardware Profile)</option>
+    </select>
+  </div>
+  <pre class="xml-code-block" id="xmlCodeDisplay"></pre>
+</div>
+
 <div class="instructions">
-  <strong>Interactive Touch Navigation:</strong> Click navigation buttons at the top of the LCD, or <strong>Click & Drag (Swipe)</strong> left/right between subsystems (Bus, Steer, Brake, Drive) and up/down to toggle 15-second rolling scope plots.
+  <strong>Touch & Gesture Controls:</strong> Tap top tabs to jump between subsystems. On numeric screens, <strong>swipe down</strong> (or tap bottom action button) to enter the 15-second Scope Plot. On plot screens, <strong>swipe up</strong> (or tap &lt; NUMERICS) to return.
 </div>
 
 <script>
@@ -173,41 +248,7 @@
   const W = 800;
   const H = 480;
 
-  // State
-  let currentTab = 1; // 0: Bus, 1: Steer, 2: Brake, 3: Drive
-  let showPlot = false; // false: Numerics (A), true: 15s Scope (B)
-  let estopActive = false;
-  let driverTakeover = false;
-  let scopePaused = false;
-
-  // 15-second circular plot buffers (150 samples @ 10 Hz)
-  const POINTS = 150;
-  const steerCmdPlot = new Float32Array(POINTS).fill(15.0);
-  const steerActPlot = new Float32Array(POINTS).fill(14.7);
-  const steerTorqPlot = new Float32Array(POINTS).fill(0.2);
-  const brakeCmdPlot = new Float32Array(POINTS).fill(450.0);
-  const brakeActPlot = new Float32Array(POINTS).fill(442.0);
-  const driveCmdPlot = new Float32Array(POINTS).fill(15.0);
-  const driveActPlot = new Float32Array(POINTS).fill(14.8);
-
-  let angleTarget = 15.0;
-  let angleActual = 14.7;
-  let torqueActual = 0.2;
-  let brakeTarget = 450.0;
-  let brakeActual = 442.0;
-  let driveTarget = 15.0;
-  let driveActual = 14.8;
-  let timeSec = 0;
-
-  // Navigation tabs definition
-  const tabs = [
-    { id: 0, label: "0. BUS & SAFETY" },
-    { id: 1, label: "1. STEER (SES)" },
-    { id: 2, label: "2. BRAKE (SEB)" },
-    { id: 3, label: "3. DRIVE (MTR)" }
-  ];
-
-  // Colors matching official palette
+  // Semantic Design Tokens matching LVGL styles.xml
   const C = {
     bg: "#000000",
     cardBg: "#0d0d0d",
@@ -221,131 +262,372 @@
     amber: "#f59e0b",
     white: "#ffffff",
     grayText: "#888888",
-    graySub: "#555555",
+    graySub: "#64748b",
     grid: "#181818"
   };
 
-  // Touch & Gesture Tracking
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let isDragging = false;
+  // State
+  let currentTab = 0; // 0: Bus/Safety, 1: Steer, 2: Brake, 3: Drive
+  let showPlot = false;
+  let estopActive = false;
+  let driverTakeover = false;
+  let scopePaused = false;
 
-  canvas.addEventListener("mousedown", (e) => {
-    const rect = canvas.getBoundingClientRect();
-    touchStartX = e.clientX - rect.left;
-    touchStartY = e.clientY - rect.top;
-    isDragging = true;
-  });
+  // Realtime Simulation variables
+  let angleTarget = 15.0;
+  let angleActual = 14.7;
+  let torqueActual = 0.2;
+  let brakeTarget = 450;
+  let brakeActual = 442;
+  let driveTarget = 15.0;
+  let driveActual = 14.8;
+  let busRate = 420;
 
-  canvas.addEventListener("mouseup", (e) => {
-    if (!isDragging) return;
-    isDragging = false;
-    const rect = canvas.getBoundingClientRect();
-    const endX = e.clientX - rect.left;
-    const endY = e.clientY - rect.top;
-    const dx = endX - touchStartX;
-    const dy = endY - touchStartY;
+  // Rolling 15-second plot data (150 samples @ 10Hz)
+  const POINTS = 150;
+  const steerCmdPlot = new Array(POINTS).fill(15.0);
+  const steerActPlot = new Array(POINTS).fill(14.7);
+  const steerTorqPlot = new Array(POINTS).fill(0.2);
 
-    // Detect Click vs Swipe
-    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
-      handleClick(endX, endY);
-    } else {
-      // Gesture
-      if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx < -40 && currentTab < 3) currentTab++;
-        else if (dx > 40 && currentTab > 0) currentTab--;
-      } else {
-        if (dy > 40 && currentTab > 0) showPlot = true;
-        else if (dy < -40 && showPlot) showPlot = false;
-      }
-    }
-  });
+  const brakeCmdPlot = new Array(POINTS).fill(450);
+  const brakeActPlot = new Array(POINTS).fill(442);
 
-  function handleClick(x, y) {
-    // 1. Top Nav Tabs (y <= 52)
-    if (!showPlot && y <= 52) {
-      const tabW = 186;
-      for (let i = 0; i < 4; i++) {
-        const tx0 = 8 + i * (tabW + 10);
-        const tx1 = tx0 + tabW;
-        if (x >= tx0 && x <= tx1) {
-          currentTab = i;
-          return;
-        }
-      }
-    }
+  const driveCmdPlot = new Array(POINTS).fill(15.0);
+  const driveActPlot = new Array(POINTS).fill(14.8);
 
-    // 2. Bottom "Open 15s Scope Plot" Button (y >= 410)
-    if (!showPlot && currentTab > 0 && y >= 410) {
-      if (x >= 530 && x <= 780) {
-        showPlot = true;
-        return;
-      }
-    }
+  // Tab labels
+  const tabs = [
+    { label: "0. BUS & SAFETY", id: 0 },
+    { label: "1. STEER (SES)", id: 1 },
+    { label: "2. BRAKE (SEB)", id: 2 },
+    { label: "3. DRIVE (MTR)", id: 3 }
+  ];
 
-    // 3. Scope Mode Controls
-    if (showPlot) {
-      // Back to numerics (Top right button: x >= 680, y <= 50)
-      if (x >= 680 && y <= 50) {
-        showPlot = false;
-        return;
-      }
-      // Pause button (Bottom: x: 420..590, y >= 420)
-      if (x >= 420 && x <= 590 && y >= 420) {
-        scopePaused = !scopePaused;
-        return;
-      }
-      // Next subsystem plot (Bottom: x: 605..780, y >= 420)
-      if (x >= 605 && x <= 780 && y >= 420) {
-        currentTab = (currentTab % 3) + 1;
-        return;
-      }
-    }
-  }
+  // Embedded LVGL XML Declarations for Live Inspector
+  const XML_REGISTRY = {
+    view_general_bus: `<view name="view_general_bus" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- Top Persistent Navigation Header (52px height) -->
+    <lv_obj name="top_nav" width="800" height="52" align="top_mid" style="nav_bar_container"
+            layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
+        <lv_button name="btn_nav_gen" style="nav_tab_active" width="185" height="44">
+            <lv_label text="0. BUS &amp; SAFETY" align="center" />
+        </lv_button>
+        <lv_button name="btn_nav_steer" style="nav_tab_default" width="185" height="44">
+            <lv_label text="1. STEER (SES)" align="center" />
+        </lv_button>
+        <lv_button name="btn_nav_brake" style="nav_tab_default" width="185" height="44">
+            <lv_label text="2. BRAKE (SEB)" align="center" />
+        </lv_button>
+        <lv_button name="btn_nav_drive" style="nav_tab_default" width="185" height="44">
+            <lv_label text="3. DRIVE (MTR)" align="center" />
+        </lv_button>
+    </lv_obj>
 
-  // Simulation Telemetry Engine (10 Hz periodic tick)
-  setInterval(() => {
-    timeSec += 0.1;
+    <!-- Main Content Area -->
+    <lv_obj name="content_area" width="784" height="416" align="bottom_mid" y="-6"
+            bg_opa="0" border_width="0" pad_all="0" layout="flex" flex_flow="column" pad_row="10">
 
-    // Simulate steering wave (sinusoidal turn)
-    if (!scopePaused) {
-      angleTarget = 15.0 * Math.sin(timeSec * 0.4);
-      const lag = driverTakeover ? -4.5 : 0.25;
-      angleActual = angleTarget * 0.98 + (Math.random() - 0.5) * 0.2 - lag;
+        <!-- 1. E-Stop & Safety Interlock Banner -->
+        <lv_obj name="card_estop_root" width="784" height="76" style="estop_banner_armed"
+                layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+            <lv_label name="val_estop_status" text="[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR" style="hero_val_emerald" text_font="montserrat_28" />
+            <lv_label name="val_estop_origin" text="Interlock Source: NONE  |  Hardware Pin: HIGH  |  Reason: 0" style="field_metadata" />
+        </lv_obj>
 
-      if (driverTakeover) {
-        torqueActual = 3.8 + (Math.random() - 0.5) * 0.4;
-      } else {
-        const d_angle = angleActual - steerActPlot[POINTS - 2];
-        torqueActual = 0.45 * d_angle + 0.04 * angleActual + (Math.random() - 0.5) * 0.12;
-      }
+        <!-- 2. 5-Node Watchdog Array (146px cards) -->
+        <lv_obj name="card_watchdog" width="784" height="114" style="tool_card" pad_all="8">
+            <lv_label text="LOW-BUS ACTUATORS &amp; GATEWAY LIVENESS (250ms FAIL-CLOSED WATCHDOG)" style="field_label" />
+            <lv_obj name="watchdog_row" width="768" height="74" y="24" bg_opa="0" border_width="0" pad_all="0"
+                    layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
+                <lv_obj name="node_sys" width="146" height="68" style="watchdog_card">
+                    <lv_label text="SYS (0x011)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label text="10 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
+                </lv_obj>
+                <lv_obj name="node_rt" width="146" height="68" style="watchdog_card">
+                    <lv_label text="RT (0x210)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label text="100 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
+                </lv_obj>
+                <lv_obj name="node_mtr" width="146" height="68" style="watchdog_card">
+                    <lv_label text="MTR (0x206)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label text="50 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
+                </lv_obj>
+                <lv_obj name="node_ses" width="146" height="68" style="watchdog_card">
+                    <lv_label text="SES (0x201)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label text="100 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
+                </lv_obj>
+                <lv_obj name="node_seb" width="146" height="68" style="watchdog_card">
+                    <lv_label text="SEB (0x721)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label text="100 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
+                </lv_obj>
+            </lv_obj>
+        </lv_obj>
 
-      // Shift buffers
-      for (let i = 0; i < POINTS - 1; i++) {
-        steerCmdPlot[i] = steerCmdPlot[i + 1];
-        steerActPlot[i] = steerActPlot[i + 1];
-        steerTorqPlot[i] = steerTorqPlot[i + 1];
-        brakeCmdPlot[i] = brakeCmdPlot[i + 1];
-        brakeActPlot[i] = brakeActPlot[i + 1];
-        driveCmdPlot[i] = driveCmdPlot[i + 1];
-        driveActPlot[i] = driveActPlot[i + 1];
-      }
-      steerCmdPlot[POINTS - 1] = angleTarget;
-      steerActPlot[POINTS - 1] = angleActual;
-      steerTorqPlot[POINTS - 1] = torqueActual;
+        <!-- 3. Bottom Tri-Metric Deck (3 Columns) -->
+        <lv_obj name="card_hw_stats" width="784" height="196" style="tool_card"
+                layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
+            <lv_obj width="246" height="172" style="tool_card">
+                <lv_label text="12V SYSTEM BUS" style="field_label" />
+                <lv_label text="13.8 V" style="hero_val_white" text_font="montserrat_48" />
+                <lv_label text="[ BATTERY HEALTHY ]" text_color="#10b981" text_font="montserrat_14" />
+            </lv_obj>
+            <lv_obj width="246" height="172" style="tool_card">
+                <lv_label text="CAN BUS HEALTH" style="field_label" />
+                <lv_label text="420 msg/s" style="hero_val_cyan" text_font="montserrat_48" />
+                <lv_label text="[ 0 ERRORS • BUS OK ]" text_color="#10b981" text_font="montserrat_14" />
+            </lv_obj>
+            <lv_obj width="246" height="172" style="tool_card">
+                <lv_label text="CAN FLIGHT RECORDER" style="field_label" />
+                <lv_label text="LOGGING" style="hero_val_emerald" text_font="montserrat_48" />
+                <lv_label text="[ RAW_CAN_01.LOG ]" text_color="#06b6d4" text_font="montserrat_14" />
+            </lv_obj>
+        </lv_obj>
+    </lv_obj>
+</view>`,
 
-      brakeTarget = estopActive ? 1200.0 : (Math.sin(timeSec * 0.3) > 0.5 ? 450.0 : 0.0);
-      brakeActual = brakeTarget * 0.98 + (Math.random() - 0.5) * 6.0;
-      brakeCmdPlot[POINTS - 1] = brakeTarget;
-      brakeActPlot[POINTS - 1] = brakeActual;
+    view_steer_digits: `<view name="view_steer_digits" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- Top Persistent Navigation Header -->
+    <lv_obj name="top_nav" width="800" height="52" align="top_mid" style="nav_bar_container">
+        <!-- 4 Subsystem Tabs -->
+    </lv_obj>
 
-      driveTarget = estopActive ? 0.0 : 15.0;
-      driveActual = driveTarget * 0.98 + (Math.random() - 0.5) * 0.15;
-      driveCmdPlot[POINTS - 1] = driveTarget;
-      driveActPlot[POINTS - 1] = driveActual;
-    }
-    render();
-  }, 100);
+    <!-- Main Content Area: 3 Cards (254px each) -->
+    <lv_obj name="row_metrics" width="784" height="348" layout="flex" flex_flow="row" flex_align_main="space_between">
+        <!-- Card 1: Command (0x169) -->
+        <lv_obj name="card_cmd" width="254" height="348" style="tool_card">
+            <lv_label text="COMMAND (VCU 0x169)" style="field_label" />
+            <lv_label name="val_steer_cmd" text="+15.0°" style="hero_val_cyan" text_font="montserrat_48" />
+            <lv_label text="TARGET SPEED: 200 °/s" text_font="montserrat_16" />
+            <lv_label text="[ OK ] CLOSED-LOOP ENABLED" text_color="#10b981" />
+        </lv_obj>
+
+        <!-- Card 2: Actual Feedback (0x201) -->
+        <lv_obj name="card_act" width="254" height="348" style="tool_card">
+            <lv_label text="ACTUATION (SES 0x201)" style="field_label" />
+            <lv_label name="val_steer_act" text="+14.7°" style="hero_val_emerald" text_font="montserrat_48" />
+            <lv_label text="ACTUAL SPEED: 198 °/s" text_font="montserrat_16" />
+            <lv_label text="[ OK ] SES ALIGNED • READY" text_color="#10b981" />
+        </lv_obj>
+
+        <!-- Card 3: Delta & Driver Column Torque (0x201/0x202) -->
+        <lv_obj name="card_delta" width="254" height="348" style="tool_card">
+            <!-- 2-Tier Delta Badge -->
+            <lv_obj name="badge_delta" width="230" height="74" style="badge_delta_ok">
+                <lv_label name="val_steer_delta" text="Δ: 0.3°" text_font="montserrat_20" text_color="#ffffff" />
+                <lv_label text="[ TRACKING OK ]" text_font="montserrat_14" text_color="#34d399" />
+            </lv_obj>
+            <!-- Column Torque Box -->
+            <lv_obj name="box_torque" width="230" height="130" style="card_torque">
+                <lv_label text="DRIVER COLUMN TORQUE" text_font="montserrat_14" text_color="#f59e0b" />
+                <lv_label name="val_steer_torque" text="+0.2 Nm" style="hero_val_amber" text_font="montserrat_48" />
+                <lv_label text="[ NO OVERRIDE ]" text_font="montserrat_14" text_color="#10b981" />
+            </lv_obj>
+            <lv_label text="[ OK ] SES ECU: HEALTHY" text_color="#10b981" />
+        </lv_obj>
+    </lv_obj>
+
+    <!-- Bottom Full-Width Action Button (58px) -->
+    <lv_button name="btn_goto_plot" style="btn_action_full" width="784" height="58">
+        <lv_label text="VIEW 15-SECOND STEERING SCOPE PLOT (OR SWIPE DOWN) &gt;" align="center" />
+    </lv_button>
+</view>`,
+
+    view_steer_plot: `<view name="view_steer_plot" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- Top Header Bar -->
+    <lv_obj name="plot_header" width="784" height="48" style="tool_card">
+        <lv_label text="STEER (SES)" text_font="montserrat_20" text_color="#ffffff" />
+        <lv_label name="lbl_cmd" text="CMD: +15.0°" text_color="#06b6d4" />
+        <lv_label name="lbl_act" text="ACT: +14.7°" text_color="#10b981" />
+        <lv_label name="lbl_delta" text="Δ: 0.3° [OK]" text_color="#10b981" />
+        <lv_label name="lbl_torque" text="TORQ: +0.2 Nm" text_color="#f59e0b" />
+        <lv_button name="btn_back_num" style="nav_tab_default" width="110" height="36">
+            <lv_label text="&lt; NUMERICS" align="center" />
+        </lv_button>
+    </lv_obj>
+
+    <!-- 15-Second Oscilloscope Chart (Dual-Axis Angle + Torque) -->
+    <lv_chart name="chart_steer" width="784" height="352" style="scope_chart"
+              type="line" point_count="150"
+              range_primary_y_min="-45" range_primary_y_max="45"
+              range_secondary_y_min="-45" range_secondary_y_max="45">
+        <series name="ser_cmd" color="#06b6d4" axis="primary_y" />
+        <series name="ser_act" color="#10b981" axis="primary_y" />
+        <series name="ser_torque" color="#f59e0b" axis="secondary_y" />
+    </lv_chart>
+
+    <!-- Bottom Controls & Time Horizon Axis -->
+    <lv_obj name="plot_bottom" width="784" height="52">
+        <lv_label text="Time: -15s ... -10s ... -5s ... NOW  (10Hz)" text_color="#888888" />
+        <lv_button name="btn_pause" style="btn_scope_ctrl" width="180" height="50">
+            <lv_label text="|| PAUSE / FREEZE" align="center" />
+        </lv_button>
+        <lv_button name="btn_next_plot" style="btn_scope_nav" width="180" height="50">
+            <lv_label text="BRAKE PLOT &gt;" align="center" />
+        </lv_button>
+    </lv_obj>
+</view>`,
+
+    view_brake_digits: `<view name="view_brake_digits" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- 3-Column Hydraulic Metrics Deck -->
+    <lv_obj name="row_metrics" width="784" height="348">
+        <!-- Command (0x7B9) -->
+        <lv_obj width="254" height="348" style="tool_card">
+            <lv_label text="COMMAND (VCU 0x7B9)" style="field_label" />
+            <lv_label text="450" style="hero_val_cyan" text_font="montserrat_48" />
+            <lv_label text="kPa" style="unit_label" />
+            <lv_label text="TARGET STROKE: 18.0 mm" text_font="montserrat_16" />
+            <lv_label text="[ OK ] AUTOBRAKE ARMED" text_color="#10b981" />
+        </lv_obj>
+
+        <!-- Feedback (0x721) -->
+        <lv_obj width="254" height="348" style="tool_card">
+            <lv_label text="ACTUATION (SEB 0x721)" style="field_label" />
+            <lv_label text="442" style="hero_val_emerald" text_font="montserrat_48" />
+            <lv_label text="kPa" text_color="#10b981" text_font="montserrat_20" />
+            <lv_label text="ACTUAL STROKE: 17.8 mm" text_font="montserrat_16" />
+            <lv_label text="[ OK ] SEB ARMED • READY" text_color="#10b981" />
+        </lv_obj>
+
+        <!-- Delta & Piston Stroke -->
+        <lv_obj width="254" height="348" style="tool_card">
+            <lv_obj width="230" height="74" style="badge_delta_ok">
+                <lv_label text="Δ: -8 kPa" text_font="montserrat_20" text_color="#ffffff" />
+                <lv_label text="[ TRACKING OK ]" text_font="montserrat_14" text_color="#34d399" />
+            </lv_obj>
+            <lv_obj width="230" height="130" style="tool_card" border_color="#38bdf8">
+                <lv_label text="PISTON DISPLACEMENT" text_color="#38bdf8" />
+                <lv_label text="17.8 mm" style="hero_val_white" text_font="montserrat_48" />
+                <lv_label text="[ STROKE Δ: 0.2 mm OK ]" text_color="#10b981" />
+            </lv_obj>
+            <lv_label text="[ OK ] SEB ECU: HEALTHY" text_color="#10b981" />
+        </lv_obj>
+    </lv_obj>
+
+    <!-- Bottom Full-Width Action Button -->
+    <lv_button style="btn_action_full" width="784" height="58">
+        <lv_label text="VIEW 15-SECOND BRAKE PRESSURE SCOPE (OR SWIPE DOWN) &gt;" align="center" />
+    </lv_button>
+</view>`,
+
+    view_brake_plot: `<view name="view_brake_plot" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- Top Header Bar -->
+    <lv_obj name="plot_header" width="784" height="48" style="tool_card">
+        <lv_label text="BRAKE (SEB)" text_font="montserrat_20" text_color="#ffffff" />
+        <lv_label text="CMD: 450 kPa" text_color="#06b6d4" />
+        <lv_label text="ACT: 442 kPa" text_color="#10b981" />
+        <lv_label text="Δ: -8 kPa [OK]" text_color="#10b981" />
+        <lv_label text="STRK: 17.8mm" text_color="#38bdf8" />
+    </lv_obj>
+
+    <!-- 15s Brake Pressure Chart (0-1500 kPa) -->
+    <lv_chart width="784" height="352" style="scope_chart" range_primary_y_min="0" range_primary_y_max="1500">
+        <series name="ser_cmd" color="#06b6d4" />
+        <series name="ser_act" color="#10b981" />
+    </lv_chart>
+
+    <!-- Bottom Controls & Time Scale -->
+    <lv_obj name="plot_bottom" width="784" height="52">
+        <lv_label text="Time: -15s ... -10s ... -5s ... NOW  (10Hz)" text_color="#888888" />
+        <lv_button style="btn_scope_ctrl" width="180" height="50">
+            <lv_label text="|| PAUSE / FREEZE" align="center" />
+        </lv_button>
+        <lv_button style="btn_scope_nav" width="180" height="50">
+            <lv_label text="DRIVE PLOT &gt;" align="center" />
+        </lv_button>
+    </lv_obj>
+</view>`,
+
+    view_drive_digits: `<view name="view_drive_digits" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- 3-Column Drive Powertrain Deck -->
+    <lv_obj name="row_metrics" width="784" height="348">
+        <!-- Command (0x204) -->
+        <lv_obj width="254" height="348" style="tool_card">
+            <lv_label text="COMMAND (VCU 0x204)" style="field_label" />
+            <lv_label text="15.0" style="hero_val_cyan" text_font="montserrat_48" />
+            <lv_label text="km/h" style="unit_label" />
+            <lv_label text="TARGET: [ D ] (DRIVE)" text_font="montserrat_16" />
+            <lv_label text="[ OK ] DRIVE REQ VALID" text_color="#10b981" />
+        </lv_obj>
+
+        <!-- Feedback (0x206) -->
+        <lv_obj width="254" height="348" style="tool_card">
+            <lv_label text="ACTUATION (MTR 0x206)" style="field_label" />
+            <lv_label text="14.8" style="hero_val_emerald" text_font="montserrat_48" />
+            <lv_label text="km/h" text_color="#10b981" text_font="montserrat_20" />
+            <lv_label text="ACTUAL: [ D ] (ENGAGED)" text_font="montserrat_16" />
+            <lv_label text="[ OK ] PROPULSION HEALTHY" text_color="#10b981" />
+        </lv_obj>
+
+        <!-- Delta & Safety Interlocks (0x502) -->
+        <lv_obj width="254" height="348" style="tool_card">
+            <lv_obj width="230" height="74" style="badge_delta_ok">
+                <lv_label text="Δ: 0.2 km/h" text_font="montserrat_20" text_color="#ffffff" />
+                <lv_label text="[ TRACKING OK ]" text_font="montserrat_14" text_color="#34d399" />
+            </lv_obj>
+            <lv_obj width="230" height="130" style="tool_card" border_color="#10b981">
+                <lv_label text="SAFETY INTERLOCKS" text_color="#888888" />
+                <lv_label text="ALL CLEAR" style="hero_val_emerald" text_font="montserrat_28" />
+                <lv_label text="[ BRAKE PRIORITY OK ]" text_color="#10b981" />
+            </lv_obj>
+            <lv_label text="[ OK ] MTR NODE ACTIVE (3)" text_color="#10b981" />
+        </lv_obj>
+    </lv_obj>
+
+    <!-- Bottom Full-Width Action Button -->
+    <lv_button style="btn_action_full" width="784" height="58">
+        <lv_label text="VIEW 15-SECOND DRIVE SPEED SCOPE (OR SWIPE DOWN) &gt;" align="center" />
+    </lv_button>
+</view>`,
+
+    view_drive_plot: `<view name="view_drive_plot" extends="lv_obj" width="800" height="480" style="inspector_bg">
+    <!-- Top Header Bar -->
+    <lv_obj name="plot_header" width="784" height="48" style="tool_card">
+        <lv_label text="DRIVE (MTR)" text_font="montserrat_20" text_color="#ffffff" />
+        <lv_label text="CMD: 15.0 km/h" text_color="#06b6d4" />
+        <lv_label text="ACT: 14.8 km/h" text_color="#10b981" />
+        <lv_label text="Δ: 0.2 km/h [OK]" text_color="#10b981" />
+        <lv_label text="MTR: 1620 RPM" text_color="#38bdf8" />
+    </lv_obj>
+
+    <!-- 15s Speed Chart (0-30 km/h) -->
+    <lv_chart width="784" height="352" style="scope_chart" range_primary_y_min="0" range_primary_y_max="30">
+        <series name="ser_cmd" color="#06b6d4" />
+        <series name="ser_act" color="#10b981" />
+    </lv_chart>
+
+    <!-- Bottom Controls & Time Scale -->
+    <lv_obj name="plot_bottom" width="784" height="52">
+        <lv_label text="Time: -15s ... -10s ... -5s ... NOW  (10Hz)" text_color="#888888" />
+        <lv_button style="btn_scope_ctrl" width="180" height="50">
+            <lv_label text="|| PAUSE / FREEZE" align="center" />
+        </lv_button>
+        <lv_button style="btn_scope_nav" width="180" height="50">
+            <lv_label text="STEER PLOT &gt;" align="center" />
+        </lv_button>
+    </lv_obj>
+</view>`,
+
+    styles: `<styles>
+    <style name="inspector_bg" bg_color="#000000" bg_opa="255" radius="0" />
+    <style name="tool_card" bg_color="#0d0d0d" border_color="#262626" border_width="1" radius="8" pad_all="12" />
+    <style name="nav_bar_container" bg_color="#080808" border_color="#262626" border_width="1" pad_hor="8" pad_ver="4" />
+    <style name="nav_tab_default" bg_color="#141414" border_color="#262626" border_width="1" radius="8" text_color="#888888" min_height="44" />
+    <style name="nav_tab_active" bg_color="#1e293b" border_color="#38bdf8" border_width="2" radius="8" text_color="#38bdf8" min_height="44" />
+    <style name="btn_action_full" bg_color="#1e293b" border_color="#38bdf8" border_width="2" radius="8" text_color="#ffffff" min_height="58" />
+    <style name="hero_val_cyan" text_color="#06b6d4" text_font="montserrat_48" text_align="center" />
+    <style name="hero_val_emerald" text_color="#10b981" text_font="montserrat_48" text_align="center" />
+    <style name="hero_val_amber" text_color="#f59e0b" text_font="montserrat_48" text_align="center" />
+    <style name="badge_delta_ok" bg_color="#064e3b" border_color="#10b981" border_width="2" radius="8" />
+    <style name="card_torque" bg_color="#231806" border_color="#f59e0b" border_width="1" radius="8" />
+    <style name="scope_chart" bg_color="#000000" border_color="#262626" border_width="1" radius="8" />
+</styles>`,
+
+    project_json: `{
+  "name": "low_bus_inspector",
+  "version": "1.0.0",
+  "display": { "width": 800, "height": 480, "color_depth": 16, "default_font": "montserrat_14" },
+  "target": { "board": "Waveshare ESP32-S3-Touch-LCD-4.3B-BOX", "sku": "28141", "display": "ST7262_RGB", "touch": "GT911" }
+}`
+  };
 
   // Drawing primitives
   function drawRoundedRect(x, y, w, h, r, fill, outline, lineWidth = 1) {
@@ -366,7 +648,7 @@
     tabs.forEach((tab, i) => {
       const tx = 8 + i * (tabW + 10);
       const isActive = (i === currentTab);
-      drawRoundedRect(tx, 4, tabW, 44, 6, isActive ? C.navActive : C.navBtn, isActive ? C.cyan : C.cardBorder, isActive ? 2 : 1);
+      drawRoundedRect(tx, 4, tabW, 44, 8, isActive ? C.navActive : C.navBtn, isActive ? C.cyan : C.cardBorder, isActive ? 2 : 1);
       ctx.fillStyle = isActive ? C.cyan : C.grayText;
       ctx.font = "bold 14px sans-serif";
       ctx.textAlign = "center";
@@ -378,25 +660,25 @@
   function renderScreen0() {
     renderNavBar();
 
-    // 1. E-Stop & Master Interlock Card (Height 100px)
+    // 1. E-Stop & Master Interlock Card (Height 76px)
     const estopBg = estopActive ? "#38080f" : "#062817";
     const estopBorder = estopActive ? C.rose : C.emerald;
-    drawRoundedRect(8, 56, 784, 100, 8, estopBg, estopBorder, 2);
+    drawRoundedRect(8, 56, 784, 76, 8, estopBg, estopBorder, 2);
     ctx.font = "bold 24px sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = estopActive ? C.rose : "#34d399";
-    ctx.fillText(estopActive ? "[ ! ] E-STOP ACTIVE • LATCHED" : "[ OK ] E-STOP DISENGAGED • SYSTEM ARMED", 400, 92);
+    ctx.fillText(estopActive ? "[ ! ] E-STOP ACTIVE • SYSTEM LATCHED" : "[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR", 400, 86);
 
     ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = estopActive ? "#fca5a5" : "#a7f3d0";
-    ctx.fillText(estopActive ? "INTERLOCK SOURCE: SYS 0x011 (HW PIN LOW) | REASON: EMERGENCY_BUTTON" : "LOW-BUS LOOP MASTER ACTIVE (500 kbps)  •  INTERLOCK PIN: HIGH", 400, 128);
+    ctx.fillText(estopActive ? "INTERLOCK SOURCE: SYS 0x011 (HW PIN LOW) | REASON: EMERGENCY_BUTTON" : "LOW-BUS LOOP MASTER ACTIVE (500 kbps)  •  INTERLOCK PIN: HIGH", 400, 114);
 
-    // 2. 5-Node Watchdogs (Height 114px)
-    drawRoundedRect(8, 164, 784, 114, 8, C.cardBg, C.cardBorder, 1);
+    // 2. 5-Node Watchdogs (146px cards)
+    drawRoundedRect(8, 138, 784, 114, 8, C.cardBg, C.cardBorder, 1);
     ctx.fillStyle = C.grayText;
     ctx.font = "bold 13px sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("LOW-BUS ACTUATORS & GATEWAY LIVENESS (250ms WATCHDOG)", 20, 180);
+    ctx.fillText("LOW-BUS ACTUATORS & GATEWAY LIVENESS (250ms FAIL-CLOSED WATCHDOG)", 20, 154);
 
     const nodes = [
       { name: "SYS (0x011)", rate: "10 Hz [OK]" },
@@ -408,35 +690,35 @@
     const cardW = 146;
     nodes.forEach((n, i) => {
       const x0 = 18 + i * (cardW + 9);
-      drawRoundedRect(x0, 198, cardW, 68, 6, "#052e16", "#15803d", 1);
+      drawRoundedRect(x0, 172, cardW, 68, 6, "#0d0d0d", C.cardBorder, 1);
       ctx.textAlign = "center";
       ctx.font = "bold 14px sans-serif";
       ctx.fillStyle = C.white;
-      ctx.fillText(n.name, x0 + cardW / 2, 218);
+      ctx.fillText(n.name, x0 + cardW / 2, 192);
       ctx.font = "bold 15px sans-serif";
       ctx.fillStyle = C.emerald;
-      ctx.fillText(n.rate, x0 + cardW / 2, 248);
+      ctx.fillText(n.rate, x0 + cardW / 2, 222);
     });
 
-    // 3. Bottom Tri-Metric Health Deck (Height 184px, 3 spacious columns)
-    drawRoundedRect(8, 288, 784, 184, 8, C.cardBg, C.cardBorder, 1);
+    // 3. Bottom Tri-Metric Deck (3 Columns, Height 210px)
+    drawRoundedRect(8, 258, 784, 214, 8, C.cardBg, C.cardBorder, 1);
     const stats = [
-      { label: "12V SYSTEM BUS", val: "12.6 V", sub: "[ BATTERY HEALTHY ]", col: C.white, subCol: C.emerald },
-      { label: "CAN BUS HEALTH", val: "210 msg/s", sub: "[ 0 ERRORS • BUS OK ]", col: C.cyan, subCol: C.emerald },
+      { label: "12V SYSTEM BUS", val: "13.8 V", sub: "[ BATTERY HEALTHY ]", col: C.white, subCol: C.emerald },
+      { label: "CAN BUS HEALTH", val: `${busRate} msg/s`, sub: "[ 0 ERRORS • BUS OK ]", col: C.cyan, subCol: C.emerald },
       { label: "CAN FLIGHT RECORDER", val: "LOGGING", sub: "[ RAW_CAN_01.LOG ]", col: C.emerald, subCol: C.cyan }
     ];
     const colW = 248;
     stats.forEach((s, i) => {
       const x0 = 18 + i * (colW + 12);
-      drawRoundedRect(x0, 298, colW, 164, 6, "#0d0d0d", C.cardBorder, 1);
+      drawRoundedRect(x0, 268, colW, 194, 6, "#0d0d0d", C.cardBorder, 1);
       const cx = x0 + colW / 2;
       ctx.textAlign = "center";
-      ctx.font = "bold 13px sans-serif";
+      ctx.font = "bold 14px sans-serif";
       ctx.fillStyle = C.grayText;
-      ctx.fillText(s.label, cx, 322);
-      ctx.font = "bold 38px sans-serif";
+      ctx.fillText(s.label, cx, 296);
+      ctx.font = "bold 44px sans-serif";
       ctx.fillStyle = s.col;
-      ctx.fillText(s.val, cx, 376);
+      ctx.fillText(s.val, cx, 362);
       ctx.font = "bold 14px sans-serif";
       ctx.fillStyle = s.subCol;
       ctx.fillText(s.sub, cx, 434);
@@ -451,7 +733,7 @@
     // 1. Command (VCU 0x169)
     drawRoundedRect(8, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
     ctx.textAlign = "center";
-    ctx.font = "bold 13px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.fillStyle = C.grayText;
     ctx.fillText("COMMAND (VCU 0x169)", 8 + cardW / 2, 82);
     ctx.font = "bold 52px sans-serif";
@@ -461,16 +743,16 @@
     ctx.font = "bold 15px sans-serif";
     ctx.fillStyle = C.white;
     ctx.fillText("TARGET SPEED: 200 °/s", 8 + cardW / 2, 275);
-    ctx.font = "bold 16px sans-serif";
-    ctx.fillStyle = C.grayText;
-    ctx.fillText("Target Slew: 0.4s", 8 + cardW / 2, 335);
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] CLOSED-LOOP", 8 + cardW / 2, 335);
     ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = C.graySub;
-    ctx.fillText("CAN 2.0B • 100 Hz", 8 + cardW / 2, 375);
+    ctx.fillText("[ OK ] CLUSTER SYNC", 8 + cardW / 2, 375);
 
     // 2. Feedback (SES 0x201)
     drawRoundedRect(272, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-    ctx.font = "bold 13px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.fillStyle = C.grayText;
     ctx.fillText("ACTUATION (SES 0x201)", 272 + cardW / 2, 82);
     ctx.font = "bold 52px sans-serif";
@@ -480,12 +762,12 @@
     ctx.font = "bold 15px sans-serif";
     ctx.fillStyle = C.white;
     ctx.fillText("ACTUAL SPEED: 198 °/s", 272 + cardW / 2, 275);
-    ctx.font = "bold 16px sans-serif";
+    ctx.font = "bold 14px sans-serif";
     ctx.fillStyle = C.emerald;
-    ctx.fillText(driverTakeover ? "MODE: TAKEOVER (0x3)" : "CLOSED-LOOP ANGLE", 272 + cardW / 2, 335);
+    ctx.fillText(driverTakeover ? "[ ! ] TAKEOVER (0x3)" : "[ OK ] ANGLE TRACKING", 272 + cardW / 2, 335);
     ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = C.graySub;
-    ctx.fillText("SES ALIGNED • READY", 272 + cardW / 2, 375);
+    ctx.fillText("[ OK ] SES ALIGNED", 272 + cardW / 2, 375);
 
     // 3. Tracking Error & Driver Torque
     drawRoundedRect(536, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
@@ -506,163 +788,159 @@
     ctx.fillStyle = C.amber;
     ctx.fillText("DRIVER COLUMN TORQUE", 536 + cardW / 2, 172);
     ctx.font = "bold 38px sans-serif";
-    ctx.fillText(`${torqueActual.toFixed(1)} Nm`, 536 + cardW / 2, 215);
+    ctx.fillText(`${torqueActual >= 0 ? "+" : ""}${torqueActual.toFixed(1)} Nm`, 536 + cardW / 2, 215);
     ctx.font = "bold 14px sans-serif";
     ctx.fillStyle = driverTakeover ? C.rose : C.emerald;
     ctx.fillText(driverTakeover ? "[ TAKEOVER ACTIVE! ]" : "[ NO OVERRIDE ]", 536 + cardW / 2, 258);
 
     // Health
-    ctx.font = "bold 16px sans-serif";
-    ctx.fillStyle = driverTakeover ? C.amber : C.emerald;
-    ctx.fillText(driverTakeover ? "SES: DRIVER TAKEOVER" : "SES ECU: HEALTHY", 536 + cardW / 2, 325);
     ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = driverTakeover ? C.amber : C.emerald;
+    ctx.fillText(driverTakeover ? "[ ! ] SES: TAKEOVER" : "[ OK ] SES HEALTHY", 536 + cardW / 2, 325);
+    ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = C.white;
     ctx.fillText("Motor: 8.4A  •  Temp: 34°C", 536 + cardW / 2, 365);
 
-    // Bottom Full-Width Scope Action Button (Height 58px)
+    // Bottom Action Button (58px tall)
     drawRoundedRect(8, 414, 784, 58, 8, "#0f2937", C.cyan, 2);
     ctx.font = "bold 15px sans-serif";
     ctx.fillStyle = C.cyan;
     ctx.fillText("VIEW 15-SECOND STEERING SCOPE PLOT  (OR SWIPE DOWN)  >", 400, 443);
   }
 
-  function renderScope(title, cmdTrace, actTrace, minVal, maxVal, unit, currentCmd, currentAct, auxTrace = null, auxMin = 0, auxMax = 0, auxUnit = "", currentAux = 0) {
-    // Header
-    drawRoundedRect(8, 6, 784, 48, 6, C.cardBg, C.cardBorder, 1);
-    ctx.textAlign = "left";
+  function renderScope(title, cmdTrace, actTrace, minVal, maxVal, unit, curCmd, curAct, auxTrace = null, auxMin = 0, auxMax = 0, auxUnit = "", curAux = 0) {
+    // 1. Top Header Bar (48px)
+    drawRoundedRect(8, 6, 784, 48, 8, C.cardBg, C.cardBorder, 1);
     ctx.font = "bold 16px sans-serif";
+    ctx.textAlign = "left";
     ctx.fillStyle = C.white;
-    ctx.fillText(title, 18, 30);
+    ctx.fillText(title, 24, 30);
 
-    ctx.textAlign = "center";
+    const delta = Math.abs(curCmd - curAct);
     ctx.font = "bold 14px sans-serif";
-    const d = Math.abs(currentCmd - currentAct);
+    ctx.fillStyle = C.cyan;
+    ctx.fillText(`CMD: ${curCmd > 0 && unit === "°" ? "+" : ""}${curCmd.toFixed(1)}${unit}`, 175, 30);
+    ctx.fillStyle = C.emerald;
+    ctx.fillText(`ACT: ${curAct > 0 && unit === "°" ? "+" : ""}${curAct.toFixed(1)}${unit}`, 320, 30);
+    ctx.fillText(`Δ: ${delta.toFixed(1)}${unit} [OK]`, 460, 30);
 
     if (auxTrace) {
-      ctx.fillStyle = C.cyan;
-      ctx.fillText(`CMD: ${currentCmd.toFixed(1)}${unit}`, 195, 30);
-      ctx.fillStyle = C.emerald;
-      ctx.fillText(`ACT: ${currentAct.toFixed(1)}${unit}`, 315, 30);
-      ctx.fillStyle = d > 2.0 ? C.rose : C.emerald;
-      ctx.fillText(`Δ: ${d.toFixed(1)}${unit}`, 425, 30);
       ctx.fillStyle = C.amber;
-      ctx.fillText(`TORQ: ${currentAux.toFixed(1)} ${auxUnit}`, 545, 30);
-    } else {
-      ctx.fillStyle = C.cyan;
-      ctx.fillText(`CMD: ${currentCmd.toFixed(1)} ${unit}`, 200, 30);
-      ctx.fillStyle = C.emerald;
-      ctx.fillText(`ACT: ${currentAct.toFixed(1)} ${unit}`, 330, 30);
-      ctx.fillStyle = d > (maxVal - minVal) * 0.1 ? C.rose : C.emerald;
-      ctx.fillText(`Δ: ${d.toFixed(1)} ${unit}`, 450, 30);
+      ctx.fillText(`TORQ: ${curAux >= 0 ? "+" : ""}${curAux.toFixed(1)}${auxUnit}`, 575, 30);
     }
 
-    drawRoundedRect(665, 8, 120, 40, 6, C.navBtn, C.cardBorder, 1);
-    ctx.fillStyle = C.grayText;
-    ctx.font = "bold 13px sans-serif";
-    ctx.fillText("< NUMERICS", 725, 28);
+    drawRoundedRect(686, 12, 96, 36, 6, C.navBtn, C.cardBorder, 1);
+    ctx.textAlign = "center";
+    ctx.fillStyle = C.white;
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillText("< NUMERICS", 734, 30);
 
-    // Chart Area
-    const cx0 = 8, cy0 = 60, cx1 = 792, cy1 = 410;
-    drawRoundedRect(cx0, cy0, cx1 - cx0, cy1 - cy0, 8, "#080808", C.cardBorder, 1);
+    // 2. Oscilloscope Screen Area (Height 344px)
+    const chartY = 58;
+    const chartH = 344;
+    drawRoundedRect(8, chartY, 784, chartH, 8, "#000000", C.cardBorder, 1);
 
-    // Grid lines (15 seconds, 1 per sec)
+    // Grid lines
     ctx.strokeStyle = C.grid;
     ctx.lineWidth = 1;
-    for (let s = 0; s <= 15; s++) {
-      const gx = cx0 + (s * (cx1 - cx0) / 15);
-      ctx.beginPath(); ctx.moveTo(gx, cy0); ctx.lineTo(gx, cy1); ctx.stroke();
-    }
-
-    // Y Grid
-    const ySteps = 4;
-    for (let i = 0; i <= ySteps; i++) {
-      const yVal = minVal + (maxVal - minVal) * (i / ySteps);
-      const gy = cy1 - (i / ySteps) * (cy1 - cy0 - 20) - 10;
-      ctx.strokeStyle = (i === 0 || yVal === 0) ? "#464646" : "#202020";
-      ctx.beginPath(); ctx.moveTo(cx0, gy); ctx.lineTo(cx1, gy); ctx.stroke();
-      ctx.fillStyle = C.white;
-      ctx.font = "bold 12px sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(`${yVal.toFixed(0)} ${unit}`, cx0 + 10, gy - 4);
-    }
-
-    // Right-axis labels for Aux trace (e.g. Torque)
-    if (auxTrace) {
-      ctx.fillStyle = C.amber;
-      ctx.font = "bold 12px sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(`+${auxMax.toFixed(1)} ${auxUnit}`, cx1 - 10, cy0 + 18);
-      ctx.fillText(`0.0 ${auxUnit}`, cx1 - 10, (cy0 + cy1) / 2 - 4);
-      ctx.fillText(`${auxMin.toFixed(1)} ${auxUnit}`, cx1 - 10, cy1 - 10);
-    }
-
-    function valToY(v) {
-      const normalized = (v - minVal) / (maxVal - minVal);
-      const py = cy1 - normalized * (cy1 - cy0 - 20) - 10;
-      return Math.max(cy0 + 5, Math.min(cy1 - 5, py));
-    }
-
-    function valToAuxY(v) {
-      const normalized = (v - auxMin) / (auxMax - auxMin);
-      const py = cy1 - normalized * (cy1 - cy0 - 20) - 10;
-      return Math.max(cy0 + 5, Math.min(cy1 - 5, py));
-    }
-
-    // Draw Cmd Trace (Cyan)
-    ctx.strokeStyle = C.cyan;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    for (let i = 0; i < POINTS; i++) {
-      const px = cx0 + (i * (cx1 - cx0) / (POINTS - 1));
-      const py = valToY(cmdTrace[i]);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-
-    // Draw Act Trace (Emerald)
-    ctx.strokeStyle = C.emerald;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = 0; i < POINTS; i++) {
-      const px = cx0 + (i * (cx1 - cx0) / (POINTS - 1));
-      const py = valToY(actTrace[i]);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-
-    // Draw Aux Trace (Amber)
-    if (auxTrace) {
-      ctx.strokeStyle = C.amber;
-      ctx.lineWidth = 2;
+    for (let i = 1; i <= 3; i++) {
+      const gy = chartY + (chartH / 4) * i;
       ctx.beginPath();
-      for (let i = 0; i < POINTS; i++) {
-        const px = cx0 + (i * (cx1 - cx0) / (POINTS - 1));
-        const py = valToAuxY(auxTrace[i]);
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      ctx.moveTo(8, gy);
+      ctx.lineTo(792, gy);
+      ctx.stroke();
+    }
+    for (let i = 1; i <= 5; i++) {
+      const gx = 8 + (784 / 6) * i;
+      ctx.beginPath();
+      ctx.moveTo(gx, chartY);
+      ctx.lineTo(gx, chartY + chartH);
+      ctx.stroke();
+    }
+
+    // Time horizon ticks along bottom
+    ctx.fillStyle = "#64748b";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("-15s", 28, chartY + chartH - 8);
+    ctx.fillText("-10s", 8 + (784 / 6) * 2, chartY + chartH - 8);
+    ctx.fillText("-5s", 8 + (784 / 6) * 4, chartY + chartH - 8);
+    ctx.fillText("NOW (0s)", 760, chartY + chartH - 8);
+
+    // Zero Reference Line
+    const zeroY = chartY + chartH * (maxVal / (maxVal - minVal));
+    if (minVal < 0 && maxVal > 0) {
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(8, zeroY);
+      ctx.lineTo(792, zeroY);
+      ctx.stroke();
+    }
+
+    // Y Axis Labels with dark plates to prevent waveform occlusion
+    function drawAxisLabel(text, x, y, align, color) {
+      ctx.font = "bold 12px sans-serif";
+      ctx.textAlign = align;
+      const textW = ctx.measureText(text).width;
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(align === "left" ? x - 2 : x - textW - 2, y - 10, textW + 4, 14);
+      ctx.fillStyle = color;
+      ctx.fillText(text, x, y);
+    }
+
+    drawAxisLabel(`${maxVal > 0 ? "+" : ""}${maxVal}${unit}`, 18, chartY + 20, "left", C.grayText);
+    drawAxisLabel(`0${unit}`, 18, (minVal < 0 && maxVal > 0) ? zeroY - 6 : chartY + chartH - 26, "left", C.grayText);
+    if (minVal < 0) {
+      drawAxisLabel(`${minVal}${unit}`, 18, chartY + chartH - 22, "left", C.grayText);
+    }
+
+    if (auxTrace) {
+      drawAxisLabel(`+${auxMax}${auxUnit}`, 780, chartY + 20, "right", C.amber);
+      drawAxisLabel(`0${auxUnit}`, 780, zeroY - 6, "right", C.amber);
+      drawAxisLabel(`-${auxMax}${auxUnit}`, 780, chartY + chartH - 22, "right", C.amber);
+    }
+
+    // Render Waveforms
+    function drawTrace(points, min, max, strokeColor, lineWidth = 2) {
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = lineWidth;
+      ctx.beginPath();
+      for (let i = 0; i < points.length; i++) {
+        const x = 12 + i * ((784 - 24) / (POINTS - 1));
+        const norm = (points[i] - min) / (max - min);
+        const y = (chartY + chartH - 20) - norm * (chartH - 40);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
 
-    // Bottom Controls Bar (Height 58px)
-    drawRoundedRect(8, 416, 784, 58, 6, C.cardBg, C.cardBorder, 1);
+    drawTrace(cmdTrace, minVal, maxVal, C.cyan, 2.5);
+    drawTrace(actTrace, minVal, maxVal, C.emerald, 2);
+    if (auxTrace) {
+      drawTrace(auxTrace, auxMin, auxMax, C.amber, 2);
+    }
+
+    // 3. Bottom Controls & Navigation (52px)
     ctx.textAlign = "left";
     ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = C.grayText;
     if (auxTrace) {
-      ctx.fillText(`±45° [CYN/EMR]  |  Torq: ±4.5Nm [AMB]  |  15s (10Hz)`, 20, 445);
+      ctx.fillText(`±45° [CYN/EMR]  |  Torq: ±4.5Nm [AMB]  |  15s (10Hz)`, 20, 442);
     } else {
-      ctx.fillText(`Scale: ${minVal.toFixed(0)} .. ${maxVal.toFixed(0)} ${unit} | 15s Window`, 20, 445);
+      ctx.fillText(`Scale: 0 .. ${maxVal.toFixed(0)} ${unit} | 15s Window`, 20, 442);
     }
 
-    drawRoundedRect(415, 420, 180, 50, 6, scopePaused ? C.amber : C.navActive, scopePaused ? C.amber : C.cyan, 1);
+    drawRoundedRect(415, 414, 180, 52, 8, scopePaused ? C.amber : C.navActive, scopePaused ? C.amber : C.cyan, 1);
     ctx.textAlign = "center";
     ctx.font = "bold 14px sans-serif";
     ctx.fillStyle = scopePaused ? "#000" : C.cyan;
-    ctx.fillText(scopePaused ? "> RESUME" : "||  PAUSE / FREEZE", 505, 445);
+    ctx.fillText(scopePaused ? "> RESUME" : "||  PAUSE / FREEZE", 505, 442);
 
-    drawRoundedRect(605, 420, 180, 50, 6, C.navBtn, C.cardBorder, 1);
+    drawRoundedRect(605, 414, 180, 52, 8, C.navBtn, C.cardBorder, 1);
     ctx.fillStyle = C.white;
-    ctx.fillText("NEXT PLOT >", 695, 445);
+    ctx.fillText("NEXT PLOT >", 695, 442);
   }
 
   function render() {
@@ -688,45 +966,45 @@
         // Command
         drawRoundedRect(8, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
         ctx.textAlign = "center";
-        ctx.font = "bold 13px sans-serif";
+        ctx.font = "bold 14px sans-serif";
         ctx.fillStyle = C.grayText;
         ctx.fillText("COMMAND (VCU 0x7B9)", 8 + cardW / 2, 82);
         ctx.font = "bold 52px sans-serif";
         ctx.fillStyle = C.cyan;
         ctx.fillText(brakeTarget.toFixed(0), 8 + cardW / 2, 160);
-        ctx.font = "bold 18px sans-serif";
+        ctx.font = "bold 20px sans-serif";
         ctx.fillText("kPa", 8 + cardW / 2, 200);
         drawRoundedRect(20, 245, cardW - 24, 50, 6, "#121a24", "#1e3a50", 1);
         ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.white;
         ctx.fillText("TARGET STROKE: 18.0 mm", 8 + cardW / 2, 275);
-        ctx.font = "bold 16px sans-serif";
-        ctx.fillStyle = C.grayText;
-        ctx.fillText("AUTOBRAKE: ARMED", 8 + cardW / 2, 335);
+        ctx.font = "bold 15px sans-serif";
+        ctx.fillStyle = C.emerald;
+        ctx.fillText("[ OK ] AUTOBRAKE ARMED", 8 + cardW / 2, 335);
         ctx.font = "bold 13px sans-serif";
         ctx.fillStyle = C.graySub;
-        ctx.fillText("CAN 2.0B • 100 Hz", 8 + cardW / 2, 375);
+        ctx.fillText("[ OK ] CLOSED-LOOP PRESSURE", 8 + cardW / 2, 375);
 
         // Feedback
         drawRoundedRect(272, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        ctx.font = "bold 13px sans-serif";
+        ctx.font = "bold 14px sans-serif";
         ctx.fillStyle = C.grayText;
         ctx.fillText("ACTUATION (SEB 0x721)", 272 + cardW / 2, 82);
         ctx.font = "bold 52px sans-serif";
         ctx.fillStyle = C.emerald;
         ctx.fillText(brakeActual.toFixed(0), 272 + cardW / 2, 160);
-        ctx.font = "bold 18px sans-serif";
+        ctx.font = "bold 20px sans-serif";
         ctx.fillText("kPa", 272 + cardW / 2, 200);
         drawRoundedRect(284, 245, cardW - 24, 50, 6, "#0c2218", "#155032", 1);
         ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.white;
         ctx.fillText("ACTUAL STROKE: 17.8 mm", 272 + cardW / 2, 275);
-        ctx.font = "bold 16px sans-serif";
+        ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.emerald;
-        ctx.fillText("CLOSED-LOOP PRESSURE", 272 + cardW / 2, 335);
+        ctx.fillText("[ OK ] CLOSED-LOOP PRESSURE", 272 + cardW / 2, 335);
         ctx.font = "bold 13px sans-serif";
         ctx.fillStyle = C.graySub;
-        ctx.fillText("SEB ARMED • READY", 272 + cardW / 2, 375);
+        ctx.fillText("[ OK ] SEB ARMED • READY", 272 + cardW / 2, 375);
 
         // Delta & Diagnostics
         drawRoundedRect(536, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
@@ -751,14 +1029,14 @@
         ctx.fillText("[ STROKE Δ: 0.2 mm OK ]", 536 + cardW / 2, 258);
 
         // Health
-        ctx.font = "bold 16px sans-serif";
+        ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.emerald;
-        ctx.fillText("SEB ECU: HEALTHY", 536 + cardW / 2, 325);
-        ctx.font = "bold 14px sans-serif";
+        ctx.fillText("[ OK ] SEB ECU: HEALTHY", 536 + cardW / 2, 325);
+        ctx.font = "bold 13px sans-serif";
         ctx.fillStyle = C.white;
         ctx.fillText("Motor: 4.2A  •  Temp: 38°C", 536 + cardW / 2, 365);
 
-        // Bottom button
+        // Bottom button (58px)
         drawRoundedRect(8, 414, 784, 58, 8, "#0f2937", C.cyan, 2);
         ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.cyan;
@@ -771,45 +1049,45 @@
         // Command
         drawRoundedRect(8, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
         ctx.textAlign = "center";
-        ctx.font = "bold 13px sans-serif";
+        ctx.font = "bold 14px sans-serif";
         ctx.fillStyle = C.grayText;
         ctx.fillText("COMMAND (VCU 0x204)", 8 + cardW / 2, 82);
         ctx.font = "bold 52px sans-serif";
         ctx.fillStyle = C.cyan;
         ctx.fillText(driveTarget.toFixed(1), 8 + cardW / 2, 160);
-        ctx.font = "bold 18px sans-serif";
+        ctx.font = "bold 20px sans-serif";
         ctx.fillText("km/h", 8 + cardW / 2, 200);
         drawRoundedRect(20, 245, cardW - 24, 50, 6, "#121a24", "#1e3a50", 1);
         ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.white;
         ctx.fillText("TARGET: [ D ] (DRIVE)", 8 + cardW / 2, 275);
-        ctx.font = "bold 16px sans-serif";
-        ctx.fillStyle = C.grayText;
-        ctx.fillText("Slew Limit: 1.5 m/s²", 8 + cardW / 2, 335);
+        ctx.font = "bold 15px sans-serif";
+        ctx.fillStyle = C.emerald;
+        ctx.fillText("[ OK ] DRIVE REQ VALID", 8 + cardW / 2, 335);
         ctx.font = "bold 13px sans-serif";
         ctx.fillStyle = C.graySub;
-        ctx.fillText("CAN 2.0B • 100 Hz", 8 + cardW / 2, 375);
+        ctx.fillText("[ OK ] ACCEL SMOOTHING ACTIVE", 8 + cardW / 2, 375);
 
         // Feedback
         drawRoundedRect(272, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        ctx.font = "bold 13px sans-serif";
+        ctx.font = "bold 14px sans-serif";
         ctx.fillStyle = C.grayText;
         ctx.fillText("ACTUATION (MTR 0x206)", 272 + cardW / 2, 82);
         ctx.font = "bold 52px sans-serif";
         ctx.fillStyle = C.emerald;
         ctx.fillText(driveActual.toFixed(1), 272 + cardW / 2, 160);
-        ctx.font = "bold 18px sans-serif";
+        ctx.font = "bold 20px sans-serif";
         ctx.fillText("km/h", 272 + cardW / 2, 200);
         drawRoundedRect(284, 245, cardW - 24, 50, 6, "#0c2218", "#155032", 1);
         ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("ACTUAL: [ D ] (ENGAGED)", 272 + cardW / 2, 275);
-        ctx.font = "bold 16px sans-serif";
         ctx.fillStyle = C.white;
-        ctx.fillText("MOTOR: 1,620 RPM", 272 + cardW / 2, 335);
+        ctx.fillText("ACTUAL: [ D ] (ENGAGED)", 272 + cardW / 2, 275);
+        ctx.font = "bold 15px sans-serif";
+        ctx.fillStyle = C.emerald;
+        ctx.fillText("[ OK ] PROPULSION HEALTHY", 272 + cardW / 2, 335);
         ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.graySub;
-        ctx.fillText("PROPULSION HEALTHY", 272 + cardW / 2, 375);
+        ctx.fillStyle = C.white;
+        ctx.fillText("MOTOR: 1,620 RPM", 272 + cardW / 2, 375);
 
         // Interlock & Lifecycle
         drawRoundedRect(536, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
@@ -821,7 +1099,7 @@
         ctx.font = "bold 14px sans-serif";
         ctx.fillText("[ TRACKING OK ]", 536 + cardW / 2, 124);
 
-        // Interlock Status Box
+        // Interlock Status Box (No Hex Clutter)
         drawRoundedRect(550, 150, cardW - 28, 130, 6, "#062817", C.emerald, 1);
         ctx.font = "bold 13px sans-serif";
         ctx.fillStyle = C.emerald;
@@ -830,17 +1108,17 @@
         ctx.fillStyle = "#34d399";
         ctx.fillText("ALL CLEAR", 536 + cardW / 2, 215);
         ctx.font = "bold 14px sans-serif";
-        ctx.fillText("[ MASK: 0x0000 OK ]", 536 + cardW / 2, 258);
+        ctx.fillText("[ BRAKE PRIORITY OK ]", 536 + cardW / 2, 258);
 
         // Lifecycle & Output
-        ctx.font = "bold 16px sans-serif";
+        ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.emerald;
-        ctx.fillText("MTR NODE: ACTIVE (3)", 536 + cardW / 2, 325);
-        ctx.font = "bold 14px sans-serif";
+        ctx.fillText("[ OK ] MTR NODE ACTIVE (3)", 536 + cardW / 2, 325);
+        ctx.font = "bold 13px sans-serif";
         ctx.fillStyle = C.white;
         ctx.fillText("Output Drive: ENABLED", 536 + cardW / 2, 365);
 
-        // Bottom button
+        // Bottom button (58px)
         drawRoundedRect(8, 414, 784, 58, 8, "#0f2937", C.cyan, 2);
         ctx.font = "bold 15px sans-serif";
         ctx.fillStyle = C.cyan;
@@ -848,6 +1126,174 @@
       }
     }
   }
+
+  // Animation Loop (30 Hz UI refresh)
+  let simTime = 0;
+  setInterval(() => {
+    simTime += 0.1;
+
+    // Simulate realistic physics
+    if (!estopActive) {
+      // Steering smooth square/sine oscillation
+      if (Math.sin(simTime * 0.4) > 0) angleTarget = 15.0;
+      else angleTarget = -15.0;
+      angleActual += (angleTarget - angleActual) * 0.18;
+
+      if (driverTakeover) {
+        torqueActual = 3.6 + Math.sin(simTime * 2) * 0.4;
+      } else {
+        torqueActual = 0.2 + (Math.random() - 0.5) * 0.1;
+      }
+
+      // Brake pressure profile
+      if (Math.sin(simTime * 0.3) > 0.3) brakeTarget = 450;
+      else brakeTarget = 0;
+      brakeActual += (brakeTarget - brakeActual) * 0.25;
+
+      // Drive speed profile
+      driveTarget = 15.0 + Math.sin(simTime * 0.2) * 5.0;
+      driveActual += (driveTarget - driveActual) * 0.12;
+    } else {
+      angleTarget = 0;
+      angleActual += (0 - angleActual) * 0.1;
+      brakeTarget = 1200; // Emergency clamping
+      brakeActual += (1200 - brakeActual) * 0.4;
+      driveTarget = 0;
+      driveActual += (0 - driveActual) * 0.3;
+    }
+
+    if (!scopePaused) {
+      steerCmdPlot.shift(); steerCmdPlot.push(angleTarget);
+      steerActPlot.shift(); steerActPlot.push(angleActual);
+      steerTorqPlot.shift(); steerTorqPlot.push(torqueActual);
+
+      brakeCmdPlot.shift(); brakeCmdPlot.push(brakeTarget);
+      brakeActPlot.shift(); brakeActPlot.push(brakeActual);
+
+      driveCmdPlot.shift(); driveCmdPlot.push(driveTarget);
+      driveActPlot.shift(); driveActPlot.push(driveActual);
+    }
+
+    render();
+  }, 33);
+
+  // Click & Swipe Gesture Navigation
+  let dragStartY = null;
+  let dragStartX = null;
+
+  canvas.addEventListener("mousedown", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    dragStartX = x;
+    dragStartY = y;
+
+    // Check Top Nav Bar clicks
+    if (y <= 52) {
+      const tabW = 186;
+      for (let i = 0; i < 4; i++) {
+        const tx = 8 + i * (tabW + 10);
+        if (x >= tx && x <= tx + tabW) {
+          currentTab = i;
+          showPlot = false;
+          updateXmlDisplay();
+          render();
+          return;
+        }
+      }
+    }
+
+    // Check Bottom Action Button click (to jump to plot)
+    if (!showPlot && y >= 414 && y <= 472) {
+      if (currentTab > 0) {
+        showPlot = true;
+        updateXmlDisplay();
+        render();
+        return;
+      }
+    }
+
+    // Check Header Back button on Plot screen
+    if (showPlot && y >= 6 && y <= 54 && x >= 686 && x <= 782) {
+      showPlot = false;
+      updateXmlDisplay();
+      render();
+      return;
+    }
+
+    // Check Pause button on Plot screen
+    if (showPlot && y >= 414 && y <= 466 && x >= 415 && x <= 595) {
+      scopePaused = !scopePaused;
+      document.getElementById("btnPauseScope").classList.toggle("active", scopePaused);
+      render();
+      return;
+    }
+
+    // Check Next Plot button
+    if (showPlot && y >= 414 && y <= 466 && x >= 605 && x <= 785) {
+      currentTab = (currentTab % 3) + 1;
+      updateXmlDisplay();
+      render();
+      return;
+    }
+  });
+
+  canvas.addEventListener("mouseup", (e) => {
+    if (dragStartY === null) return;
+    const rect = canvas.getBoundingClientRect();
+    const dy = (e.clientY - rect.top) - dragStartY;
+    const dx = (e.clientX - rect.left) - dragStartX;
+
+    // Swipe down to open plot
+    if (dy > 60 && !showPlot && currentTab > 0) {
+      showPlot = true;
+      updateXmlDisplay();
+      render();
+    }
+    // Swipe up to return to numerics
+    else if (dy < -60 && showPlot) {
+      showPlot = false;
+      updateXmlDisplay();
+      render();
+    }
+    // Swipe left / right to change subsystem tab
+    else if (Math.abs(dx) > 80 && Math.abs(dy) < 50) {
+      if (dx < 0 && currentTab < 3) currentTab++;
+      else if (dx > 0 && currentTab > 0) currentTab--;
+      updateXmlDisplay();
+      render();
+    }
+    dragStartY = null;
+    dragStartX = null;
+  });
+
+  // XML Inspector Integration
+  const drawer = document.getElementById("xmlInspectorDrawer");
+  const xmlSelect = document.getElementById("xmlFileSelect");
+  const xmlDisplay = document.getElementById("xmlCodeDisplay");
+
+  function updateXmlDisplay() {
+    let key = "view_general_bus";
+    if (currentTab === 0) key = "view_general_bus";
+    else if (currentTab === 1) key = showPlot ? "view_steer_plot" : "view_steer_digits";
+    else if (currentTab === 2) key = showPlot ? "view_brake_plot" : "view_brake_digits";
+    else if (currentTab === 3) key = showPlot ? "view_drive_plot" : "view_drive_digits";
+
+    xmlSelect.value = key;
+    xmlDisplay.textContent = XML_REGISTRY[key] || "<!-- XML file not found -->";
+  }
+
+  xmlSelect.addEventListener("change", function() {
+    xmlDisplay.textContent = XML_REGISTRY[this.value] || "";
+  });
+
+  document.getElementById("btnXmlToggle").addEventListener("click", function() {
+    drawer.classList.toggle("visible");
+    this.classList.toggle("active", drawer.classList.contains("visible"));
+    if (drawer.classList.contains("visible")) {
+      updateXmlDisplay();
+    }
+  });
 
   // Toolbar event listeners
   const enclosure = document.getElementById("enclosure");
@@ -880,7 +1326,8 @@
     link.click();
   });
 
-  // Initial draw
+  // Initial render
+  updateXmlDisplay();
   render();
 })();
 </script>

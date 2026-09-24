@@ -1,92 +1,80 @@
 <view name="view_general_bus" extends="lv_obj" width="800" height="480" style="inspector_bg">
-    <!-- Top Persistent Navigation Header (48px height) -->
+    <!-- Top Persistent Navigation Header (52px height) -->
     <lv_obj name="top_nav" width="800" height="52" align="top_mid" style="nav_bar_container"
             layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
-        <lv_button name="btn_nav_gen" style="nav_tab_active" width="180" height="44">
+        <lv_button name="btn_nav_gen" style="nav_tab_active" width="185" height="44">
             <lv_label text="0. BUS &amp; SAFETY" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_steer" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_steer" style="nav_tab_default" width="185" height="44">
             <lv_label text="1. STEER (SES)" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_brake" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_brake" style="nav_tab_default" width="185" height="44">
             <lv_label text="2. BRAKE (SEB)" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_drive" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_drive" style="nav_tab_default" width="185" height="44">
             <lv_label text="3. DRIVE (MTR)" align="center" />
         </lv_button>
     </lv_obj>
 
-    <!-- Main Content Area (415px height) -->
-    <lv_obj name="content_area" width="784" height="415" align="bottom_mid" y="-6"
+    <!-- Main Content Area -->
+    <lv_obj name="content_area" width="784" height="416" align="bottom_mid" y="-6"
             bg_opa="0" border_width="0" pad_all="0" layout="flex" flex_flow="column" pad_row="10">
 
-        <!-- 1. Giant E-Stop & Root Cause Status Card -->
-        <lv_obj name="card_estop_root" width="784" height="110" style="tool_card"
+        <!-- 1. E-Stop & Safety Interlock Banner -->
+        <lv_obj name="card_estop_root" width="784" height="76" style="estop_banner_armed"
                 layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-            <lv_label text="SAFETY INTERLOCK &amp; E-STOP ROOT CAUSE" style="field_label" />
-            <lv_label name="val_estop_status" text="E-STOP DISENGAGED • SYSTEM CLEAR" style="hero_val_emerald" text_font="montserrat_36" />
-            <lv_label name="val_estop_origin" text="Interlock Source: NONE  |  Hardware Pin: HIGH  |  Software Reason: 0" style="field_label" />
+            <lv_label name="val_estop_status" text="[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR" style="hero_val_emerald" text_font="montserrat_28" />
+            <lv_label name="val_estop_origin" text="Interlock Source: NONE  |  Hardware Pin: HIGH  |  Reason: 0" style="field_metadata" />
         </lv_obj>
 
-        <!-- 2. The 5-Node Low-Bus Watchdog Array -->
-        <lv_obj name="card_watchdog" width="784" height="130" style="tool_card">
-            <lv_label text="LOW-BUS NODE LIVENESS WATCHDOGS (TIMEOUT &gt; 250ms)" style="field_label" />
-            <lv_obj name="watchdog_row" width="760" height="74" y="28" bg_opa="0" border_width="0" pad_all="0"
+        <!-- 2. 5-Node Watchdog Array (146px cards) -->
+        <lv_obj name="card_watchdog" width="784" height="114" style="tool_card" pad_all="8">
+            <lv_label text="LOW-BUS ACTUATORS &amp; GATEWAY LIVENESS (250ms FAIL-CLOSED WATCHDOG)" style="field_label" />
+            <lv_obj name="watchdog_row" width="768" height="74" y="24" bg_opa="0" border_width="0" pad_all="0"
                     layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
-                <!-- SYS Node -->
-                <lv_obj name="node_sys" width="144" height="66" style="watchdog_ok" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                    <lv_label text="SYS (0x011)" text_font="montserrat_12" />
-                    <lv_label name="lbl_sys_rate" text="10.0 Hz [OK]" text_font="montserrat_14" />
+                <lv_obj name="node_sys" width="146" height="68" style="watchdog_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="SYS (0x011)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label name="lbl_sys_rate" text="10 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
                 </lv_obj>
-                <!-- RT Node -->
-                <lv_obj name="node_rt" width="144" height="66" style="watchdog_ok" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                    <lv_label text="RT (0x210)" text_font="montserrat_12" />
-                    <lv_label name="lbl_rt_rate" text="100.0 Hz [OK]" text_font="montserrat_14" />
+                <lv_obj name="node_rt" width="146" height="68" style="watchdog_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="RT (0x210)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label name="lbl_rt_rate" text="100 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
                 </lv_obj>
-                <!-- MTR Node -->
-                <lv_obj name="node_mtr" width="144" height="66" style="watchdog_ok" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                    <lv_label text="MTR (0x206)" text_font="montserrat_12" />
-                    <lv_label name="lbl_mtr_rate" text="50.0 Hz [OK]" text_font="montserrat_14" />
+                <lv_obj name="node_mtr" width="146" height="68" style="watchdog_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="MTR (0x206)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label name="lbl_mtr_rate" text="50 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
                 </lv_obj>
-                <!-- SES Node -->
-                <lv_obj name="node_ses" width="144" height="66" style="watchdog_ok" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                    <lv_label text="SES (0x201)" text_font="montserrat_12" />
-                    <lv_label name="lbl_ses_rate" text="100.0 Hz [OK]" text_font="montserrat_14" />
+                <lv_obj name="node_ses" width="146" height="68" style="watchdog_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="SES (0x201)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label name="lbl_ses_rate" text="100 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
                 </lv_obj>
-                <!-- SEB Node -->
-                <lv_obj name="node_seb" width="144" height="66" style="watchdog_ok" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                    <lv_label text="SEB (0x721)" text_font="montserrat_12" />
-                    <lv_label name="lbl_seb_rate" text="100.0 Hz [OK]" text_font="montserrat_14" />
+                <lv_obj name="node_seb" width="146" height="68" style="watchdog_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="SEB (0x721)" text_font="montserrat_14" text_color="#ffffff" />
+                    <lv_label name="lbl_seb_rate" text="100 Hz [OK]" text_font="montserrat_16" text_color="#10b981" />
                 </lv_obj>
             </lv_obj>
         </lv_obj>
 
-        <!-- 3. Hardware Rail & Controller Statistics (Including 0°C..+65°C Thermal Watchdog) -->
-        <lv_obj name="card_hw_stats" width="784" height="145" style="tool_card"
+        <!-- 3. Bottom Tri-Metric Deck (3 Spacious 248px Columns) -->
+        <lv_obj name="card_hw_stats" width="784" height="196" style="tool_card"
                 layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
-            <!-- Supply Voltage -->
-            <lv_obj width="170" height="115" bg_opa="0" border_width="0" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                <lv_label text="12V RAIL SUPPLY" style="field_label" />
-                <lv_label name="val_rail_volts" text="12.6 V" style="hero_val_white" text_font="montserrat_36" />
-                <lv_label text="BATTERY HEALTHY" style="field_sub" text_color="#10b981" />
+            <!-- 12V System Rail -->
+            <lv_obj width="246" height="172" style="tool_card" layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="12V SYSTEM BUS" style="field_label" />
+                <lv_label name="val_rail_volts" text="13.8 V" style="hero_val_white" text_font="montserrat_48" />
+                <lv_label text="[ BATTERY HEALTHY ]" text_color="#10b981" text_font="montserrat_14" />
             </lv_obj>
-            <!-- ESP32-S3 Die Temperature Watchdog -->
-            <lv_obj width="180" height="115" bg_opa="0" border_width="0" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                <lv_label text="ESP32 DIE TEMP" style="field_label" />
-                <lv_label name="val_esp_temp" text="42.5 °C" style="hero_val_emerald" text_font="montserrat_36" />
-                <lv_label text="LIMIT: 65°C [SAFE]" style="field_sub" text_color="#10b981" />
+            <!-- CAN Bus Health & Hardware Error Counters -->
+            <lv_obj width="246" height="172" style="tool_card" layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="CAN BUS HEALTH" style="field_label" />
+                <lv_label name="val_bus_rate" text="420 msg/s" style="hero_val_cyan" text_font="montserrat_48" />
+                <lv_label name="val_tec_rec" text="[ 0 ERRORS • BUS OK ]" text_color="#10b981" text_font="montserrat_14" />
             </lv_obj>
-            <!-- Low Bus Health & Error Counters -->
-            <lv_obj width="180" height="115" bg_opa="0" border_width="0" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                <lv_label text="LOW BUS HEALTH" style="field_label" />
-                <lv_label name="val_bus_rate" text="210 Hz" style="hero_val_cyan" text_font="montserrat_28" />
-                <lv_label name="val_tec_rec" text="TEC: 0 | REC: 0" style="field_sub" text_color="#10b981" />
-            </lv_obj>
-            <!-- Flight Logger Status -->
-            <lv_obj width="180" height="115" bg_opa="0" border_width="0" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
-                <lv_label text="FLIGHT RECORDER" style="field_label" />
-                <lv_label name="val_sd_state" text="RECORDING" style="hero_val_emerald" text_font="montserrat_24" />
-                <lv_label name="val_sd_file" text="RAW_CAN_01.LOG" style="field_sub" />
+            <!-- SD Flight Recorder -->
+            <lv_obj width="246" height="172" style="tool_card" layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="CAN FLIGHT RECORDER" style="field_label" />
+                <lv_label name="val_sd_state" text="LOGGING" style="hero_val_emerald" text_font="montserrat_48" />
+                <lv_label name="val_sd_file" text="[ RAW_CAN_01.LOG ]" text_color="#06b6d4" text_font="montserrat_14" />
             </lv_obj>
         </lv_obj>
     </lv_obj>

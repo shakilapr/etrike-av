@@ -2,66 +2,78 @@
     <!-- Top Persistent Navigation Header -->
     <lv_obj name="top_nav" width="800" height="52" align="top_mid" style="nav_bar_container"
             layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
-        <lv_button name="btn_nav_gen" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_gen" style="nav_tab_default" width="185" height="44">
             <lv_label text="0. BUS &amp; SAFETY" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_steer" style="nav_tab_active" width="180" height="44">
+        <lv_button name="btn_nav_steer" style="nav_tab_active" width="185" height="44">
             <lv_label text="1. STEER (SES)" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_brake" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_brake" style="nav_tab_default" width="185" height="44">
             <lv_label text="2. BRAKE (SEB)" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_drive" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_drive" style="nav_tab_default" width="185" height="44">
             <lv_label text="3. DRIVE (MTR)" align="center" />
         </lv_button>
     </lv_obj>
 
     <!-- Main Content Area -->
-    <lv_obj name="content_area" width="784" height="415" align="bottom_mid" y="-6"
+    <lv_obj name="content_area" width="784" height="416" align="bottom_mid" y="-6"
             bg_opa="0" border_width="0" pad_all="0" layout="flex" flex_flow="column" pad_row="10">
 
-        <!-- 3-Column Actuation Metrics Card -->
-        <lv_obj name="row_metrics" width="784" height="240" bg_opa="0" border_width="0" pad_all="0"
+        <!-- 3-Column Actuation Metrics Deck (254px cards) -->
+        <lv_obj name="row_metrics" width="784" height="348" bg_opa="0" border_width="0" pad_all="0"
                 layout="flex" flex_flow="row" flex_align_main="space_between">
 
-            <!-- Card 1: Command (0x169) -->
-            <lv_obj name="card_cmd" width="250" height="240" style="tool_card"
+            <!-- Card 1: Command (VCU 0x169) -->
+            <lv_obj name="card_cmd" width="254" height="348" style="tool_card"
                     layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
-                <lv_label text="COMMAND (0x169 VCU_SES_REQ)" style="field_label" />
+                <lv_label text="COMMAND (VCU 0x169)" style="field_label" />
                 <lv_label name="val_steer_cmd" text="+15.0°" style="hero_val_cyan" text_font="montserrat_48" />
-                <lv_label name="sub_steer_cmd_speed" text="Cmd Speed: 60 °/s" style="field_sub" />
-                <lv_label name="sub_steer_chk" text="XOR Checksum: VALID (0x3C)" style="field_sub" text_color="#10b981" />
-            </lv_obj>
-
-            <!-- Card 2: Actual Feedback (0x201) -->
-            <lv_obj name="card_act" width="250" height="240" style="tool_card"
-                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
-                <lv_label text="FEEDBACK (0x201 SES_STATUS)" style="field_label" />
-                <lv_label name="val_steer_act" text="+14.7°" style="hero_val_emerald" text_font="montserrat_48" />
-                <lv_label name="sub_steer_act_speed" text="Actual Speed: 58 °/s" style="field_sub" />
-                <lv_label name="sub_steer_act_torque" text="Motor Torque: 3.4 Nm" style="field_sub" />
-            </lv_obj>
-
-            <!-- Card 3: Delta & Error Status (0x202) -->
-            <lv_obj name="card_delta" width="260" height="240" style="tool_card"
-                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
-                <lv_label text="TRACKING ERROR (Δ)" style="field_label" />
-                <lv_obj name="badge_delta" style="badge_delta_ok">
-                    <lv_label name="val_steer_delta" text="Δ: 0.3° [OK]" text_font="montserrat_24" />
+                <lv_obj width="230" height="50" style="tool_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="TARGET SPEED: 200 °/s" text_font="montserrat_16" text_color="#ffffff" />
                 </lv_obj>
-                <lv_label text="VENDOR FAULT CODE (0x202)" style="field_label" />
-                <lv_label name="val_steer_fault_str" text="STATUS: 0x00 (CLEAR)" text_font="montserrat_14" text_color="#10b981" />
-                <lv_label text="Max Allowed Error: ±3.0°" style="field_sub" />
+                <lv_label text="[ OK ] CLOSED-LOOP ENABLED" text_color="#10b981" text_font="montserrat_16" />
+                <lv_label text="[ OK ] CLUSTER SYNC VALID" text_color="#64748b" text_font="montserrat_14" />
+            </lv_obj>
+
+            <!-- Card 2: Actual Feedback (SES 0x201) -->
+            <lv_obj name="card_act" width="254" height="348" style="tool_card"
+                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="ACTUATION (SES 0x201)" style="field_label" />
+                <lv_label name="val_steer_act" text="+14.7°" style="hero_val_emerald" text_font="montserrat_48" />
+                <lv_obj width="230" height="50" style="tool_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="ACTUAL SPEED: 198 °/s" text_font="montserrat_16" text_color="#ffffff" />
+                </lv_obj>
+                <lv_label text="[ OK ] CLOSED-LOOP ANGLE" text_color="#10b981" text_font="montserrat_16" />
+                <lv_label text="[ OK ] SES ALIGNED • READY" text_color="#64748b" text_font="montserrat_14" />
+            </lv_obj>
+
+            <!-- Card 3: Delta & Driver Column Torque (0x201/0x202) -->
+            <lv_obj name="card_delta" width="254" height="348" style="tool_card"
+                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <!-- 2-Tier Delta Badge -->
+                <lv_obj name="badge_delta" width="230" height="74" style="badge_delta_ok"
+                        layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label name="val_steer_delta" text="Δ: 0.3°" text_font="montserrat_20" text_color="#ffffff" />
+                    <lv_label text="[ TRACKING OK ]" text_font="montserrat_14" text_color="#34d399" />
+                </lv_obj>
+
+                <!-- Driver Column Torque Box -->
+                <lv_obj name="box_torque" width="230" height="130" style="card_torque"
+                        layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                    <lv_label text="DRIVER COLUMN TORQUE" text_font="montserrat_14" text_color="#f59e0b" />
+                    <lv_label name="val_steer_torque" text="+0.2 Nm" style="hero_val_amber" text_font="montserrat_48" />
+                    <lv_label text="[ NO OVERRIDE ]" text_font="montserrat_14" text_color="#10b981" />
+                </lv_obj>
+
+                <lv_label text="[ OK ] SES ECU: HEALTHY" text_color="#10b981" text_font="montserrat_16" />
+                <lv_label text="Motor: 8.4A  •  Temp: 34°C" text_color="#ffffff" text_font="montserrat_14" />
             </lv_obj>
         </lv_obj>
 
-        <!-- Bottom Action Bar: Jump to 15s Scope Plot -->
-        <lv_obj name="bottom_actions" width="784" height="60" style="tool_card"
-                layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
-            <lv_label text="Swipe DOWN or tap button to inspect 15-second response curve" style="field_label" />
-            <lv_button name="btn_open_steer_plot" style="nav_tab_active" width="260" height="46">
-                <lv_label text="OPEN 15s SCOPE PLOT &gt;" align="center" />
-            </lv_button>
-        </lv_obj>
+        <!-- Bottom Action Bar: Jump to 15s Scope Plot (Full-Width 58px) -->
+        <lv_button name="btn_goto_plot" style="btn_action_full" width="784" height="58">
+            <lv_label text="VIEW 15-SECOND STEERING SCOPE PLOT (OR SWIPE DOWN) &gt;" align="center" />
+        </lv_button>
     </lv_obj>
 </view>

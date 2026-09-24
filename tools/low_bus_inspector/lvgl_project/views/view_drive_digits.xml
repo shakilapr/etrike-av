@@ -2,66 +2,84 @@
     <!-- Top Persistent Navigation Header -->
     <lv_obj name="top_nav" width="800" height="52" align="top_mid" style="nav_bar_container"
             layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
-        <lv_button name="btn_nav_gen" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_gen" style="nav_tab_default" width="185" height="44">
             <lv_label text="0. BUS &amp; SAFETY" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_steer" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_steer" style="nav_tab_default" width="185" height="44">
             <lv_label text="1. STEER (SES)" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_brake" style="nav_tab_default" width="180" height="44">
+        <lv_button name="btn_nav_brake" style="nav_tab_default" width="185" height="44">
             <lv_label text="2. BRAKE (SEB)" align="center" />
         </lv_button>
-        <lv_button name="btn_nav_drive" style="nav_tab_active" width="180" height="44">
+        <lv_button name="btn_nav_drive" style="nav_tab_active" width="185" height="44">
             <lv_label text="3. DRIVE (MTR)" align="center" />
         </lv_button>
     </lv_obj>
 
     <!-- Main Content Area -->
-    <lv_obj name="content_area" width="784" height="415" align="bottom_mid" y="-6"
+    <lv_obj name="content_area" width="784" height="416" align="bottom_mid" y="-6"
             bg_opa="0" border_width="0" pad_all="0" layout="flex" flex_flow="column" pad_row="10">
 
-        <!-- 3-Column Actuation Metrics Card -->
-        <lv_obj name="row_metrics" width="784" height="240" bg_opa="0" border_width="0" pad_all="0"
+        <!-- 3-Column Actuation Metrics Deck (254px cards) -->
+        <lv_obj name="row_metrics" width="784" height="348" bg_opa="0" border_width="0" pad_all="0"
                 layout="flex" flex_flow="row" flex_align_main="space_between">
 
-            <!-- Card 1: Command (0x204) -->
-            <lv_obj name="card_cmd" width="250" height="240" style="tool_card"
+            <!-- Card 1: Command (VCU 0x204) -->
+            <lv_obj name="card_cmd" width="254" height="348" style="tool_card"
                     layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
-                <lv_label text="COMMAND (0x204 RT_DRIVE_CMD)" style="field_label" />
-                <lv_label name="val_drive_cmd_spd" text="15.0 km/h" style="hero_val_cyan" text_font="montserrat_48" />
-                <lv_label name="sub_drive_cmd_gear" text="Target Gear: D (DRIVE)" style="field_sub" />
-                <lv_label text="Rate: 100 Hz Periodic" style="field_sub" />
-            </lv_obj>
-
-            <!-- Card 2: Actual Feedback (0x120 & 0x206) -->
-            <lv_obj name="card_act" width="250" height="240" style="tool_card"
-                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
-                <lv_label text="FEEDBACK (0x120 / 0x206)" style="field_label" />
-                <lv_label name="val_drive_act_spd" text="14.8 km/h" style="hero_val_emerald" text_font="montserrat_48" />
-                <lv_label name="sub_drive_act_rpm" text="Motor Speed: 1,620 RPM" style="field_sub" />
-                <lv_label name="sub_drive_act_gear" text="Actual Gear: D (DRIVE)" style="field_sub" />
-            </lv_obj>
-
-            <!-- Card 3: Interlock & Block Mask (0x502) -->
-            <lv_obj name="card_delta" width="260" height="240" style="tool_card"
-                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
-                <lv_label text="INTERLOCK BLOCK MASK (0x502)" style="field_label" />
-                <lv_obj name="badge_delta" style="badge_delta_ok">
-                    <lv_label name="val_drive_block_state" text="MASK: 0x0000 [CLEAR]" text_font="montserrat_18" />
+                <lv_label text="COMMAND (VCU 0x204)" style="field_label" />
+                <lv_obj width="230" height="100" bg_opa="0" border_width="0" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label name="val_drive_cmd" text="15.0" style="hero_val_cyan" text_font="montserrat_48" />
+                    <lv_label text="km/h" style="unit_label" />
                 </lv_obj>
-                <lv_label text="NODE LIFECYCLE STATE" style="field_label" />
-                <lv_label name="val_drive_lifecycle" text="STATE: 3 (ACTIVE)" text_font="montserrat_14" text_color="#10b981" />
-                <lv_label text="Output: ENABLED  |  Degraded: NO" style="field_sub" />
+                <lv_obj width="230" height="50" style="tool_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="TARGET: [ D ] (DRIVE)" text_font="montserrat_16" text_color="#ffffff" />
+                </lv_obj>
+                <lv_label text="[ OK ] DRIVE REQ VALID" text_color="#10b981" text_font="montserrat_16" />
+                <lv_label text="[ OK ] ACCEL SMOOTHING ACTIVE" text_color="#64748b" text_font="montserrat_14" />
+            </lv_obj>
+
+            <!-- Card 2: Actual Feedback (MTR 0x206) -->
+            <lv_obj name="card_act" width="254" height="348" style="tool_card"
+                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <lv_label text="ACTUATION (MTR 0x206)" style="field_label" />
+                <lv_obj width="230" height="100" bg_opa="0" border_width="0" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label name="val_drive_act" text="14.8" style="hero_val_emerald" text_font="montserrat_48" />
+                    <lv_label text="km/h" text_color="#10b981" text_font="montserrat_20" />
+                </lv_obj>
+                <lv_obj width="230" height="50" style="tool_card" layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label text="ACTUAL: [ D ] (ENGAGED)" text_font="montserrat_16" text_color="#ffffff" />
+                </lv_obj>
+                <lv_label text="[ OK ] PROPULSION HEALTHY" text_color="#10b981" text_font="montserrat_16" />
+                <lv_label text="MOTOR: 1,620 RPM" text_color="#ffffff" text_font="montserrat_14" />
+            </lv_obj>
+
+            <!-- Card 3: Delta & Safety Interlocks (0x502) -->
+            <lv_obj name="card_delta" width="254" height="348" style="tool_card"
+                    layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                <!-- 2-Tier Delta Badge -->
+                <lv_obj name="badge_delta" width="230" height="74" style="badge_delta_ok"
+                        layout="flex" flex_flow="column" flex_align_main="center" flex_align_cross="center">
+                    <lv_label name="val_drive_delta" text="Δ: 0.2 km/h" text_font="montserrat_20" text_color="#ffffff" />
+                    <lv_label text="[ TRACKING OK ]" text_font="montserrat_14" text_color="#34d399" />
+                </lv_obj>
+
+                <!-- Safety Interlocks Box -->
+                <lv_obj name="box_interlock" width="230" height="130" style="tool_card" border_color="#10b981"
+                        layout="flex" flex_flow="column" flex_align_main="space_between" flex_align_cross="center">
+                    <lv_label text="SAFETY INTERLOCKS" text_font="montserrat_14" text_color="#888888" />
+                    <lv_label text="ALL CLEAR" style="hero_val_emerald" text_font="montserrat_28" />
+                    <lv_label text="[ BRAKE PRIORITY OK ]" text_font="montserrat_14" text_color="#10b981" />
+                </lv_obj>
+
+                <lv_label text="[ OK ] MTR NODE ACTIVE (3)" text_color="#10b981" text_font="montserrat_16" />
+                <lv_label text="Output Drive: ENABLED" text_color="#ffffff" text_font="montserrat_14" />
             </lv_obj>
         </lv_obj>
 
-        <!-- Bottom Action Bar: Jump to 15s Scope Plot -->
-        <lv_obj name="bottom_actions" width="784" height="60" style="tool_card"
-                layout="flex" flex_flow="row" flex_align_main="space_between" flex_align_cross="center">
-            <lv_label text="Swipe DOWN or tap button to inspect 15-second throttle step response" style="field_label" />
-            <lv_button name="btn_open_drive_plot" style="nav_tab_active" width="260" height="46">
-                <lv_label text="OPEN 15s SCOPE PLOT &gt;" align="center" />
-            </lv_button>
-        </lv_obj>
+        <!-- Bottom Action Bar: Jump to 15s Scope Plot (Full-Width 58px) -->
+        <lv_button name="btn_goto_plot" style="btn_action_full" width="784" height="58">
+            <lv_label text="VIEW 15-SECOND DRIVE SPEED SCOPE (OR SWIPE DOWN) &gt;" align="center" />
+        </lv_button>
     </lv_obj>
 </view>

@@ -1,5 +1,11 @@
 <styles>
-    <!-- True Black background for outdoor sunlight contrast -->
+    <!-- ============================================================= -->
+    <!-- Low-Bus Inspector LVGL XML Stylesheet                         -->
+    <!-- Hardware Target: Waveshare ESP32-S3-Touch-LCD-4.3B (SKU 28141)-->
+    <!-- 800x480 RGB565 Flat Minimalist Automotive HMI                 -->
+    <!-- ============================================================= -->
+
+    <!-- Base Canvas Background: True Black for Maximum Daylight Contrast -->
     <style name="inspector_bg"
            bg_color="#000000"
            bg_opa="255"
@@ -7,16 +13,16 @@
            pad_all="0"
            radius="0" />
 
-    <!-- High-Contrast Tool Card -->
+    <!-- Solid Tool Card (Flat, No Gradient, No Blur) -->
     <style name="tool_card"
            bg_color="#0d0d0d"
            bg_opa="255"
            border_color="#262626"
            border_width="1"
-           radius="10"
+           radius="8"
            pad_all="12" />
 
-    <!-- Top Navigation Bar Container -->
+    <!-- Top Persistent Navigation Bar Container (52px Height) -->
     <style name="nav_bar_container"
            bg_color="#080808"
            bg_opa="255"
@@ -26,16 +32,16 @@
            pad_hor="8"
            pad_ver="4" />
 
-    <!-- Navigation Tab Buttons (52px Touch Target for Vehicle Vibration) -->
+    <!-- Navigation Tab Buttons (48-52px Touch Target for Vehicle Operation) -->
     <style name="nav_tab_default"
            bg_color="#141414"
-           border_color="#333333"
+           border_color="#262626"
            border_width="1"
            radius="8"
-           text_color="#94a3b8"
+           text_color="#888888"
            text_font="montserrat_14"
-           min_width="130"
-           min_height="52" />
+           min_width="180"
+           min_height="44" />
 
     <style name="nav_tab_active"
            bg_color="#1e293b"
@@ -44,8 +50,8 @@
            radius="8"
            text_color="#38bdf8"
            text_font="montserrat_14"
-           min_width="130"
-           min_height="52" />
+           min_width="180"
+           min_height="44" />
 
     <style name="nav_tab_fault"
            bg_color="#4c0519"
@@ -54,10 +60,47 @@
            radius="8"
            text_color="#ffffff"
            text_font="montserrat_14"
-           min_width="130"
-           min_height="52" />
+           min_width="180"
+           min_height="44" />
 
-    <!-- Giant Hero Digits (Glanceable from 1 Meter) -->
+    <!-- Full-Width Bottom Action Button (56-58px Ergonomic Thumb Target) -->
+    <style name="btn_action_full"
+           bg_color="#1e293b"
+           border_color="#38bdf8"
+           border_width="2"
+           radius="8"
+           text_color="#ffffff"
+           text_font="montserrat_16"
+           pad_ver="14" />
+
+    <style name="btn_action_full_pressed"
+           bg_color="#0369a1"
+           border_color="#7dd3fc"
+           border_width="2"
+           radius="8"
+           text_color="#ffffff"
+           text_font="montserrat_16" />
+
+    <!-- E-Stop Armed Banner -->
+    <style name="estop_banner_armed"
+           bg_color="#062817"
+           border_color="#10b981"
+           border_width="2"
+           radius="8"
+           pad_all="12" />
+
+    <style name="estop_banner_tripped"
+           bg_color="#38080f"
+           border_color="#f43f5e"
+           border_width="2"
+           radius="8"
+           pad_all="12" />
+
+    <!-- 6-Tier Typography Hierarchy Tokens (Montserrat / Inter) -->
+    <style name="font_hero"
+           text_font="montserrat_96"
+           text_align="center" />
+
     <style name="hero_val_cyan"
            text_color="#06b6d4"
            text_font="montserrat_48"
@@ -73,27 +116,40 @@
            text_font="montserrat_48"
            text_align="center" />
 
-    <style name="hero_val_white"
-           text_color="#ffffff"
-           text_font="montserrat_48"
-           text_align="center" />
-
     <style name="hero_val_amber"
            text_color="#f59e0b"
            text_font="montserrat_48"
            text_align="center" />
 
-    <!-- Field Labels (Glanceable Typography, Minimum 13-14px) -->
+    <style name="hero_val_white"
+           text_color="#ffffff"
+           text_font="montserrat_48"
+           text_align="center" />
+
+    <style name="font_heading"
+           text_color="#ffffff"
+           text_font="montserrat_28"
+           text_align="center" />
+
+    <style name="font_body"
+           text_color="#ffffff"
+           text_font="montserrat_20" />
+
+    <style name="unit_label"
+           text_color="#06b6d4"
+           text_font="montserrat_20"
+           text_align="center" />
+
     <style name="field_label"
-           text_color="#94a3b8"
-           text_font="montserrat_14"
+           text_color="#888888"
+           text_font="montserrat_16"
            text_letter_space="1" />
 
-    <style name="field_sub"
-           text_color="#cbd5e1"
-           text_font="montserrat_13" />
+    <style name="field_metadata"
+           text_color="#64748b"
+           text_font="montserrat_14" />
 
-    <!-- Delta Tracking Badges (20-22px Prominent Readout) -->
+    <!-- 2-Tier Delta Badges (No Horizontal Text Clipping) -->
     <style name="badge_delta_ok"
            bg_color="#064e3b"
            border_color="#10b981"
@@ -104,7 +160,7 @@
            text_color="#34d399"
            text_font="montserrat_20" />
 
-    <style name="badge_delta_err"
+    <style name="badge_delta_lag"
            bg_color="#4c0519"
            border_color="#f43f5e"
            border_width="2"
@@ -114,32 +170,46 @@
            text_color="#f43f5e"
            text_font="montserrat_20" />
 
-    <!-- Node Watchdog Pills -->
-    <style name="watchdog_ok"
-           bg_color="#052e16"
-           border_color="#15803d"
+    <!-- Driver Column Torque Card (SES Steering Dual-Axis) -->
+    <style name="card_torque"
+           bg_color="#231806"
+           border_color="#f59e0b"
            border_width="1"
-           radius="6"
-           pad_hor="8"
-           pad_ver="4"
-           text_color="#4ade80"
-           text_font="montserrat_12" />
+           radius="8"
+           pad_all="10" />
 
-    <style name="watchdog_timeout"
-           bg_color="#450a0a"
-           border_color="#b91c1c"
-           border_width="2"
-           radius="6"
-           pad_hor="8"
-           pad_ver="4"
-           text_color="#fca5a5"
-           text_font="montserrat_12" />
+    <!-- Node Watchdog Array (146x170px) -->
+    <style name="watchdog_card"
+           bg_color="#0d0d0d"
+           border_color="#262626"
+           border_width="1"
+           radius="8"
+           pad_all="8" />
 
-    <!-- 15s Scope Chart Styles -->
+    <!-- 15s Scope Chart Styles (Line thickness 2-3px, grid 1px) -->
     <style name="scope_chart"
-           bg_color="#080808"
+           bg_color="#000000"
            border_color="#262626"
            border_width="1"
            radius="8"
            line_width="2" />
+
+    <!-- Oscilloscope Bottom Control Buttons (50-52px height) -->
+    <style name="btn_scope_ctrl"
+           bg_color="#1e293b"
+           border_color="#38bdf8"
+           border_width="1"
+           radius="8"
+           text_color="#ffffff"
+           text_font="montserrat_16"
+           min_height="48" />
+
+    <style name="btn_scope_nav"
+           bg_color="#141414"
+           border_color="#262626"
+           border_width="1"
+           radius="8"
+           text_color="#ffffff"
+           text_font="montserrat_16"
+           min_height="48" />
 </styles>
