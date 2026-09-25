@@ -29,9 +29,12 @@ extern "C" {
 #define BOARD_I2C_PORT         I2C_NUM_0
 
 esp_err_t board_hardware_init(void);
+esp_err_t board_lvgl_init(void);
 esp_err_t board_lcd_init(esp_lcd_panel_handle_t *panel_handle);
 esp_err_t board_set_backlight(uint8_t percent);
 esp_err_t board_twai_init(void);
+bool board_gt911_init(void);
+bool board_gt911_read(uint16_t *x, uint16_t *y);
 
 /**
  * @brief Thread-safe LVGL display mutex locking (per Waveshare & LVGL guidelines)

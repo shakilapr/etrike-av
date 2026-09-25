@@ -1,6 +1,14 @@
 /**
  * @file ui_manager.h
- * @brief 2D Window Matrix Navigation and 15s Scope Chart Feeder
+ * @brief 2D Window Matrix Navigation and 5s/15s Scope Chart Feeder
+ *
+ * Implements Waveshare ESP32-S3-Touch-LCD-4.3B (SKU: 28141) HMI:
+ * - 0. DASHBOARD: Unified CAN Watch Cockpit with 3-actuator status & 5-node watchdog
+ * - 1. STEER (SES): Dual digits + Target speed + Delta/Torque + Embedded 5s Live Plot
+ * - 2. BRAKE (SEB): Dual digits + Stroke + Delta + Embedded 5s Live Plot
+ * - 3. DRIVE (MTR): Dual digits + RPM/Gear + Delta + Embedded 5s Live Plot
+ * - 4. BUS & NODES: Detailed CAN bus diagnostics, 12V rail, SD logger
+ * - 5-7. EXPANDED SCOPES: 15-second high-resolution full-screen plots
  */
 
 #pragma once
@@ -32,40 +40,28 @@ extern "C" {
 #define UI_COLOR_ACCENT_CMD      0x06B6D4  // Cyan command target
 #define UI_COLOR_ACCENT_ACT      0x10B981  // Emerald actual feedback
 
-/* =========================================================================
- * Semantic Typography Tokens (Fixed 6-Tier Hierarchy - Montserrat/Inter)
- * ========================================================================= */
-#define UI_FONT_SIZE_HERO        96  // Speed / primary focus metric
-#define UI_FONT_SIZE_MAJOR       48  // Command & Feedback values, Gear, E-Stop state
-#define UI_FONT_SIZE_HEADING     28  // Section titles, header labels, primary badges
-#define UI_FONT_SIZE_BODY        20  // Touch button labels, normal values, unit labels
-#define UI_FONT_SIZE_SECONDARY   16  // Card titles, telemetry labels, auxiliary rates
-#define UI_FONT_SIZE_METADATA    14  // Bus addresses, cycle times, qualitative tags
+#define PLOT_POINTS_5S           50   // 5.0 seconds at 100ms sample interval
+#define PLOT_POINTS_15S          150  // 15.0 seconds at 100ms sample interval
 
 typedef enum {
-    WIN_BUS_SAFETY     = 0,
-    WIN_STEER_DIGITS   = 1,
-    WIN_STEER_PLOT     = 2,
-    WIN_BRAKE_DIGITS   = 3,
-    WIN_BRAKE_PLOT     = 4,
-    WIN_DRIVE_DIGITS   = 5,
-    WIN_DRIVE_PLOT     = 6,
-    WIN_COUNT          = 7
+    WIN_DASHBOARD      = 0, // Cockpit CAN Watch Dashboard
+    WIN_STEER          = 1, // SES Steer digits + embedded 5s plot
+    WIN_BRAKE          = 2, // SEB Brake digits + embedded 5s plot
+    WIN_DRIVE          = 3, // MTR Drive digits + embedded 5s plot
+    WIN_BUS_SAFETY     = 4, // Bus & Safety Watchdog Diagnostics
+    WIN_STEER_PLOT_15S = 5, // Fullscreen 15s Steer Scope
+    WIN_BRAKE_PLOT_15S = 6, // Fullscreen 15s Brake Scope
+    WIN_DRIVE_PLOT_15S = 7, // Fullscreen 15s Drive Scope
+    WIN_COUNT          = 8
 } inspector_window_t;
 
 /**
- * @brief Initialize all 7 LVGL screens, styles, and event listeners.
+ * @brief Initialize all LVGL screens, styles, plots, and event listeners.
  */
 void ui_manager_init(void);
 
 /**
- * @brief Update active window widgets and feed 15s scope charts.
- * @param t Low-bus telemetry snapshot.
- */
-void ui_manager_update(const low_bus_telemetry_t *t);
-
-/**
- * @brief Switch explicitly to a target window (with smooth animation).
+ * @brief Switch active window with flat transition.
  */
 void ui_manager_switch_window(inspector_window_t win);
 
@@ -73,6 +69,11 @@ void ui_manager_switch_window(inspector_window_t win);
  * @brief Get currently active window.
  */
 inspector_window_t ui_manager_get_current_window(void);
+
+/**
+ * @brief Update all telemetry labels and feed 5s / 15s scope charts.
+ */
+void ui_manager_update(const low_bus_telemetry_t *t);
 
 #ifdef __cplusplus
 }

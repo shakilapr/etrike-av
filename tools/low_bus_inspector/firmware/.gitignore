@@ -1,0 +1,5 @@
+build/
+.pio/
+components/lvgl/
+sdkconfig
+sdkconfig.old

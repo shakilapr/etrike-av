@@ -1,7 +1,12 @@
 """800x480 Pixel-Perfect Low-Bus Inspector UI Simulator and Screenshot Generator.
 
-Renders high-contrast, authentic 800x480 displays matching the exact LVGL XML
-layout, 6-tier typography, semantic color tokens, and 15-second rolling waveform plots.
+Renders authentic 800x480 displays matching the exact LVGL layout:
+- Screen 0: Unified CAN Watch Cockpit / Dashboard
+- Screen 1: Steering (SES) Digits + Embedded 5s Dual-Trace Plot
+- Screen 2: Brake (SEB) Digits + Embedded 5s Dual-Trace Plot
+- Screen 3: Drive (MTR) Digits + Embedded 5s Dual-Trace Plot
+- Screen 4: Detailed Bus & 5-Node Watchdog Deck
+- Screens 5-7: 15-Second Fullscreen Oscilloscope Scopes
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 WIDTH = 800
 HEIGHT = 480
 
-# Semantic Color Tokens (matching styles.xml)
+# Semantic Color Tokens (matching styles.xml & ui_manager.h)
 C_BG = (0, 0, 0)
 C_CARD_BG = (13, 13, 13)
 C_CARD_BORDER = (38, 38, 38)
@@ -34,15 +39,15 @@ C_GRAY_TEXT = (136, 136, 136)
 C_GRAY_SUB = (100, 116, 139)
 C_GRID = (24, 24, 24)
 
-# 6-Tier Typography Hierarchy (Montserrat / Arial Bold)
+# 6-Tier Typography Hierarchy
 try:
-    font_hero = ImageFont.truetype("arialbd.ttf", 52)
-    font_large = ImageFont.truetype("arialbd.ttf", 26)
-    font_badge = ImageFont.truetype("arialbd.ttf", 22)
-    font_med = ImageFont.truetype("arialbd.ttf", 18)
-    font_bold = ImageFont.truetype("arialbd.ttf", 15)
-    font_small = ImageFont.truetype("arialbd.ttf", 14)
-    font_tiny = ImageFont.truetype("arialbd.ttf", 12)
+    font_hero = ImageFont.truetype("arialbd.ttf", 36)
+    font_large = ImageFont.truetype("arialbd.ttf", 24)
+    font_badge = ImageFont.truetype("arialbd.ttf", 16)
+    font_med = ImageFont.truetype("arialbd.ttf", 14)
+    font_bold = ImageFont.truetype("arialbd.ttf", 13)
+    font_small = ImageFont.truetype("arialbd.ttf", 12)
+    font_tiny = ImageFont.truetype("arialbd.ttf", 11)
 except Exception:
     font_hero = font_large = font_badge = font_med = font_bold = font_small = font_tiny = ImageFont.load_default()
 
@@ -60,529 +65,353 @@ def quantize_to_rgb565(img: Image.Image) -> Image.Image:
     return Image.fromarray(np.stack([r8, g8, b8], axis=-1))
 
 
-def render_waveshare_43b_enclosure(screen_img: Image.Image, screen_name: str) -> Path:
-    """Renders the 800x480 screen inside the physical Waveshare 4.3B-BOX enclosure (SKU 28141)."""
-    box_w = int(116.3 * 8.417)  # ~978 px
-    box_h = int(79.0 * 8.417)   # ~665 px
-
-    box_img = Image.new("RGB", (box_w, box_h), (12, 13, 16))
-    draw_box = ImageDraw.Draw(box_img)
-
-    draw_box.rounded_rectangle([4, 4, box_w - 4, box_h - 4], radius=32, fill=(28, 29, 33), outline=(62, 66, 76), width=3)
-    draw_box.rounded_rectangle([14, 14, box_w - 14, box_h - 14], radius=24, fill=(18, 19, 22), outline=(35, 37, 42), width=2)
-
-    scr_x0 = (box_w - WIDTH) // 2
-    scr_y0 = (box_h - HEIGHT) // 2
-    scr_x1 = scr_x0 + WIDTH
-    scr_y1 = scr_y0 + HEIGHT
-
-    glass_pad = 12
-    draw_box.rounded_rectangle(
-        [scr_x0 - glass_pad, scr_y0 - glass_pad, scr_x1 + glass_pad, scr_y1 + glass_pad],
-        radius=14,
-        fill=(5, 5, 7),
-        outline=(22, 23, 26),
-        width=2,
-    )
-
-    box_img.paste(screen_img, (scr_x0, scr_y0))
-
-    draw_box.text((scr_x0 + 4, scr_y0 - 28), "WAVESHARE ESP32-S3-Touch-LCD-4.3B-BOX (SKU: 28141)", font=font_small, fill=(148, 163, 184))
-    draw_box.text((scr_x1 - 4, scr_y0 - 28), "4.3\" IPS 800x480 | 550 cd/m² | RGB565 65K", font=font_tiny, fill=(148, 163, 184), anchor="ra")
-    draw_box.text((scr_x0 + 4, scr_y1 + 14), "GT911 CAPACITIVE TOUCH • PARALLEL RGB ST7262 • ISOLATED CAN 500k", font=font_tiny, fill=(100, 116, 139))
-    draw_box.text((scr_x1 - 4, scr_y1 + 14), "LOW-BUS ACTUATOR INSPECTOR", font=font_small, fill=C_CYAN, anchor="ra")
-
-    out_path = OUTPUT_DIR / f"{screen_name}_hardware_box.png"
-    box_img.save(out_path)
-    return out_path
+def save_screen(img: Image.Image, name: str) -> None:
+    rgb565 = quantize_to_rgb565(img)
+    out_path = OUTPUT_DIR / f"{name}.png"
+    rgb565.save(out_path)
+    print(f"Saved: {out_path.name}")
 
 
-def save_screen(img: Image.Image, screen_name: str):
-    """Enforces strict 800x480 canvas bounds, applies RGB565 quantization, and generates both raw and enclosure views."""
-    assert img.size == (WIDTH, HEIGHT), f"Invalid canvas size: {img.size}, expected ({WIDTH}, {HEIGHT})"
-    quantized_img = quantize_to_rgb565(img)
-    raw_path = OUTPUT_DIR / f"{screen_name}.png"
-    quantized_img.save(raw_path)
-    print(f"Saved (Raw 800x480): {raw_path}")
-    box_path = render_waveshare_43b_enclosure(quantized_img, screen_name)
-    print(f"Saved (Hardware Box): {box_path}")
+def draw_nav_bar(draw: ImageDraw.ImageDraw, active_tab: int = 0) -> None:
+    draw.rectangle([0, 0, WIDTH, 48], fill=C_NAV_BG, outline=C_CARD_BORDER, width=1)
 
+    tabs = [
+        "0. DASHBOARD",
+        "1. STEER (SES)",
+        "2. BRAKE (SEB)",
+        "3. DRIVE (MTR)",
+        "4. BUS & NODES",
+    ]
+    tab_w = 152
+    tab_h = 42
 
-def draw_nav_bar(draw: ImageDraw.ImageDraw, active_tab: int):
-    draw.rectangle([0, 0, WIDTH, 52], fill=C_NAV_BG, outline=C_CARD_BORDER, width=1)
-    tabs = ["0. BUS & SAFETY", "1. STEER (SES)", "2. BRAKE (SEB)", "3. DRIVE (MTR)"]
-    tab_w = 186
     for i, title in enumerate(tabs):
-        x0 = 8 + i * (tab_w + 10)
-        x1 = x0 + tab_w
-        is_active = (i == active_tab)
-        bg = C_NAV_ACTIVE if is_active else C_NAV_BTN
-        border = C_CYAN if is_active else C_CARD_BORDER
-        text_color = C_CYAN if is_active else C_GRAY_TEXT
+        tx = 4 + i * (tab_w + 6)
+        ty = 3
+        is_active = i == active_tab
 
-        draw.rounded_rectangle([x0, 4, x1, 48], radius=8, fill=bg, outline=border, width=2 if is_active else 1)
-        draw.text((x0 + tab_w // 2, 26), title, font=font_bold, fill=text_color, anchor="mm")
+        bg_col = C_NAV_ACTIVE if is_active else C_CARD_BG
+        border_col = (56, 189, 248) if is_active else C_CARD_BORDER
+        border_w = 2 if is_active else 1
+        text_col = (56, 189, 248) if is_active else C_GRAY_TEXT
+
+        draw.rounded_rectangle([tx, ty, tx + tab_w, ty + tab_h], radius=6, fill=bg_col, outline=border_col, width=border_w)
+        draw.text((tx + tab_w // 2, ty + tab_h // 2), title, font=font_small, fill=text_col, anchor="mm")
 
 
-def render_screen0_general():
+def render_screen0_dashboard():
     img = Image.new("RGB", (WIDTH, HEIGHT), C_BG)
     draw = ImageDraw.Draw(img)
     draw_nav_bar(draw, active_tab=0)
 
-    # 1. E-Stop & Master Interlock Card (Height 76px)
-    draw.rounded_rectangle([8, 56, 792, 132], radius=8, fill=(6, 40, 24), outline=C_EMERALD, width=2)
-    draw.text((400, 84), "[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR", font=font_large, fill=(52, 211, 153), anchor="mm")
-    draw.text((400, 112), "LOW-BUS LOOP MASTER ACTIVE (500 kbps)  •  INTERLOCK PIN: HIGH", font=font_bold, fill=(167, 243, 208), anchor="mm")
+    # 1. E-Stop Banner
+    draw.rounded_rectangle([8, 52, 792, 108], radius=8, fill=(6, 40, 23), outline=C_EMERALD, width=2)
+    draw.text((400, 72), "[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR", font=font_large, fill=C_EMERALD, anchor="mm")
+    draw.text((400, 94), "LOW-BUS MASTER (500 kbps)  •  INTERLOCK PIN: HIGH  •  FAIL-CLOSED READY", font=font_small, fill=(167, 243, 208), anchor="mm")
 
-    # 2. 5-Node Watchdog Array (Height 114px)
-    draw.rounded_rectangle([8, 138, 792, 252], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((20, 154), "LOW-BUS ACTUATORS & GATEWAY LIVENESS (250ms FAIL-CLOSED WATCHDOG)", font=font_small, fill=C_GRAY_TEXT)
+    # 2. Quick Cockpit Deck: 3 Actuator Overview Cards
+    act_w = 254
+    act_h = 175
+    act_y = 114
 
-    nodes = [
-        ("SYS (0x011)", "10 Hz [OK]"),
-        ("RT (0x210)", "100 Hz [OK]"),
-        ("MTR (0x206)", "50 Hz [OK]"),
-        ("SES (0x201)", "100 Hz [OK]"),
-        ("SEB (0x721)", "100 Hz [OK]"),
-    ]
-    card_w = 146
-    for i, (name, rate) in enumerate(nodes):
-        x0 = 18 + i * (card_w + 9)
-        x1 = x0 + card_w
-        draw.rounded_rectangle([x0, 172, x1, 240], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-        draw.text((x0 + card_w // 2, 192), name, font=font_bold, fill=C_WHITE, anchor="mm")
-        draw.text((x0 + card_w // 2, 222), rate, font=font_bold, fill=C_EMERALD, anchor="mm")
+    # Card 1: Steer
+    draw.rounded_rectangle([8, act_y, 8 + act_w, act_y + act_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((18, act_y + 16), "1. STEER (SES 0x201) >", font=font_med, fill=C_CYAN, anchor="lm")
+    draw.text((8 + act_w // 2, act_y + 70), "+14.7°", font=font_hero, fill=C_EMERALD, anchor="mm")
+    draw.text((8 + act_w // 2, act_y + 105), "CMD: +15.0°  |  Δ: 0.3° [OK]", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((8 + act_w // 2, act_y + 125), "Torque: +0.2 Nm [NO OVERRIDE]", font=font_small, fill=C_AMBER, anchor="mm")
+    draw.text((18, act_y + act_h - 14), "[ OK ] SES HEALTHY (100 Hz)", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    # 3. Bottom Tri-Metric Health Deck (Height 214px, 3 spacious columns)
-    draw.rounded_rectangle([8, 258, 792, 472], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    stats = [
-        ("12V SYSTEM BUS", "13.8 V", "[ BATTERY HEALTHY ]", C_WHITE, C_EMERALD),
-        ("CAN BUS HEALTH", "420 msg/s", "[ 0 ERRORS • BUS OK ]", C_CYAN, C_EMERALD),
-        ("FLIGHT RECORDER", "LOGGING", "[ RAW_CAN_01.LOG ]", C_EMERALD, C_CYAN),
-    ]
-    col_w = 248
-    for i, (label, val, sub, v_col, s_col) in enumerate(stats):
-        x0 = 18 + i * (col_w + 12)
-        x1 = x0 + col_w
-        cx = (x0 + x1) // 2
-        draw.rounded_rectangle([x0, 268, x1, 462], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-        draw.text((cx, 296), label, font=font_small, fill=C_GRAY_TEXT, anchor="mm")
-        draw.text((cx, 362), val, font=font_hero, fill=v_col, anchor="mm")
-        draw.text((cx, 434), sub, font=font_bold, fill=s_col, anchor="mm")
+    # Card 2: Brake
+    draw.rounded_rectangle([273, act_y, 273 + act_w, act_y + act_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((283, act_y + 16), "2. BRAKE (SEB 0x721) >", font=font_med, fill=C_CYAN, anchor="lm")
+    draw.text((273 + act_w // 2, act_y + 70), "442 kPa", font=font_hero, fill=C_EMERALD, anchor="mm")
+    draw.text((273 + act_w // 2, act_y + 105), "CMD: 450 kPa  |  Δ: -8 kPa [OK]", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((273 + act_w // 2, act_y + 125), "Stroke: 17.8 mm  |  Temp: 38°C", font=font_small, fill=(56, 189, 248), anchor="mm")
+    draw.text((283, act_y + act_h - 14), "[ OK ] SEB HEALTHY (100 Hz)", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    save_screen(img, "screen0_general_bus")
+    # Card 3: Drive
+    draw.rounded_rectangle([538, act_y, 538 + act_w, act_y + act_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((548, act_y + 16), "3. DRIVE (MTR 0x206) >", font=font_med, fill=C_CYAN, anchor="lm")
+    draw.text((538 + act_w // 2, act_y + 70), "14.8 km/h", font=font_hero, fill=C_EMERALD, anchor="mm")
+    draw.text((538 + act_w // 2, act_y + 105), "CMD: 15.0 km/h  |  Δ: 0.2 [OK]", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((538 + act_w // 2, act_y + 125), "RPM: 1240  |  GEAR: [ D ] (DRIVE)", font=font_small, fill=(56, 189, 248), anchor="mm")
+    draw.text((548, act_y + act_h - 14), "[ OK ] MTR HEALTHY (50 Hz)", font=font_tiny, fill=C_EMERALD, anchor="lm")
+
+    # 3. CAN Watch Cockpit Deck: Bus Health + 5-Node Array
+    can_y = 296
+    can_h = 176
+
+    # CAN Box
+    draw.rounded_rectangle([8, can_y, 8 + act_w, can_y + can_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((18, can_y + 16), "CAN BUS HEALTH", font=font_med, fill=C_GRAY_TEXT, anchor="lm")
+    draw.text((8 + act_w // 2, can_y + 70), "420 msg/s", font=font_hero, fill=C_CYAN, anchor="mm")
+    draw.text((8 + act_w // 2, can_y + 110), "TEC: 0 | REC: 0 [BUS OK]", font=font_small, fill=C_EMERALD, anchor="mm")
+    draw.text((8 + act_w // 2, can_y + 135), "12V Rail: 13.8 V [BATTERY OK]", font=font_small, fill=C_WHITE, anchor="mm")
+
+    # 5-Node Heartbeat Deck
+    draw.rounded_rectangle([273, can_y, 792, can_y + can_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((283, can_y + 16), "LOW-BUS ACTUATOR & GATEWAY LIVENESS (250ms FAIL-CLOSED WATCHDOG)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
+
+    node_ids = ["SYS (0x011)", "RT (0x210)", "MTR (0x206)", "SES (0x201)", "SEB (0x721)"]
+    node_rates = ["10 Hz", "100 Hz", "50 Hz", "100 Hz", "100 Hz"]
+    n_w = 95
+    n_h = 132
+    for i in range(5):
+        nx = 283 + i * (n_w + 8)
+        ny = can_y + 32
+        draw.rounded_rectangle([nx, ny, nx + n_w, ny + n_h], radius=6, fill=C_BG, outline=C_CARD_BORDER, width=1)
+        draw.text((nx + n_w // 2, ny + 16), node_ids[i], font=font_tiny, fill=C_WHITE, anchor="mm")
+        draw.text((nx + n_w // 2, ny + 60), node_rates[i], font=font_large, fill=C_EMERALD, anchor="mm")
+        draw.text((nx + n_w // 2, ny + n_h - 16), "[ OK ]", font=font_small, fill=C_EMERALD, anchor="mm")
+
+    save_screen(img, "screen0_dashboard")
 
 
-def render_screen1_steer_digits():
+def render_screen1_steer_with_5s_plot():
     img = Image.new("RGB", (WIDTH, HEIGHT), C_BG)
     draw = ImageDraw.Draw(img)
     draw_nav_bar(draw, active_tab=1)
 
-    card_w = 254
+    act_w = 254
+    u_h = 195
+    u_y = 50
+
     # Card 1: Command (VCU 0x169)
-    draw.rounded_rectangle([8, 58, 8 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((8 + card_w // 2, 82), "COMMAND (VCU 0x169)", font=font_small, fill=C_GRAY_TEXT, anchor="mm")
-    draw.text((8 + card_w // 2, 175), "+15.0°", font=font_hero, fill=C_CYAN, anchor="mm")
-    draw.rounded_rectangle([20, 245, 8 + card_w - 12, 295], radius=6, fill=(18, 26, 36), outline=(30, 58, 80), width=1)
-    draw.text((8 + card_w // 2, 270), "TARGET SPEED: 200 °/s", font=font_bold, fill=C_WHITE, anchor="mm")
-    draw.text((8 + card_w // 2, 335), "[ OK ] CLOSED-LOOP", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((8 + card_w // 2, 375), "[ OK ] CLUSTER SYNC", font=font_small, fill=C_GRAY_SUB, anchor="mm")
+    draw.rounded_rectangle([8, u_y, 8 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((18, u_y + 16), "COMMAND (VCU 0x169)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
+    draw.text((8 + act_w // 2, u_y + 70), "+15.0°", font=font_hero, fill=C_CYAN, anchor="mm")
+    draw.rounded_rectangle([20, u_y + 105, 8 + act_w - 12, u_y + 140], radius=6, fill=(18, 26, 36), outline=(30, 58, 80), width=1)
+    draw.text((8 + act_w // 2, u_y + 122), "TARGET SPEED: 200 °/s", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((18, u_y + u_h - 14), "[ OK ] CLOSED-LOOP ENABLED", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
     # Card 2: Feedback (SES 0x201)
-    draw.rounded_rectangle([272, 58, 272 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((272 + card_w // 2, 82), "ACTUATION (SES 0x201)", font=font_small, fill=C_GRAY_TEXT, anchor="mm")
-    draw.text((272 + card_w // 2, 175), "+14.7°", font=font_hero, fill=C_EMERALD, anchor="mm")
-    draw.rounded_rectangle([284, 245, 272 + card_w - 12, 295], radius=6, fill=(12, 34, 24), outline=(21, 80, 50), width=1)
-    draw.text((272 + card_w // 2, 270), "ACTUAL SPEED: 198 °/s", font=font_bold, fill=C_WHITE, anchor="mm")
-    draw.text((272 + card_w // 2, 335), "[ OK ] ANGLE TRACKING", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((272 + card_w // 2, 375), "[ OK ] SES ALIGNED", font=font_small, fill=C_GRAY_SUB, anchor="mm")
+    draw.rounded_rectangle([273, u_y, 273 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((283, u_y + 16), "ACTUATION (SES 0x201)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
+    draw.text((273 + act_w // 2, u_y + 70), "+14.7°", font=font_hero, fill=C_EMERALD, anchor="mm")
+    draw.rounded_rectangle([285, u_y + 105, 273 + act_w - 12, u_y + 140], radius=6, fill=(12, 34, 24), outline=(21, 80, 50), width=1)
+    draw.text((273 + act_w // 2, u_y + 122), "ACTUAL SPEED: 198 °/s", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((283, u_y + u_h - 14), "[ OK ] ANGLE TRACKING • ALIGNED", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    # Card 3: Tracking Error & Driver Torque
-    draw.rounded_rectangle([536, 58, 536 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.rounded_rectangle([550, 68, 536 + card_w - 14, 142], radius=6, fill=(6, 78, 59), outline=C_EMERALD, width=2)
-    draw.text((536 + card_w // 2, 92), "Δ: 0.3°", font=font_badge, fill=(52, 211, 153), anchor="mm")
-    draw.text((536 + card_w // 2, 122), "[ TRACKING OK ]", font=font_bold, fill=(167, 243, 208), anchor="mm")
+    # Card 3: Delta & Torque
+    draw.rounded_rectangle([538, u_y, 538 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.rounded_rectangle([550, u_y + 10, 538 + act_w - 12, u_y + 54], radius=6, fill=(6, 78, 59), outline=C_EMERALD, width=2)
+    draw.text((538 + act_w // 2, u_y + 32), "Δ: 0.3°   [ TRACKING OK ]", font=font_med, fill=C_WHITE, anchor="mm")
 
-    draw.rounded_rectangle([550, 150, 536 + card_w - 14, 280], radius=6, fill=(35, 24, 6), outline=C_AMBER, width=1)
-    draw.text((536 + card_w // 2, 172), "DRIVER COLUMN TORQUE", font=font_small, fill=C_AMBER, anchor="mm")
-    draw.text((536 + card_w // 2, 215), "+0.2 Nm", font=font_hero, fill=C_AMBER, anchor="mm")
-    draw.text((536 + card_w // 2, 258), "[ NO OVERRIDE ]", font=font_bold, fill=C_EMERALD, anchor="mm")
+    draw.rounded_rectangle([550, u_y + 60, 538 + act_w - 12, u_y + 138], radius=6, fill=(35, 24, 6), outline=C_AMBER, width=1)
+    draw.text((538 + act_w // 2, u_y + 74), "DRIVER COLUMN TORQUE", font=font_tiny, fill=C_AMBER, anchor="mm")
+    draw.text((538 + act_w // 2, u_y + 98), "+0.2 Nm", font=font_large, fill=C_AMBER, anchor="mm")
+    draw.text((538 + act_w // 2, u_y + 124), "[ NO OVERRIDE ]", font=font_tiny, fill=C_EMERALD, anchor="mm")
 
-    draw.text((536 + card_w // 2, 325), "[ OK ] SES HEALTHY", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((536 + card_w // 2, 365), "Motor: 8.4A  •  Temp: 34°C", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((548, u_y + u_h - 14), "[ OK ] SES HEALTHY • 8.4A / 34°C", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    # Bottom Full-Width Scope Action Button (Height 58px)
-    draw.rounded_rectangle([8, 414, 792, 472], radius=8, fill=(15, 41, 55), outline=C_CYAN, width=2)
-    draw.text((400, 443), "VIEW 15-SECOND STEERING SCOPE PLOT  (OR SWIPE DOWN)  >", font=font_bold, fill=C_CYAN, anchor="mm")
-
-    save_screen(img, "screen1_steer_digits")
-
-
-def render_screen1_steer_plot():
-    img = Image.new("RGB", (WIDTH, HEIGHT), C_BG)
-    draw = ImageDraw.Draw(img)
-
-    # Top Header
-    draw.rounded_rectangle([8, 6, 792, 54], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((18, 30), "STEER (SES)", font=font_med, fill=C_WHITE, anchor="lm")
-    draw.text((205, 30), "CMD: +15.0°", font=font_bold, fill=C_CYAN, anchor="mm")
-    draw.text((345, 30), "ACT: +14.7°", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((465, 30), "Δ: 0.3° [OK]", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((585, 30), "TORQ: +0.2 Nm", font=font_bold, fill=C_AMBER, anchor="mm")
-
-    draw.rounded_rectangle([686, 12, 782, 48], radius=6, fill=C_NAV_BTN, outline=C_CARD_BORDER, width=1)
-    draw.text((734, 30), "< NUMERICS", font=font_bold, fill=C_GRAY_TEXT, anchor="mm")
-
-    # Chart Area
-    c_x0, c_y0, c_x1, c_y1 = 8, 60, 792, 410
+    # Middle Deck: Embedded 5-Second Dual-Trace Scope Plot (Height 172px)
+    c_x0, c_y0, c_x1, c_y1 = 8, 250, 792, 422
     draw.rounded_rectangle([c_x0, c_y0, c_x1, c_y1], radius=8, fill=(8, 8, 8), outline=C_CARD_BORDER, width=1)
 
     chart_w = c_x1 - c_x0
     chart_h = c_y1 - c_y0
-    for s in range(16):
-        gx = c_x0 + int(s * (chart_w / 15))
+    for s in range(6):
+        gx = c_x0 + int(s * (chart_w / 5))
         draw.line([(gx, c_y0), (gx, c_y1)], fill=C_GRID, width=1)
 
-    # Horizontal center zero line
     cy = c_y0 + chart_h // 2
-    draw.line([(c_x0, cy), (c_x1, cy)], fill=(70, 70, 70), width=2)
+    draw.line([(c_x0, cy), (c_x1, cy)], fill=(60, 60, 60), width=1)
 
-    # Time ticks along bottom
-    draw.text((c_x0 + 20, c_y1 - 16), "-15s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x0 + chart_w // 3, c_y1 - 16), "-10s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x0 + 2 * chart_w // 3, c_y1 - 16), "-5s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x1 - 35, c_y1 - 16), "NOW", font=font_tiny, fill=C_GRAY_SUB)
+    draw.text((c_x0 + 16, c_y0 + 14), "5s REAL-TIME SCOPE (100ms) • CMD: CYAN | ACT: EMERALD (-45° to +45°)", font=font_tiny, fill=C_GRAY_SUB)
 
-    # +/- 20° lines
-    y_p20 = cy - int((20 / 45) * (chart_h / 2))
-    y_m20 = cy + int((20 / 45) * (chart_h / 2))
-    draw.line([(c_x0, y_p20), (c_x1, y_p20)], fill=(40, 40, 40), width=1)
-    draw.line([(c_x0, y_m20), (c_x1, y_m20)], fill=(40, 40, 40), width=1)
+    # 5-second plot curve (50 points @ 10Hz)
+    np.random.seed(101)
+    cmd5 = np.zeros(50)
+    cmd5[:15] = 10.0
+    cmd5[15:35] = 22.0
+    cmd5[35:] = 15.0
 
-    # Synthetic realistic steering wave trace
-    np.random.seed(42)
-    cmd_trace = np.zeros(150)
-    cmd_trace[10:50] = 12.0
-    cmd_trace[50:90] = -15.0
-    cmd_trace[90:130] = 20.0
-    cmd_trace[130:] = 15.0
+    act5 = np.zeros(50)
+    for i in range(1, 50):
+        act5[i] = act5[i - 1] + (cmd5[i] - act5[i - 1]) * 0.32 + np.random.normal(0, 0.12)
 
-    act_trace = np.zeros(150)
-    for i in range(1, 150):
-        act_trace[i] = act_trace[i - 1] + (cmd_trace[i] - act_trace[i - 1]) * 0.28 + np.random.normal(0, 0.15)
-
-    torq_trace = np.zeros(150)
-    for i in range(1, 150):
-        d_angle = act_trace[i] - act_trace[i - 1]
-        torq_trace[i] = 0.45 * d_angle + 0.04 * act_trace[i] + np.random.normal(0, 0.06)
-
-    def to_canvas(idx, deg):
-        px = c_x0 + int(idx * (chart_w / 149))
-        py = cy - int((deg / 45.0) * (chart_h / 2 - 10))
+    def to_canvas_5s(idx, deg):
+        px = c_x0 + int(idx * (chart_w / 49))
+        py = cy - int((deg / 45.0) * (chart_h / 2 - 14))
         return (px, max(c_y0 + 5, min(c_y1 - 5, py)))
 
-    def to_canvas_torq(idx, nm):
-        px = c_x0 + int(idx * (chart_w / 149))
-        py = cy - int((nm / 4.5) * (chart_h / 2 - 10))
-        return (px, max(c_y0 + 5, min(c_y1 - 5, py)))
-
-    # Draw Command (Cyan, width 3)
-    cmd_pts = [to_canvas(i, cmd_trace[i]) for i in range(150)]
+    cmd_pts = [to_canvas_5s(i, cmd5[i]) for i in range(50)]
     draw.line(cmd_pts, fill=C_CYAN, width=3)
 
-    # Draw Feedback (Emerald, width 2)
-    act_pts = [to_canvas(i, act_trace[i]) for i in range(150)]
+    act_pts = [to_canvas_5s(i, act5[i]) for i in range(50)]
     draw.line(act_pts, fill=C_EMERALD, width=2)
 
-    # Draw Driver Column Torque (Amber, width 2)
-    torq_pts = [to_canvas_torq(i, torq_trace[i]) for i in range(150)]
-    draw.line(torq_pts, fill=C_AMBER, width=2)
+    # Bottom Full-Width Action Button (Height 46px)
+    draw.rounded_rectangle([8, 428, 792, 474], radius=8, fill=(30, 41, 59), outline=(56, 189, 248), width=2)
+    draw.text((400, 451), "VIEW 15-SECOND FULL STEERING SCOPE PLOT (OR SWIPE DOWN) >", font=font_med, fill=C_WHITE, anchor="mm")
 
-    # Non-occluded Y-Axis labels with dark plate
-    def draw_y_label(x, y, text, color, anchor="la"):
-        bbox = draw.textbbox((x, y), text, font=font_small, anchor=anchor)
-        draw.rectangle([bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2], fill=(0, 0, 0))
-        draw.text((x, y), text, font=font_small, fill=color, anchor=anchor)
-
-    draw_y_label(c_x0 + 10, cy - 10, "0.0°", C_WHITE)
-    draw_y_label(c_x0 + 10, y_p20 - 10, "+20°", C_GRAY_TEXT)
-    draw_y_label(c_x0 + 10, y_m20 - 10, "-20°", C_GRAY_TEXT)
-
-    draw_y_label(c_x1 - 10, cy - 10, "0.0 Nm", C_AMBER, anchor="ra")
-    draw_y_label(c_x1 - 10, y_p20 - 10, "+2.0 Nm", C_AMBER, anchor="ra")
-    draw_y_label(c_x1 - 10, y_m20 - 10, "-2.0 Nm", C_AMBER, anchor="ra")
-    draw_y_label(c_x1 - 10, c_y0 + 10, "+4.5 Nm", C_AMBER, anchor="ra")
-
-    # Bottom Controls Bar (52px tall)
-    draw.rounded_rectangle([8, 414, 792, 472], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((20, 443), "±45° [CYN/EMR]  |  Torq: ±4.5Nm [AMB]  |  15s (10Hz)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
-
-    draw.rounded_rectangle([415, 418, 595, 468], radius=6, fill=C_NAV_ACTIVE, outline=C_CYAN, width=1)
-    draw.text((505, 443), "||  PAUSE / FREEZE", font=font_bold, fill=C_CYAN, anchor="mm")
-
-    draw.rounded_rectangle([605, 418, 785, 468], radius=6, fill=C_NAV_BTN, outline=C_CARD_BORDER, width=1)
-    draw.text((695, 443), "BRAKE PLOT >", font=font_bold, fill=C_WHITE, anchor="mm")
-
-    save_screen(img, "screen1_steer_plot")
+    save_screen(img, "screen1_steer_with_5s_plot")
 
 
-def render_screen2_brake_digits():
+def render_screen2_brake_with_5s_plot():
     img = Image.new("RGB", (WIDTH, HEIGHT), C_BG)
     draw = ImageDraw.Draw(img)
     draw_nav_bar(draw, active_tab=2)
 
-    card_w = 254
-    # Card 1: Command (VCU 0x7B9)
-    draw.rounded_rectangle([8, 58, 8 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((8 + card_w // 2, 82), "COMMAND (VCU 0x7B9)", font=font_small, fill=C_GRAY_TEXT, anchor="mm")
-    draw.text((8 + card_w // 2, 155), "450", font=font_hero, fill=C_CYAN, anchor="mm")
-    draw.text((8 + card_w // 2, 198), "kPa", font=font_med, fill=C_CYAN, anchor="mm")
-    draw.rounded_rectangle([20, 245, 8 + card_w - 12, 295], radius=6, fill=(18, 26, 36), outline=(30, 58, 80), width=1)
-    draw.text((8 + card_w // 2, 270), "TARGET STROKE: 18.0 mm", font=font_bold, fill=C_WHITE, anchor="mm")
-    draw.text((8 + card_w // 2, 335), "[ OK ] BRAKE ARMED", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((8 + card_w // 2, 375), "[ OK ] PRESSURE SYNC", font=font_small, fill=C_GRAY_SUB, anchor="mm")
+    act_w = 254
+    u_h = 195
+    u_y = 50
+
+    # Card 1: Command (VCU 0x169 / 0x7B9)
+    draw.rounded_rectangle([8, u_y, 8 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((18, u_y + 16), "COMMAND (VCU 0x169)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
+    draw.text((8 + act_w // 2, u_y + 70), "450 kPa", font=font_hero, fill=C_CYAN, anchor="mm")
+    draw.rounded_rectangle([20, u_y + 105, 8 + act_w - 12, u_y + 140], radius=6, fill=(18, 26, 36), outline=(30, 58, 80), width=1)
+    draw.text((8 + act_w // 2, u_y + 122), "TARGET PRESSURE: 450 kPa", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((18, u_y + u_h - 14), "[ OK ] CLOSED-LOOP HYDRAULIC", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
     # Card 2: Feedback (SEB 0x721)
-    draw.rounded_rectangle([272, 58, 272 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((272 + card_w // 2, 82), "ACTUATION (SEB 0x721)", font=font_small, fill=C_GRAY_TEXT, anchor="mm")
-    draw.text((272 + card_w // 2, 155), "442", font=font_hero, fill=C_EMERALD, anchor="mm")
-    draw.text((272 + card_w // 2, 198), "kPa", font=font_med, fill=C_EMERALD, anchor="mm")
-    draw.rounded_rectangle([284, 245, 272 + card_w - 12, 295], radius=6, fill=(12, 34, 24), outline=(21, 80, 50), width=1)
-    draw.text((272 + card_w // 2, 270), "ACTUAL STROKE: 17.8 mm", font=font_bold, fill=C_WHITE, anchor="mm")
-    draw.text((272 + card_w // 2, 335), "[ OK ] PRESSURE SERVO", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((272 + card_w // 2, 375), "[ OK ] SEB ARMED", font=font_small, fill=C_GRAY_SUB, anchor="mm")
+    draw.rounded_rectangle([273, u_y, 273 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((283, u_y + 16), "ACTUATION (SEB 0x721)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
+    draw.text((273 + act_w // 2, u_y + 70), "442 kPa", font=font_hero, fill=C_EMERALD, anchor="mm")
+    draw.rounded_rectangle([285, u_y + 105, 273 + act_w - 12, u_y + 140], radius=6, fill=(12, 34, 24), outline=(21, 80, 50), width=1)
+    draw.text((273 + act_w // 2, u_y + 122), "ACTUATOR STROKE: 17.8 mm", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((283, u_y + u_h - 14), "[ OK ] PRESSURE TRACKING", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    # Card 3: Tracking Error & Diagnostics
-    draw.rounded_rectangle([536, 58, 536 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.rounded_rectangle([550, 68, 536 + card_w - 14, 142], radius=6, fill=(6, 78, 59), outline=C_EMERALD, width=2)
-    draw.text((536 + card_w // 2, 92), "Δ: -8 kPa", font=font_badge, fill=(52, 211, 153), anchor="mm")
-    draw.text((536 + card_w // 2, 122), "[ TRACKING OK ]", font=font_bold, fill=(167, 243, 208), anchor="mm")
+    # Card 3: Delta & Temp
+    draw.rounded_rectangle([538, u_y, 538 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.rounded_rectangle([550, u_y + 10, 538 + act_w - 12, u_y + 54], radius=6, fill=(6, 78, 59), outline=C_EMERALD, width=2)
+    draw.text((538 + act_w // 2, u_y + 32), "Δ: -8 kPa   [ TRACKING OK ]", font=font_med, fill=C_WHITE, anchor="mm")
 
-    draw.rounded_rectangle([550, 150, 536 + card_w - 14, 280], radius=6, fill=(15, 23, 42), outline=(56, 189, 248), width=1)
-    draw.text((536 + card_w // 2, 172), "PISTON DISPLACEMENT", font=font_small, fill=C_CYAN, anchor="mm")
-    draw.text((536 + card_w // 2, 215), "17.8 mm", font=font_hero, fill=C_WHITE, anchor="mm")
-    draw.text((536 + card_w // 2, 258), "[ STROKE Δ: 0.2 mm OK ]", font=font_bold, fill=C_EMERALD, anchor="mm")
+    draw.rounded_rectangle([550, u_y + 60, 538 + act_w - 12, u_y + 138], radius=6, fill=(18, 26, 36), outline=(56, 189, 248), width=1)
+    draw.text((538 + act_w // 2, u_y + 74), "ACTUATOR TEMPERATURE", font=font_tiny, fill=C_GRAY_TEXT, anchor="mm")
+    draw.text((538 + act_w // 2, u_y + 98), "38°C [NOMINAL]", font=font_large, fill=C_WHITE, anchor="mm")
+    draw.text((538 + act_w // 2, u_y + 124), "[ BRAKE PRIORITY READY ]", font=font_tiny, fill=C_EMERALD, anchor="mm")
 
-    draw.text((536 + card_w // 2, 325), "[ OK ] SEB HEALTHY", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((536 + card_w // 2, 365), "Motor: 4.2A  •  Temp: 38°C", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((548, u_y + u_h - 14), "[ OK ] SEB ECU HEALTHY (100 Hz)", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    # Bottom Full-Width Scope Action Button (Height 58px)
-    draw.rounded_rectangle([8, 414, 792, 472], radius=8, fill=(15, 41, 55), outline=C_CYAN, width=2)
-    draw.text((400, 443), "VIEW 15-SECOND BRAKE PRESSURE SCOPE  (OR SWIPE DOWN)  >", font=font_bold, fill=C_CYAN, anchor="mm")
-
-    save_screen(img, "screen2_brake_digits")
-
-
-def render_screen2_brake_plot():
-    img = Image.new("RGB", (WIDTH, HEIGHT), C_BG)
-    draw = ImageDraw.Draw(img)
-
-    # Top Header
-    draw.rounded_rectangle([8, 6, 792, 54], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((18, 30), "BRAKE (SEB)", font=font_med, fill=C_WHITE, anchor="lm")
-    draw.text((205, 30), "CMD: 450 kPa", font=font_bold, fill=C_CYAN, anchor="mm")
-    draw.text((345, 30), "ACT: 442 kPa", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((465, 30), "Δ: -8 kPa [OK]", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((585, 30), "STRK: 17.8mm", font=font_bold, fill=C_WHITE, anchor="mm")
-
-    draw.rounded_rectangle([686, 12, 782, 48], radius=6, fill=C_NAV_BTN, outline=C_CARD_BORDER, width=1)
-    draw.text((734, 30), "< NUMERICS", font=font_bold, fill=C_GRAY_TEXT, anchor="mm")
-
-    # Chart Area
-    c_x0, c_y0, c_x1, c_y1 = 8, 60, 792, 410
+    # Middle Deck: Embedded 5s Scope Plot (Height 172px)
+    c_x0, c_y0, c_x1, c_y1 = 8, 250, 792, 422
     draw.rounded_rectangle([c_x0, c_y0, c_x1, c_y1], radius=8, fill=(8, 8, 8), outline=C_CARD_BORDER, width=1)
 
     chart_w = c_x1 - c_x0
     chart_h = c_y1 - c_y0
-    for s in range(16):
-        gx = c_x0 + int(s * (chart_w / 15))
+    for s in range(6):
+        gx = c_x0 + int(s * (chart_w / 5))
         draw.line([(gx, c_y0), (gx, c_y1)], fill=C_GRID, width=1)
 
-    # Time ticks along bottom (y = c_y1 - 13)
-    draw.text((c_x0 + 20, c_y1 - 13), "-15s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x0 + chart_w // 3, c_y1 - 13), "-10s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x0 + 2 * chart_w // 3, c_y1 - 13), "-5s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x1 - 35, c_y1 - 13), "NOW", font=font_tiny, fill=C_GRAY_SUB)
+    cy = c_y1 - 10
+    draw.line([(c_x0, cy), (c_x1, cy)], fill=(60, 60, 60), width=1)
 
-    # Synthetic realistic brake pressure trace
-    np.random.seed(101)
-    cmd_trace = np.zeros(150)
-    cmd_trace[20:65] = 600.0
-    cmd_trace[85:120] = 1200.0
-    cmd_trace[135:] = 450.0
+    draw.text((c_x0 + 16, c_y0 + 14), "5s REAL-TIME SCOPE (100ms) • CMD: CYAN | ACT: EMERALD (0 to 1200 kPa)", font=font_tiny, fill=C_GRAY_SUB)
 
-    act_trace = np.zeros(150)
-    for i in range(1, 150):
-        act_trace[i] = act_trace[i - 1] + (cmd_trace[i] - act_trace[i - 1]) * 0.32 + np.random.normal(0, 4.0)
-        if act_trace[i] < 0:
-            act_trace[i] = 0
+    np.random.seed(202)
+    bcmd5 = np.full(50, 450.0)
+    bcmd5[:10] = 0.0
+    bact5 = np.zeros(50)
+    for i in range(1, 50):
+        bact5[i] = bact5[i - 1] + (bcmd5[i] - bact5[i - 1]) * 0.28 + np.random.normal(0, 3.5)
 
-    def to_canvas_brake(idx, kpa):
-        px = c_x0 + int(idx * (chart_w / 149))
-        py = (c_y1 - 26) - int((kpa / 1500.0) * (chart_h - 52))
+    def to_canvas_brake(idx, val):
+        px = c_x0 + int(idx * (chart_w / 49))
+        py = cy - int((val / 1200.0) * (chart_h - 36))
         return (px, max(c_y0 + 5, min(c_y1 - 5, py)))
 
-    cmd_pts = [to_canvas_brake(i, cmd_trace[i]) for i in range(150)]
+    cmd_pts = [to_canvas_brake(i, bcmd5[i]) for i in range(50)]
     draw.line(cmd_pts, fill=C_CYAN, width=3)
 
-    act_pts = [to_canvas_brake(i, act_trace[i]) for i in range(150)]
+    act_pts = [to_canvas_brake(i, bact5[i]) for i in range(50)]
     draw.line(act_pts, fill=C_EMERALD, width=2)
 
-    # Y-scale lines with protective background plates
-    for kpa in [0, 500, 1000, 1500]:
-        py = (c_y1 - 26) - int((kpa / 1500.0) * (chart_h - 52))
-        draw.line([(c_x0, py), (c_x1, py)], fill=(40, 40, 40) if kpa > 0 else (70, 70, 70), width=1 if kpa > 0 else 2)
-        bbox = draw.textbbox((c_x0 + 10, py - 10), f"{kpa} kPa", font=font_small)
-        draw.rectangle([bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2], fill=(0, 0, 0))
-        draw.text((c_x0 + 10, py - 10), f"{kpa} kPa", font=font_small, fill=C_WHITE if kpa == 0 else C_GRAY_TEXT)
+    # Bottom Full-Width Action Button (Height 46px)
+    draw.rounded_rectangle([8, 428, 792, 474], radius=8, fill=(30, 41, 59), outline=(56, 189, 248), width=2)
+    draw.text((400, 451), "VIEW 15-SECOND FULL BRAKE PRESSURE SCOPE (OR SWIPE DOWN) >", font=font_med, fill=C_WHITE, anchor="mm")
 
-    # Bottom Controls Bar (52px tall)
-    draw.rounded_rectangle([8, 414, 792, 472], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((20, 443), "Scale: 0 .. 1500 kPa (Line Pressure) | 15s Window", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
-
-    draw.rounded_rectangle([415, 418, 595, 468], radius=6, fill=C_NAV_ACTIVE, outline=C_CYAN, width=1)
-    draw.text((505, 443), "||  PAUSE / FREEZE", font=font_bold, fill=C_CYAN, anchor="mm")
-
-    draw.rounded_rectangle([605, 418, 785, 468], radius=6, fill=C_NAV_BTN, outline=C_CARD_BORDER, width=1)
-    draw.text((695, 443), "DRIVE PLOT >", font=font_bold, fill=C_WHITE, anchor="mm")
-
-    save_screen(img, "screen2_brake_plot")
+    save_screen(img, "screen2_brake_with_5s_plot")
 
 
-def render_screen3_drive_digits():
+def render_screen3_drive_with_5s_plot():
     img = Image.new("RGB", (WIDTH, HEIGHT), C_BG)
     draw = ImageDraw.Draw(img)
     draw_nav_bar(draw, active_tab=3)
 
-    card_w = 254
+    act_w = 254
+    u_h = 195
+    u_y = 50
+
     # Card 1: Command (VCU 0x204)
-    draw.rounded_rectangle([8, 58, 8 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((8 + card_w // 2, 82), "COMMAND (VCU 0x204)", font=font_small, fill=C_GRAY_TEXT, anchor="mm")
-    draw.text((8 + card_w // 2, 155), "15.0", font=font_hero, fill=C_CYAN, anchor="mm")
-    draw.text((8 + card_w // 2, 198), "km/h", font=font_med, fill=C_CYAN, anchor="mm")
-    draw.rounded_rectangle([20, 245, 8 + card_w - 12, 295], radius=6, fill=(18, 26, 36), outline=(30, 58, 80), width=1)
-    draw.text((8 + card_w // 2, 270), "TARGET: [ D ] (DRIVE)", font=font_bold, fill=C_WHITE, anchor="mm")
-    draw.text((8 + card_w // 2, 335), "[ OK ] DRIVE REQ VALID", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((8 + card_w // 2, 375), "[ OK ] SLEW ACTIVE", font=font_small, fill=C_GRAY_SUB, anchor="mm")
+    draw.rounded_rectangle([8, u_y, 8 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((18, u_y + 16), "COMMAND (VCU 0x204)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
+    draw.text((8 + act_w // 2, u_y + 70), "15.0 km/h", font=font_hero, fill=C_CYAN, anchor="mm")
+    draw.rounded_rectangle([20, u_y + 105, 8 + act_w - 12, u_y + 140], radius=6, fill=(18, 26, 36), outline=(30, 58, 80), width=1)
+    draw.text((8 + act_w // 2, u_y + 122), "TARGET: [ D ] (DRIVE)", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((18, u_y + u_h - 14), "[ OK ] DRIVE REQ VALID", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
     # Card 2: Feedback (MTR 0x206)
-    draw.rounded_rectangle([272, 58, 272 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((272 + card_w // 2, 82), "ACTUATION (MTR 0x206)", font=font_small, fill=C_GRAY_TEXT, anchor="mm")
-    draw.text((272 + card_w // 2, 155), "14.8", font=font_hero, fill=C_EMERALD, anchor="mm")
-    draw.text((272 + card_w // 2, 198), "km/h", font=font_med, fill=C_EMERALD, anchor="mm")
-    draw.rounded_rectangle([284, 245, 272 + card_w - 12, 295], radius=6, fill=(12, 34, 24), outline=(21, 80, 50), width=1)
-    draw.text((272 + card_w // 2, 270), "ACTUAL: [ D ] (ENGAGED)", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((272 + card_w // 2, 335), "MOTOR: 1,620 RPM", font=font_bold, fill=C_WHITE, anchor="mm")
-    draw.text((272 + card_w // 2, 375), "[ OK ] PROPULSION OK", font=font_small, fill=C_GRAY_SUB, anchor="mm")
+    draw.rounded_rectangle([273, u_y, 273 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.text((283, u_y + 16), "ACTUATION (MTR 0x206)", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
+    draw.text((273 + act_w // 2, u_y + 70), "14.8 km/h", font=font_hero, fill=C_EMERALD, anchor="mm")
+    draw.rounded_rectangle([285, u_y + 105, 273 + act_w - 12, u_y + 140], radius=6, fill=(12, 34, 24), outline=(21, 80, 50), width=1)
+    draw.text((273 + act_w // 2, u_y + 122), "ACTUAL: [ D ] (ENGAGED)", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((283, u_y + u_h - 14), "[ OK ] PROPULSION HEALTHY", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    # Card 3: Delta & Safety Interlocks
-    draw.rounded_rectangle([536, 58, 536 + card_w, 406], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.rounded_rectangle([550, 68, 536 + card_w - 14, 142], radius=6, fill=(6, 78, 59), outline=C_EMERALD, width=2)
-    draw.text((536 + card_w // 2, 92), "Δ: 0.2 km/h", font=font_badge, fill=(52, 211, 153), anchor="mm")
-    draw.text((536 + card_w // 2, 122), "[ TRACKING OK ]", font=font_bold, fill=(167, 243, 208), anchor="mm")
+    # Card 3: Delta & Powertrain Status
+    draw.rounded_rectangle([538, u_y, 538 + act_w, u_y + u_h], radius=8, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
+    draw.rounded_rectangle([550, u_y + 10, 538 + act_w - 12, u_y + 54], radius=6, fill=(6, 78, 59), outline=C_EMERALD, width=2)
+    draw.text((538 + act_w // 2, u_y + 32), "Δ: 0.2 km/h   [ TRACKING OK ]", font=font_med, fill=C_WHITE, anchor="mm")
 
-    draw.rounded_rectangle([550, 150, 536 + card_w - 14, 280], radius=6, fill=(6, 40, 24), outline=C_EMERALD, width=1)
-    draw.text((536 + card_w // 2, 172), "SAFETY INTERLOCKS", font=font_small, fill=C_EMERALD, anchor="mm")
-    draw.text((536 + card_w // 2, 215), "ALL CLEAR", font=font_large, fill=(52, 211, 153), anchor="mm")
-    draw.text((536 + card_w // 2, 258), "[ BRAKE PRIORITY OK ]", font=font_bold, fill=C_EMERALD, anchor="mm")
+    draw.rounded_rectangle([550, u_y + 60, 538 + act_w - 12, u_y + 138], radius=6, fill=(18, 26, 36), outline=(56, 189, 248), width=1)
+    draw.text((538 + act_w // 2, u_y + 74), "SAFETY INTERLOCKS", font=font_tiny, fill=C_GRAY_TEXT, anchor="mm")
+    draw.text((538 + act_w // 2, u_y + 98), "ALL CLEAR", font=font_large, fill=C_EMERALD, anchor="mm")
+    draw.text((538 + act_w // 2, u_y + 124), "[ BRAKE PRIORITY OK ]", font=font_tiny, fill=C_EMERALD, anchor="mm")
 
-    draw.text((536 + card_w // 2, 325), "[ OK ] MTR ACTIVE", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((536 + card_w // 2, 365), "Drive Output: ENABLED", font=font_small, fill=C_WHITE, anchor="mm")
+    draw.text((548, u_y + u_h - 14), "[ OK ] MTR NODE ACTIVE (3)", font=font_tiny, fill=C_EMERALD, anchor="lm")
 
-    # Bottom Full-Width Scope Action Button (Height 58px)
-    draw.rounded_rectangle([8, 414, 792, 472], radius=8, fill=(15, 41, 55), outline=C_CYAN, width=2)
-    draw.text((400, 443), "VIEW 15-SECOND DRIVE SPEED SCOPE  (OR SWIPE DOWN)  >", font=font_bold, fill=C_CYAN, anchor="mm")
-
-    save_screen(img, "screen3_drive_digits")
-
-
-def render_screen3_drive_plot():
-    img = Image.new("RGB", (WIDTH, HEIGHT), C_BG)
-    draw = ImageDraw.Draw(img)
-
-    # Top Header
-    draw.rounded_rectangle([8, 6, 792, 54], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((18, 30), "DRIVE (MTR)", font=font_med, fill=C_WHITE, anchor="lm")
-    draw.text((205, 30), "CMD: 15.0 km/h", font=font_bold, fill=C_CYAN, anchor="mm")
-    draw.text((350, 30), "ACT: 14.8 km/h", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((490, 30), "Δ: 0.2 km/h [OK]", font=font_bold, fill=C_EMERALD, anchor="mm")
-    draw.text((615, 30), "MTR: 1620 RPM", font=font_bold, fill=C_WHITE, anchor="mm")
-
-    draw.rounded_rectangle([686, 12, 782, 48], radius=6, fill=C_NAV_BTN, outline=C_CARD_BORDER, width=1)
-    draw.text((734, 30), "< NUMERICS", font=font_bold, fill=C_GRAY_TEXT, anchor="mm")
-
-    # Chart Area
-    c_x0, c_y0, c_x1, c_y1 = 8, 60, 792, 410
+    # Middle Deck: Embedded 5s Scope Plot (Height 172px)
+    c_x0, c_y0, c_x1, c_y1 = 8, 250, 792, 422
     draw.rounded_rectangle([c_x0, c_y0, c_x1, c_y1], radius=8, fill=(8, 8, 8), outline=C_CARD_BORDER, width=1)
 
     chart_w = c_x1 - c_x0
     chart_h = c_y1 - c_y0
-    for s in range(16):
-        gx = c_x0 + int(s * (chart_w / 15))
+    for s in range(6):
+        gx = c_x0 + int(s * (chart_w / 5))
         draw.line([(gx, c_y0), (gx, c_y1)], fill=C_GRID, width=1)
 
-    # Time ticks along bottom (y = c_y1 - 13)
-    draw.text((c_x0 + 20, c_y1 - 13), "-15s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x0 + chart_w // 3, c_y1 - 13), "-10s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x0 + 2 * chart_w // 3, c_y1 - 13), "-5s", font=font_tiny, fill=C_GRAY_SUB)
-    draw.text((c_x1 - 35, c_y1 - 13), "NOW", font=font_tiny, fill=C_GRAY_SUB)
+    cy = c_y1 - 10
+    draw.line([(c_x0, cy), (c_x1, cy)], fill=(60, 60, 60), width=1)
 
-    # Synthetic realistic drive speed trace
-    np.random.seed(202)
-    cmd_trace = np.zeros(150)
-    cmd_trace[15:60] = 10.0
-    cmd_trace[60:110] = 22.0
-    cmd_trace[110:] = 15.0
+    draw.text((c_x0 + 16, c_y0 + 14), "5s REAL-TIME SCOPE (100ms) • CMD: CYAN | ACT: EMERALD (0 to 35 km/h)", font=font_tiny, fill=C_GRAY_SUB)
 
-    act_trace = np.zeros(150)
-    for i in range(1, 150):
-        act_trace[i] = act_trace[i - 1] + (cmd_trace[i] - act_trace[i - 1]) * 0.16 + np.random.normal(0, 0.18)
-        if act_trace[i] < 0:
-            act_trace[i] = 0
+    np.random.seed(303)
+    dcmd5 = np.full(50, 15.0)
+    dcmd5[:10] = 5.0
+    dact5 = np.zeros(50)
+    for i in range(1, 50):
+        dact5[i] = dact5[i - 1] + (dcmd5[i] - dact5[i - 1]) * 0.25 + np.random.normal(0, 0.08)
 
-    def to_canvas_drive(idx, kmh):
-        px = c_x0 + int(idx * (chart_w / 149))
-        py = (c_y1 - 26) - int((kmh / 30.0) * (chart_h - 52))
+    def to_canvas_drive(idx, val):
+        px = c_x0 + int(idx * (chart_w / 49))
+        py = cy - int((val / 35.0) * (chart_h - 36))
         return (px, max(c_y0 + 5, min(c_y1 - 5, py)))
 
-    cmd_pts = [to_canvas_drive(i, cmd_trace[i]) for i in range(150)]
+    cmd_pts = [to_canvas_drive(i, dcmd5[i]) for i in range(50)]
     draw.line(cmd_pts, fill=C_CYAN, width=3)
 
-    act_pts = [to_canvas_drive(i, act_trace[i]) for i in range(150)]
+    act_pts = [to_canvas_drive(i, dact5[i]) for i in range(50)]
     draw.line(act_pts, fill=C_EMERALD, width=2)
 
-    # Y-scale lines with protective plates
-    for spd in [0, 10, 20, 30]:
-        py = (c_y1 - 26) - int((spd / 30.0) * (chart_h - 52))
-        draw.line([(c_x0, py), (c_x1, py)], fill=(40, 40, 40) if spd > 0 else (70, 70, 70), width=1 if spd > 0 else 2)
-        bbox = draw.textbbox((c_x0 + 10, py - 10), f"{spd} km/h", font=font_small)
-        draw.rectangle([bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2], fill=(0, 0, 0))
-        draw.text((c_x0 + 10, py - 10), f"{spd} km/h", font=font_small, fill=C_WHITE if spd == 0 else C_GRAY_TEXT)
+    # Bottom Full-Width Action Button (Height 46px)
+    draw.rounded_rectangle([8, 428, 792, 474], radius=8, fill=(30, 41, 59), outline=(56, 189, 248), width=2)
+    draw.text((400, 451), "VIEW 15-SECOND FULL DRIVE SPEED SCOPE (OR SWIPE DOWN) >", font=font_med, fill=C_WHITE, anchor="mm")
 
-    # Bottom Controls Bar (52px tall)
-    draw.rounded_rectangle([8, 414, 792, 472], radius=6, fill=C_CARD_BG, outline=C_CARD_BORDER, width=1)
-    draw.text((20, 443), "Scale: 0.0 .. 30.0 km/h | 15s Window", font=font_small, fill=C_GRAY_TEXT, anchor="lm")
-
-    draw.rounded_rectangle([415, 418, 595, 468], radius=6, fill=C_NAV_ACTIVE, outline=C_CYAN, width=1)
-    draw.text((505, 443), "||  PAUSE / FREEZE", font=font_bold, fill=C_CYAN, anchor="mm")
-
-    draw.rounded_rectangle([605, 418, 785, 468], radius=6, fill=C_NAV_BTN, outline=C_CARD_BORDER, width=1)
-    draw.text((695, 443), "STEER PLOT >", font=font_bold, fill=C_WHITE, anchor="mm")
-
-    save_screen(img, "screen3_drive_plot")
+    save_screen(img, "screen3_drive_with_5s_plot")
 
 
 def main():
-    print("Generating simulated 800x480 screenshots...")
-    render_screen0_general()
-    render_screen1_steer_digits()
-    render_screen1_steer_plot()
-    render_screen2_brake_digits()
-    render_screen2_brake_plot()
-    render_screen3_drive_digits()
-    render_screen3_drive_plot()
-    print("All screenshots generated successfully.")
+    print("Generating updated 800x480 screenshots...")
+    render_screen0_dashboard()
+    render_screen1_steer_with_5s_plot()
+    render_screen2_brake_with_5s_plot()
+    render_screen3_drive_with_5s_plot()
+    print("Screenshots updated successfully.")
 
 
 if __name__ == "__main__":
     main()
+

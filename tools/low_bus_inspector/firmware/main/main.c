@@ -38,6 +38,7 @@ static void lvgl_render_task(void *arg) {
 
     if (board_display_lock(portMAX_DELAY)) {
         lv_init();
+        ESP_ERROR_CHECK(board_lvgl_init());
         ui_manager_init();
         board_display_unlock();
     }

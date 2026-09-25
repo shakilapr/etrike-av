@@ -297,10 +297,11 @@
 
   // Tab labels
   const tabs = [
-    { label: "0. BUS & SAFETY", id: 0 },
+    { label: "0. DASHBOARD", id: 0 },
     { label: "1. STEER (SES)", id: 1 },
     { label: "2. BRAKE (SEB)", id: 2 },
-    { label: "3. DRIVE (MTR)", id: 3 }
+    { label: "3. DRIVE (MTR)", id: 3 },
+    { label: "4. BUS & NODES", id: 4 }
   ];
 
   // Embedded LVGL XML Declarations for Live Inspector
@@ -639,173 +640,278 @@
 
   function renderNavBar() {
     ctx.fillStyle = C.navBg;
-    ctx.fillRect(0, 0, W, 52);
+    ctx.fillRect(0, 0, W, 48);
     ctx.strokeStyle = C.cardBorder;
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, W, 52);
+    ctx.strokeRect(0, 0, W, 48);
 
-    const tabW = 186;
+    const tabW = 152;
     tabs.forEach((tab, i) => {
-      const tx = 8 + i * (tabW + 10);
+      const tx = 4 + i * (tabW + 6);
       const isActive = (i === currentTab);
-      drawRoundedRect(tx, 4, tabW, 44, 8, isActive ? C.navActive : C.navBtn, isActive ? C.cyan : C.cardBorder, isActive ? 2 : 1);
+      drawRoundedRect(tx, 3, tabW, 42, 6, isActive ? C.navActive : C.navBtn, isActive ? C.cyan : C.cardBorder, isActive ? 2 : 1);
       ctx.fillStyle = isActive ? C.cyan : C.grayText;
-      ctx.font = "bold 14px sans-serif";
+      ctx.font = "bold 12px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(tab.label, tx + tabW / 2, 26);
+      ctx.fillText(tab.label, tx + tabW / 2, 24);
     });
   }
 
   function renderScreen0() {
     renderNavBar();
 
-    // 1. E-Stop & Master Interlock Card (Height 76px)
+    // 1. E-Stop Banner
     const estopBg = estopActive ? "#38080f" : "#062817";
     const estopBorder = estopActive ? C.rose : C.emerald;
-    drawRoundedRect(8, 56, 784, 76, 8, estopBg, estopBorder, 2);
-    ctx.font = "bold 24px sans-serif";
+    drawRoundedRect(8, 52, 784, 58, 8, estopBg, estopBorder, 2);
+    ctx.font = "bold 20px sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = estopActive ? C.rose : "#34d399";
-    ctx.fillText(estopActive ? "[ ! ] E-STOP ACTIVE • SYSTEM LATCHED" : "[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR", 400, 86);
-
-    ctx.font = "bold 13px sans-serif";
+    ctx.fillText(estopActive ? "[ ! ] E-STOP ACTIVE • HARDWARE INTERLOCK" : "[ OK ] E-STOP DISENGAGED • SYSTEM CLEAR", 400, 74);
+    ctx.font = "bold 12px sans-serif";
     ctx.fillStyle = estopActive ? "#fca5a5" : "#a7f3d0";
-    ctx.fillText(estopActive ? "INTERLOCK SOURCE: SYS 0x011 (HW PIN LOW) | REASON: EMERGENCY_BUTTON" : "LOW-BUS LOOP MASTER ACTIVE (500 kbps)  •  INTERLOCK PIN: HIGH", 400, 114);
+    ctx.fillText("LOW-BUS MASTER (500 kbps) • INTERLOCK PIN: HIGH • FAIL-CLOSED READY", 400, 94);
 
-    // 2. 5-Node Watchdogs (146px cards)
-    drawRoundedRect(8, 138, 784, 114, 8, C.cardBg, C.cardBorder, 1);
-    ctx.fillStyle = C.grayText;
-    ctx.font = "bold 13px sans-serif";
+    // 2. 3 Actuator Overview Cards
+    const actW = 254;
+    const actH = 175;
+    const actY = 114;
+
+    // Card 1: Steer
+    drawRoundedRect(8, actY, actW, actH, 8, C.cardBg, C.cardBorder, 1);
     ctx.textAlign = "left";
-    ctx.fillText("LOW-BUS ACTUATORS & GATEWAY LIVENESS (250ms FAIL-CLOSED WATCHDOG)", 20, 154);
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = C.cyan;
+    ctx.fillText("1. STEER (SES 0x201) >", 20, actY + 20);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText((angleActual >= 0 ? "+" : "") + angleActual.toFixed(1) + "°", 8 + actW / 2, actY + 70);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText(`CMD: ${angleTarget >= 0 ? "+" : ""}${angleTarget.toFixed(1)}° | Δ: ${Math.abs(angleTarget - angleActual).toFixed(1)}° [OK]`, 8 + actW / 2, actY + 105);
+    ctx.fillStyle = C.amber;
+    ctx.fillText(`Torque: +${torqueActual.toFixed(1)} Nm [NO OVERRIDE]`, 8 + actW / 2, actY + 125);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] SES HEALTHY (100 Hz)", 20, actY + actH - 12);
 
-    const nodes = [
-      { name: "SYS (0x011)", rate: "10 Hz [OK]" },
-      { name: "RT (0x210)", rate: "100 Hz [OK]" },
-      { name: "MTR (0x206)", rate: "50 Hz [OK]" },
-      { name: "SES (0x201)", rate: "100 Hz [OK]" },
-      { name: "SEB (0x721)", rate: "100 Hz [OK]" }
-    ];
-    const cardW = 146;
-    nodes.forEach((n, i) => {
-      const x0 = 18 + i * (cardW + 9);
-      drawRoundedRect(x0, 172, cardW, 68, 6, "#0d0d0d", C.cardBorder, 1);
+    // Card 2: Brake
+    drawRoundedRect(273, actY, actW, actH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = C.cyan;
+    ctx.fillText("2. BRAKE (SEB 0x721) >", 285, actY + 20);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText(`${brakeActual.toFixed(0)} kPa`, 273 + actW / 2, actY + 70);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText(`CMD: ${brakeTarget.toFixed(0)} kPa | Δ: ${(brakeActual - brakeTarget).toFixed(0)} kPa [OK]`, 273 + actW / 2, actY + 105);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillText("Stroke: 17.8 mm | Temp: 38°C", 273 + actW / 2, actY + 125);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] SEB HEALTHY (100 Hz)", 285, actY + actH - 12);
+
+    // Card 3: Drive
+    drawRoundedRect(538, actY, actW, actH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = C.cyan;
+    ctx.fillText("3. DRIVE (MTR 0x206) >", 550, actY + 20);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText(`${driveActual.toFixed(1)} km/h`, 538 + actW / 2, actY + 70);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText(`CMD: ${driveTarget.toFixed(1)} km/h | Δ: ${(driveActual - driveTarget).toFixed(1)} [OK]`, 538 + actW / 2, actY + 105);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillText("RPM: 1240 | GEAR: [ D ] (DRIVE)", 538 + actW / 2, actY + 125);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] MTR HEALTHY (50 Hz)", 550, actY + actH - 12);
+
+    // 3. CAN Watch Cockpit: Bus Diagnostics + 5-Node Heartbeat Deck
+    const canY = 296;
+    const canH = 176;
+
+    // CAN Box
+    drawRoundedRect(8, canY, actW, canH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("CAN BUS HEALTH", 20, canY + 20);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.cyan;
+    ctx.fillText(`${busRate} msg/s`, 8 + actW / 2, canY + 70);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("TEC: 0 | REC: 0 [BUS OK]", 8 + actW / 2, canY + 110);
+    ctx.fillStyle = C.white;
+    ctx.fillText("12V Rail: 13.8 V [BATTERY OK]", 8 + actW / 2, canY + 135);
+
+    // 5-Node Array
+    drawRoundedRect(273, canY, 519, canH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("LOW-BUS ACTUATOR & GATEWAY LIVENESS (250ms FAIL-CLOSED WATCHDOG)", 285, canY + 18);
+
+    const nodeIds = ["SYS (0x011)", "RT (0x210)", "MTR (0x206)", "SES (0x201)", "SEB (0x721)"];
+    const nodeRates = ["10 Hz", "100 Hz", "50 Hz", "100 Hz", "100 Hz"];
+    const nW = 95;
+    const nH = 132;
+    for (let i = 0; i < 5; i++) {
+      const nx = 282 + i * (nW + 8);
+      const ny = canY + 32;
+      drawRoundedRect(nx, ny, nW, nH, 6, C.bg, C.cardBorder, 1);
       ctx.textAlign = "center";
-      ctx.font = "bold 14px sans-serif";
+      ctx.font = "bold 11px sans-serif";
       ctx.fillStyle = C.white;
-      ctx.fillText(n.name, x0 + cardW / 2, 192);
-      ctx.font = "bold 15px sans-serif";
+      ctx.fillText(nodeIds[i], nx + nW / 2, ny + 18);
+      ctx.font = "bold 20px sans-serif";
       ctx.fillStyle = C.emerald;
-      ctx.fillText(n.rate, x0 + cardW / 2, 222);
-    });
-
-    // 3. Bottom Tri-Metric Deck (3 Columns, Height 210px)
-    drawRoundedRect(8, 258, 784, 214, 8, C.cardBg, C.cardBorder, 1);
-    const stats = [
-      { label: "12V SYSTEM BUS", val: "13.8 V", sub: "[ BATTERY HEALTHY ]", col: C.white, subCol: C.emerald },
-      { label: "CAN BUS HEALTH", val: `${busRate} msg/s`, sub: "[ 0 ERRORS • BUS OK ]", col: C.cyan, subCol: C.emerald },
-      { label: "CAN FLIGHT RECORDER", val: "LOGGING", sub: "[ RAW_CAN_01.LOG ]", col: C.emerald, subCol: C.cyan }
-    ];
-    const colW = 248;
-    stats.forEach((s, i) => {
-      const x0 = 18 + i * (colW + 12);
-      drawRoundedRect(x0, 268, colW, 194, 6, "#0d0d0d", C.cardBorder, 1);
-      const cx = x0 + colW / 2;
-      ctx.textAlign = "center";
-      ctx.font = "bold 14px sans-serif";
-      ctx.fillStyle = C.grayText;
-      ctx.fillText(s.label, cx, 296);
-      ctx.font = "bold 44px sans-serif";
-      ctx.fillStyle = s.col;
-      ctx.fillText(s.val, cx, 362);
-      ctx.font = "bold 14px sans-serif";
-      ctx.fillStyle = s.subCol;
-      ctx.fillText(s.sub, cx, 434);
-    });
+      ctx.fillText(nodeRates[i], nx + nW / 2, ny + 62);
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillText("[ OK ]", nx + nW / 2, ny + nH - 16);
+    }
   }
 
   function renderScreen1Digits() {
     renderNavBar();
 
-    const cardW = 254;
+    const actW = 254;
+    const uH = 195;
+    const uY = 50;
 
     // 1. Command (VCU 0x169)
-    drawRoundedRect(8, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-    ctx.textAlign = "center";
-    ctx.font = "bold 14px sans-serif";
+    drawRoundedRect(8, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
     ctx.fillStyle = C.grayText;
-    ctx.fillText("COMMAND (VCU 0x169)", 8 + cardW / 2, 82);
-    ctx.font = "bold 52px sans-serif";
+    ctx.fillText("COMMAND (VCU 0x169)", 20, uY + 16);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
     ctx.fillStyle = C.cyan;
-    ctx.fillText((angleTarget >= 0 ? "+" : "") + angleTarget.toFixed(1) + "°", 8 + cardW / 2, 175);
-    drawRoundedRect(20, 245, cardW - 24, 50, 6, "#121a24", "#1e3a50", 1);
-    ctx.font = "bold 15px sans-serif";
+    ctx.fillText((angleTarget >= 0 ? "+" : "") + angleTarget.toFixed(1) + "°", 8 + actW / 2, uY + 70);
+    drawRoundedRect(20, uY + 105, actW - 24, 32, 6, "#121a24", "#1e3a50", 1);
+    ctx.font = "bold 12px sans-serif";
     ctx.fillStyle = C.white;
-    ctx.fillText("TARGET SPEED: 200 °/s", 8 + cardW / 2, 275);
-    ctx.font = "bold 14px sans-serif";
+    ctx.fillText("TARGET SPEED: 200 °/s", 8 + actW / 2, uY + 122);
+    ctx.textAlign = "left";
     ctx.fillStyle = C.emerald;
-    ctx.fillText("[ OK ] CLOSED-LOOP", 8 + cardW / 2, 335);
-    ctx.font = "bold 13px sans-serif";
-    ctx.fillStyle = C.graySub;
-    ctx.fillText("[ OK ] CLUSTER SYNC", 8 + cardW / 2, 375);
+    ctx.fillText("[ OK ] CLOSED-LOOP ENABLED", 20, uY + uH - 12);
 
     // 2. Feedback (SES 0x201)
-    drawRoundedRect(272, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-    ctx.font = "bold 14px sans-serif";
+    drawRoundedRect(273, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
     ctx.fillStyle = C.grayText;
-    ctx.fillText("ACTUATION (SES 0x201)", 272 + cardW / 2, 82);
-    ctx.font = "bold 52px sans-serif";
+    ctx.fillText("ACTUATION (SES 0x201)", 285, uY + 16);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
     ctx.fillStyle = C.emerald;
-    ctx.fillText((angleActual >= 0 ? "+" : "") + angleActual.toFixed(1) + "°", 272 + cardW / 2, 175);
-    drawRoundedRect(284, 245, cardW - 24, 50, 6, "#0c2218", "#155032", 1);
-    ctx.font = "bold 15px sans-serif";
+    ctx.fillText((angleActual >= 0 ? "+" : "") + angleActual.toFixed(1) + "°", 273 + actW / 2, uY + 70);
+    drawRoundedRect(285, uY + 105, actW - 24, 32, 6, "#0c2218", "#155032", 1);
+    ctx.font = "bold 12px sans-serif";
     ctx.fillStyle = C.white;
-    ctx.fillText("ACTUAL SPEED: 198 °/s", 272 + cardW / 2, 275);
-    ctx.font = "bold 14px sans-serif";
+    ctx.fillText("ACTUAL SPEED: 198 °/s", 273 + actW / 2, uY + 122);
+    ctx.textAlign = "left";
     ctx.fillStyle = C.emerald;
-    ctx.fillText(driverTakeover ? "[ ! ] TAKEOVER (0x3)" : "[ OK ] ANGLE TRACKING", 272 + cardW / 2, 335);
-    ctx.font = "bold 13px sans-serif";
-    ctx.fillStyle = C.graySub;
-    ctx.fillText("[ OK ] SES ALIGNED", 272 + cardW / 2, 375);
+    ctx.fillText("[ OK ] ANGLE TRACKING • ALIGNED", 285, uY + uH - 12);
 
     // 3. Tracking Error & Driver Torque
-    drawRoundedRect(536, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
+    drawRoundedRect(538, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
     const delta = Math.abs(angleTarget - angleActual);
     const isLag = delta > 2.0;
 
     // 2-tier Delta Badge
-    drawRoundedRect(550, 68, cardW - 28, 74, 6, isLag ? "#4c0519" : "#064e3b", isLag ? C.rose : C.emerald, 2);
-    ctx.font = "bold 22px sans-serif";
-    ctx.fillStyle = isLag ? C.rose : "#34d399";
-    ctx.fillText(`Δ: ${delta.toFixed(1)}°`, 536 + cardW / 2, 94);
+    drawRoundedRect(550, uY + 10, actW - 24, 44, 6, isLag ? "#4c0519" : "#064e3b", isLag ? C.rose : C.emerald, 2);
+    ctx.textAlign = "center";
     ctx.font = "bold 14px sans-serif";
-    ctx.fillText(`[ ${isLag ? "TRACKING LAG" : "TRACKING OK"} ]`, 536 + cardW / 2, 124);
+    ctx.fillStyle = isLag ? C.rose : "#34d399";
+    ctx.fillText(`Δ: ${delta.toFixed(1)}°   [ ${isLag ? "TRACKING LAG" : "TRACKING OK"} ]`, 538 + actW / 2, uY + 33);
 
     // Driver Column Torque Box
-    drawRoundedRect(550, 150, cardW - 28, 130, 6, driverTakeover ? "#3b1a06" : "#231806", C.amber, 1);
-    ctx.font = "bold 13px sans-serif";
+    drawRoundedRect(550, uY + 60, actW - 24, 78, 6, driverTakeover ? "#3b1a06" : "#231806", C.amber, 1);
+    ctx.font = "bold 11px sans-serif";
     ctx.fillStyle = C.amber;
-    ctx.fillText("DRIVER COLUMN TORQUE", 536 + cardW / 2, 172);
-    ctx.font = "bold 38px sans-serif";
-    ctx.fillText(`${torqueActual >= 0 ? "+" : ""}${torqueActual.toFixed(1)} Nm`, 536 + cardW / 2, 215);
-    ctx.font = "bold 14px sans-serif";
+    ctx.fillText("DRIVER COLUMN TORQUE", 538 + actW / 2, uY + 74);
+    ctx.font = "bold 24px sans-serif";
+    ctx.fillText(`${torqueActual >= 0 ? "+" : ""}${torqueActual.toFixed(1)} Nm`, 538 + actW / 2, uY + 98);
+    ctx.font = "bold 11px sans-serif";
     ctx.fillStyle = driverTakeover ? C.rose : C.emerald;
-    ctx.fillText(driverTakeover ? "[ TAKEOVER ACTIVE! ]" : "[ NO OVERRIDE ]", 536 + cardW / 2, 258);
+    ctx.fillText(driverTakeover ? "[ TAKEOVER ACTIVE! ]" : "[ NO OVERRIDE ]", 538 + actW / 2, uY + 124);
 
-    // Health
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] SES HEALTHY • 8.4A / 34°C", 550, uY + uH - 12);
+
+    // Middle Deck: Embedded 5-Second Scope Plot (Height 172px)
+    const cX0 = 8, cY0 = 250, cX1 = 792, cY1 = 422;
+    drawRoundedRect(cX0, cY0, cX1 - cX0, cY1 - cY0, 8, "#080808", C.cardBorder, 1);
+
+    const chartW = cX1 - cX0;
+    const chartH = cY1 - cY0;
+    for (let s = 0; s < 6; s++) {
+      const gx = cX0 + (s * (chartW / 5));
+      ctx.beginPath();
+      ctx.strokeStyle = C.grid;
+      ctx.lineWidth = 1;
+      ctx.moveTo(gx, cY0);
+      ctx.lineTo(gx, cY1);
+      ctx.stroke();
+    }
+    const cy = cY0 + chartH / 2;
+    ctx.beginPath();
+    ctx.strokeStyle = "#3c3c3c";
+    ctx.moveTo(cX0, cy);
+    ctx.lineTo(cX1, cy);
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = C.graySub;
+    ctx.fillText("5s REAL-TIME SCOPE (100ms) • CMD: CYAN | ACT: EMERALD (-45° to +45°)", cX0 + 16, cY0 + 16);
+
+    // Draw last 50 points of steerCmdPlot and steerActPlot
+    const pts50 = steerCmdPlot.slice(-50);
+    const act50 = steerActPlot.slice(-50);
+
+    ctx.beginPath();
+    ctx.strokeStyle = C.cyan;
+    ctx.lineWidth = 3;
+    pts50.forEach((val, idx) => {
+      const px = cX0 + (idx * (chartW / 49));
+      const py = cy - ((val / 45.0) * (chartH / 2 - 14));
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = C.emerald;
+    ctx.lineWidth = 2;
+    act50.forEach((val, idx) => {
+      const px = cX0 + (idx * (chartW / 49));
+      const py = cy - ((val / 45.0) * (chartH / 2 - 14));
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // Bottom Action Button (Height 46px)
+    drawRoundedRect(8, 428, 784, 46, 8, "#1e293b", "#38bdf8", 2);
+    ctx.textAlign = "center";
     ctx.font = "bold 14px sans-serif";
-    ctx.fillStyle = driverTakeover ? C.amber : C.emerald;
-    ctx.fillText(driverTakeover ? "[ ! ] SES: TAKEOVER" : "[ OK ] SES HEALTHY", 536 + cardW / 2, 325);
-    ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = C.white;
-    ctx.fillText("Motor: 8.4A  •  Temp: 34°C", 536 + cardW / 2, 365);
-
-    // Bottom Action Button (58px tall)
-    drawRoundedRect(8, 414, 784, 58, 8, "#0f2937", C.cyan, 2);
-    ctx.font = "bold 15px sans-serif";
-    ctx.fillStyle = C.cyan;
-    ctx.fillText("VIEW 15-SECOND STEERING SCOPE PLOT  (OR SWIPE DOWN)  >", 400, 443);
+    ctx.fillText("VIEW 15-SECOND FULL STEERING SCOPE PLOT  (OR SWIPE DOWN)  >", 400, 452);
   }
 
   function renderScope(title, cmdTrace, actTrace, minVal, maxVal, unit, curCmd, curAct, auxTrace = null, auxMin = 0, auxMax = 0, auxUnit = "", curAux = 0) {
@@ -958,172 +1064,273 @@
     } else {
       if (currentTab === 0) renderScreen0();
       else if (currentTab === 1) renderScreen1Digits();
-      else if (currentTab === 2) {
-        // Brake digits
-        renderNavBar();
-        const cardW = 254;
+      else if (currentTab === 2) renderScreen2Digits();
+      else if (currentTab === 3) renderScreen3Digits();
+      else renderScreen0();
+    }
+  }
 
-        // Command
-        drawRoundedRect(8, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        ctx.textAlign = "center";
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillStyle = C.grayText;
-        ctx.fillText("COMMAND (VCU 0x7B9)", 8 + cardW / 2, 82);
-        ctx.font = "bold 52px sans-serif";
-        ctx.fillStyle = C.cyan;
-        ctx.fillText(brakeTarget.toFixed(0), 8 + cardW / 2, 160);
-        ctx.font = "bold 20px sans-serif";
-        ctx.fillText("kPa", 8 + cardW / 2, 200);
-        drawRoundedRect(20, 245, cardW - 24, 50, 6, "#121a24", "#1e3a50", 1);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("TARGET STROKE: 18.0 mm", 8 + cardW / 2, 275);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("[ OK ] AUTOBRAKE ARMED", 8 + cardW / 2, 335);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.graySub;
-        ctx.fillText("[ OK ] CLOSED-LOOP PRESSURE", 8 + cardW / 2, 375);
+  function renderScreen2Digits() {
+    renderNavBar();
 
-        // Feedback
-        drawRoundedRect(272, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillStyle = C.grayText;
-        ctx.fillText("ACTUATION (SEB 0x721)", 272 + cardW / 2, 82);
-        ctx.font = "bold 52px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText(brakeActual.toFixed(0), 272 + cardW / 2, 160);
-        ctx.font = "bold 20px sans-serif";
-        ctx.fillText("kPa", 272 + cardW / 2, 200);
-        drawRoundedRect(284, 245, cardW - 24, 50, 6, "#0c2218", "#155032", 1);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("ACTUAL STROKE: 17.8 mm", 272 + cardW / 2, 275);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("[ OK ] CLOSED-LOOP PRESSURE", 272 + cardW / 2, 335);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.graySub;
-        ctx.fillText("[ OK ] SEB ARMED • READY", 272 + cardW / 2, 375);
+    const actW = 254;
+    const uH = 195;
+    const uY = 50;
 
-        // Delta & Diagnostics
-        drawRoundedRect(536, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        const bd = Math.abs(brakeTarget - brakeActual);
-        drawRoundedRect(550, 68, cardW - 28, 74, 6, "#064e3b", C.emerald, 2);
-        ctx.font = "bold 22px sans-serif";
-        ctx.fillStyle = "#34d399";
-        ctx.fillText(`Δ: ${bd.toFixed(0)} kPa`, 536 + cardW / 2, 94);
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText("[ TRACKING OK ]", 536 + cardW / 2, 124);
+    // 1. Command (VCU 0x169 / 0x7B9)
+    drawRoundedRect(8, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("COMMAND (VCU 0x169)", 20, uY + 16);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.cyan;
+    ctx.fillText(brakeTarget.toFixed(0) + " kPa", 8 + actW / 2, uY + 70);
+    drawRoundedRect(20, uY + 105, actW - 24, 32, 6, "#121a24", "#1e3a50", 1);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText("TARGET PRESSURE: 450 kPa", 8 + actW / 2, uY + 122);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] CLOSED-LOOP HYDRAULIC", 20, uY + uH - 12);
 
-        // Stroke displacement box
-        drawRoundedRect(550, 150, cardW - 28, 130, 6, "#0f172a", "#38bdf8", 1);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.cyan;
-        ctx.fillText("PISTON DISPLACEMENT", 536 + cardW / 2, 172);
-        ctx.font = "bold 38px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("17.8 mm", 536 + cardW / 2, 215);
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("[ STROKE Δ: 0.2 mm OK ]", 536 + cardW / 2, 258);
+    // 2. Feedback (SEB 0x721)
+    drawRoundedRect(273, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("ACTUATION (SEB 0x721)", 285, uY + 16);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText(brakeActual.toFixed(0) + " kPa", 273 + actW / 2, uY + 70);
+    drawRoundedRect(285, uY + 105, actW - 24, 32, 6, "#0c2218", "#155032", 1);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText("ACTUATOR STROKE: 17.8 mm", 273 + actW / 2, uY + 122);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] PRESSURE TRACKING", 285, uY + uH - 12);
 
-        // Health
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("[ OK ] SEB ECU: HEALTHY", 536 + cardW / 2, 325);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("Motor: 4.2A  •  Temp: 38°C", 536 + cardW / 2, 365);
+    // 3. Delta & Actuator Temp
+    drawRoundedRect(538, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    const delta = Math.abs(brakeTarget - brakeActual);
 
-        // Bottom button (58px)
-        drawRoundedRect(8, 414, 784, 58, 8, "#0f2937", C.cyan, 2);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.cyan;
-        ctx.fillText("VIEW 15-SECOND BRAKE PRESSURE SCOPE  (OR SWIPE DOWN)  >", 400, 443);
-      } else {
-        // Drive digits
-        renderNavBar();
-        const cardW = 254;
+    // 2-tier Delta Badge
+    drawRoundedRect(550, uY + 10, actW - 24, 44, 6, "#064e3b", C.emerald, 2);
+    ctx.textAlign = "center";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = "#34d399";
+    ctx.fillText(`Δ: -${delta.toFixed(0)} kPa   [ TRACKING OK ]`, 538 + actW / 2, uY + 33);
 
-        // Command
-        drawRoundedRect(8, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        ctx.textAlign = "center";
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillStyle = C.grayText;
-        ctx.fillText("COMMAND (VCU 0x204)", 8 + cardW / 2, 82);
-        ctx.font = "bold 52px sans-serif";
-        ctx.fillStyle = C.cyan;
-        ctx.fillText(driveTarget.toFixed(1), 8 + cardW / 2, 160);
-        ctx.font = "bold 20px sans-serif";
-        ctx.fillText("km/h", 8 + cardW / 2, 200);
-        drawRoundedRect(20, 245, cardW - 24, 50, 6, "#121a24", "#1e3a50", 1);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("TARGET: [ D ] (DRIVE)", 8 + cardW / 2, 275);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("[ OK ] DRIVE REQ VALID", 8 + cardW / 2, 335);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.graySub;
-        ctx.fillText("[ OK ] ACCEL SMOOTHING ACTIVE", 8 + cardW / 2, 375);
+    // Actuator Temp Box
+    drawRoundedRect(550, uY + 60, actW - 24, 78, 6, "#121a24", "#38bdf8", 1);
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("ACTUATOR TEMPERATURE", 538 + actW / 2, uY + 74);
+    ctx.font = "bold 24px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText("38°C [NOMINAL]", 538 + actW / 2, uY + 98);
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ BRAKE PRIORITY READY ]", 538 + actW / 2, uY + 124);
 
-        // Feedback
-        drawRoundedRect(272, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillStyle = C.grayText;
-        ctx.fillText("ACTUATION (MTR 0x206)", 272 + cardW / 2, 82);
-        ctx.font = "bold 52px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText(driveActual.toFixed(1), 272 + cardW / 2, 160);
-        ctx.font = "bold 20px sans-serif";
-        ctx.fillText("km/h", 272 + cardW / 2, 200);
-        drawRoundedRect(284, 245, cardW - 24, 50, 6, "#0c2218", "#155032", 1);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("ACTUAL: [ D ] (ENGAGED)", 272 + cardW / 2, 275);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("[ OK ] PROPULSION HEALTHY", 272 + cardW / 2, 335);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("MOTOR: 1,620 RPM", 272 + cardW / 2, 375);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] SEB ECU HEALTHY (100 Hz)", 550, uY + uH - 12);
 
-        // Interlock & Lifecycle
-        drawRoundedRect(536, 58, cardW, 348, 8, C.cardBg, C.cardBorder, 1);
-        const dd = Math.abs(driveTarget - driveActual);
-        drawRoundedRect(550, 68, cardW - 28, 74, 6, "#064e3b", C.emerald, 2);
-        ctx.font = "bold 22px sans-serif";
-        ctx.fillStyle = "#34d399";
-        ctx.fillText(`Δ: ${dd.toFixed(1)} km/h`, 536 + cardW / 2, 94);
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText("[ TRACKING OK ]", 536 + cardW / 2, 124);
+    // Middle Deck: Embedded 5-Second Scope Plot (Height 172px)
+    const cX0 = 8, cY0 = 250, cX1 = 792, cY1 = 422;
+    drawRoundedRect(cX0, cY0, cX1 - cX0, cY1 - cY0, 8, "#080808", C.cardBorder, 1);
 
-        // Interlock Status Box (No Hex Clutter)
-        drawRoundedRect(550, 150, cardW - 28, 130, 6, "#062817", C.emerald, 1);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("SAFETY INTERLOCKS", 536 + cardW / 2, 172);
-        ctx.font = "bold 26px sans-serif";
-        ctx.fillStyle = "#34d399";
-        ctx.fillText("ALL CLEAR", 536 + cardW / 2, 215);
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText("[ BRAKE PRIORITY OK ]", 536 + cardW / 2, 258);
+    const chartW = cX1 - cX0;
+    const chartH = cY1 - cY0;
+    for (let s = 0; s < 6; s++) {
+      const gx = cX0 + (s * (chartW / 5));
+      ctx.beginPath();
+      ctx.strokeStyle = C.grid;
+      ctx.lineWidth = 1;
+      ctx.moveTo(gx, cY0);
+      ctx.lineTo(gx, cY1);
+      ctx.stroke();
+    }
+    const cy = cY1 - 10;
+    ctx.beginPath();
+    ctx.strokeStyle = "#3c3c3c";
+    ctx.moveTo(cX0, cy);
+    ctx.lineTo(cX1, cy);
+    ctx.stroke();
 
-        // Lifecycle & Output
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.emerald;
-        ctx.fillText("[ OK ] MTR NODE ACTIVE (3)", 536 + cardW / 2, 325);
-        ctx.font = "bold 13px sans-serif";
-        ctx.fillStyle = C.white;
-        ctx.fillText("Output Drive: ENABLED", 536 + cardW / 2, 365);
+    ctx.textAlign = "left";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = C.graySub;
+    ctx.fillText("5s REAL-TIME SCOPE (100ms) • CMD: CYAN | ACT: EMERALD (0 to 1200 kPa)", cX0 + 16, cY0 + 16);
 
-        // Bottom button (58px)
-        drawRoundedRect(8, 414, 784, 58, 8, "#0f2937", C.cyan, 2);
-        ctx.font = "bold 15px sans-serif";
-        ctx.fillStyle = C.cyan;
-        ctx.fillText("VIEW 15-SECOND DRIVE SPEED SCOPE  (OR SWIPE DOWN)  >", 400, 443);
-      }
+    const pts50 = brakeCmdPlot.slice(-50);
+    const act50 = brakeActPlot.slice(-50);
+
+    ctx.beginPath();
+    ctx.strokeStyle = C.cyan;
+    ctx.lineWidth = 3;
+    pts50.forEach((val, idx) => {
+      const px = cX0 + (idx * (chartW / 49));
+      const py = cy - ((val / 1200.0) * (chartH - 40));
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = C.emerald;
+    ctx.lineWidth = 2;
+    act50.forEach((val, idx) => {
+      const px = cX0 + (idx * (chartW / 49));
+      const py = cy - ((val / 1200.0) * (chartH - 40));
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // Bottom Action Button (Height 46px)
+    drawRoundedRect(8, 428, 784, 46, 8, "#1e293b", "#38bdf8", 2);
+    ctx.textAlign = "center";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText("VIEW 15-SECOND FULL BRAKE PRESSURE SCOPE (OR SWIPE DOWN) >", 400, 452);
+  }
+
+  function renderScreen3Digits() {
+    renderNavBar();
+
+    const actW = 254;
+    const uH = 195;
+    const uY = 50;
+
+    // 1. Command (VCU 0x204)
+    drawRoundedRect(8, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("COMMAND (VCU 0x204)", 20, uY + 16);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.cyan;
+    ctx.fillText(driveTarget.toFixed(1) + " km/h", 8 + actW / 2, uY + 70);
+    drawRoundedRect(20, uY + 105, actW - 24, 32, 6, "#121a24", "#1e3a50", 1);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText("TARGET: [ D ] (DRIVE)", 8 + actW / 2, uY + 122);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] DRIVE REQ VALID", 20, uY + uH - 12);
+
+    // 2. Feedback (MTR 0x206)
+    drawRoundedRect(273, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("ACTUATION (MTR 0x206)", 285, uY + 16);
+    ctx.textAlign = "center";
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText(driveActual.toFixed(1) + " km/h", 273 + actW / 2, uY + 70);
+    drawRoundedRect(285, uY + 105, actW - 24, 32, 6, "#0c2218", "#155032", 1);
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText("ACTUAL: [ D ] (ENGAGED)", 273 + actW / 2, uY + 122);
+    ctx.textAlign = "left";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] PROPULSION HEALTHY", 285, uY + uH - 12);
+
+    // 3. Delta & Powertrain Status
+    drawRoundedRect(538, uY, actW, uH, 8, C.cardBg, C.cardBorder, 1);
+    const delta = Math.abs(driveTarget - driveActual);
+
+    // 2-tier Delta Badge
+    drawRoundedRect(550, uY + 10, actW - 24, 44, 6, "#064e3b", C.emerald, 2);
+    ctx.textAlign = "center";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = "#34d399";
+    ctx.fillText(`Δ: ${delta.toFixed(1)} km/h   [ TRACKING OK ]`, 538 + actW / 2, uY + 33);
+
+    // Safety Interlocks Box
+    drawRoundedRect(550, uY + 60, actW - 24, 78, 6, "#121a24", "#38bdf8", 1);
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = C.grayText;
+    ctx.fillText("SAFETY INTERLOCKS", 538 + actW / 2, uY + 74);
+    ctx.font = "bold 24px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("ALL CLEAR", 538 + actW / 2, uY + 98);
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ BRAKE PRIORITY OK ]", 538 + actW / 2, uY + 124);
+
+    ctx.textAlign = "left";
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = C.emerald;
+    ctx.fillText("[ OK ] MTR NODE ACTIVE (3)", 550, uY + uH - 12);
+
+    // Middle Deck: Embedded 5-Second Scope Plot (Height 172px)
+    const cX0 = 8, cY0 = 250, cX1 = 792, cY1 = 422;
+    drawRoundedRect(cX0, cY0, cX1 - cX0, cY1 - cY0, 8, "#080808", C.cardBorder, 1);
+
+    const chartW = cX1 - cX0;
+    const chartH = cY1 - cY0;
+    for (let s = 0; s < 6; s++) {
+      const gx = cX0 + (s * (chartW / 5));
+      ctx.beginPath();
+      ctx.strokeStyle = C.grid;
+      ctx.lineWidth = 1;
+      ctx.moveTo(gx, cY0);
+      ctx.lineTo(gx, cY1);
+      ctx.stroke();
+    }
+    const cy = cY1 - 10;
+    ctx.beginPath();
+    ctx.strokeStyle = "#3c3c3c";
+    ctx.moveTo(cX0, cy);
+    ctx.lineTo(cX1, cy);
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = C.graySub;
+    ctx.fillText("5s REAL-TIME SCOPE (100ms) • CMD: CYAN | ACT: EMERALD (0 to 35 km/h)", cX0 + 16, cY0 + 16);
+
+    const pts50 = driveCmdPlot.slice(-50);
+    const act50 = driveActPlot.slice(-50);
+
+    ctx.beginPath();
+    ctx.strokeStyle = C.cyan;
+    ctx.lineWidth = 3;
+    pts50.forEach((val, idx) => {
+      const px = cX0 + (idx * (chartW / 49));
+      const py = cy - ((val / 35.0) * (chartH - 40));
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = C.emerald;
+    ctx.lineWidth = 2;
+    act50.forEach((val, idx) => {
+      const px = cX0 + (idx * (chartW / 49));
+      const py = cy - ((val / 35.0) * (chartH - 40));
+      if (idx === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // Bottom Action Button (Height 46px)
+    drawRoundedRect(8, 428, 784, 46, 8, "#1e293b", "#38bdf8", 2);
+    ctx.textAlign = "center";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillStyle = C.white;
+    ctx.fillText("VIEW 15-SECOND FULL DRIVE SPEED SCOPE (OR SWIPE DOWN) >", 400, 452);
+  }
     }
   }
 
