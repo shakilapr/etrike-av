@@ -25,6 +25,7 @@ static plot_buffer_15s_t s_plot_drive;
 static uint32_t s_frame_counter = 0;
 static uint32_t s_frames_in_sec = 0;
 static int64_t s_last_sec_time = 0;
+static uint32_t s_node_rx_last[NODE_COUNT] = {0};
 
 /* Syntree SEB Checksum calculation: (Byte 0 + ... + Byte 6) XOR 0xFF */
 static inline uint8_t calc_seb_checksum(const uint8_t *data) {
@@ -75,8 +76,8 @@ void low_bus_decoder_init(void) {
     memset(&s_plot_brake, 0, sizeof(s_plot_brake));
     memset(&s_plot_drive, 0, sizeof(s_plot_drive));
 
-    s_telemetry.rail_volts_12v = 12.6f;
-    s_telemetry.esp32_internal_temp_c = 42.5f;
+    s_telemetry.rail_volts_12v = 0.0f;
+    s_telemetry.esp32_internal_temp_c = 0.0f;
     s_telemetry.ses_primary_fault_str = "NORMAL (0x00)";
     s_telemetry.seb_primary_fault_str = "NORMAL (0x00)";
     s_last_sec_time = esp_timer_get_time();
@@ -107,8 +108,14 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
 
     int64_t now = esp_timer_get_time();
     if ((now - s_last_sec_time) >= 1000000) {
-        s_telemetry.bus_rate_hz = (float)s_frames_in_sec / ((now - s_last_sec_time) / 1000000.0f);
+        float dt = (float)(now - s_last_sec_time) / 1000000.0f;
+        s_telemetry.bus_rate_hz = (float)s_frames_in_sec / dt;
         s_frames_in_sec = 0;
+        for (int i = 0; i < NODE_COUNT; i++) {
+            uint32_t diff = s_telemetry.nodes[i].rx_count - s_node_rx_last[i];
+            s_telemetry.nodes[i].rate_hz = (float)diff / dt;
+            s_node_rx_last[i] = s_telemetry.nodes[i].rx_count;
+        }
         s_last_sec_time = now;
     }
 
@@ -142,6 +149,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
         case 0x169: // VCU_SES_REQ (Steering Command from Gateway, 20ms)
             mark_node_seen(NODE_RT);
             if (dlc >= 8) {
+                s_telemetry.ses_cmd_byte0 = d[0];
                 // Byte 0: Control & Alignment Enable
                 s_telemetry.ses_cmd_align_enable   = (d[0] & 0x01) != 0;
                 s_telemetry.ses_cmd_control_enable = (d[0] & 0x02) != 0;
@@ -273,6 +281,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
         case 0x7B9: // VCU_SEB_Req (VCU Command to SEB, 20ms)
             mark_node_seen(NODE_SYS);
             if (dlc >= 8) {
+                s_telemetry.seb_cmd_byte0 = d[0];
                 // Byte 0: Control bits
                 s_telemetry.seb_cmd_align_enable     = (d[0] & 0x01) != 0;
                 s_telemetry.seb_cmd_control_enable   = (d[0] & 0x02) != 0;
@@ -396,6 +405,9 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
 
                 uint16_t volt_raw = ((uint16_t)d[5] << 8) | d[6];
                 s_telemetry.ses_pow_volt_v = (float)volt_raw * 0.00390625f;
+                if (s_telemetry.ses_pow_volt_v > 5.0f) {
+                    s_telemetry.rail_volts_12v = s_telemetry.ses_pow_volt_v;
+                }
             }
             break;
 
@@ -410,6 +422,9 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
 
                 uint16_t volt_raw = ((uint16_t)d[4] << 8) | d[5];
                 s_telemetry.seb_pow_volt_v = (float)volt_raw * 0.00390625f;
+                if (s_telemetry.seb_pow_volt_v > 5.0f) {
+                    s_telemetry.rail_volts_12v = s_telemetry.seb_pow_volt_v;
+                }
             }
             break;
 
@@ -418,6 +433,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
         // ==============================================================
         case 0x204: // RT_DRIVE_CMD
             mark_node_seen(NODE_RT);
+            memcpy(s_telemetry.drive_cmd_raw, d, dlc >= 5 ? 5 : dlc);
             if (dlc >= 4) {
                 int32_t spd_mmps = (int32_t)((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]);
                 s_telemetry.drive_cmd_kmh = (float)spd_mmps * 0.0036f;
@@ -433,7 +449,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             if (id == 0x120 && dlc >= 2) {
                 int16_t spd_mmps = (int16_t)((d[0] << 8) | d[1]);
                 s_telemetry.drive_act_kmh = (float)spd_mmps * 0.0036f;
-                s_telemetry.drive_motor_rpm = (uint16_t)(fabsf(s_telemetry.drive_act_kmh) * 110.0f);
+                s_telemetry.drive_motor_rpm = 0; // Not available on low bus
                 s_telemetry.drive_delta_kmh = fabsf(s_telemetry.drive_cmd_kmh - s_telemetry.drive_act_kmh);
             }
             if (id == 0x206 && dlc >= 3) {
@@ -468,6 +484,14 @@ void low_bus_decoder_tick_100ms(void) {
 
     int64_t now = esp_timer_get_time();
 
+    // 0. Update TWAI hardware error counters & bus-off state
+    twai_status_info_t twai_stat;
+    if (twai_get_status_info(&twai_stat) == ESP_OK) {
+        s_telemetry.twai_tec = (uint8_t)twai_stat.tx_error_counter;
+        s_telemetry.twai_rec = (uint8_t)twai_stat.rx_error_counter;
+        s_telemetry.bus_off = (twai_stat.state == TWAI_STATE_BUS_OFF);
+    }
+
     // 1. Check node liveness watchdogs
     for (int i = 0; i < NODE_COUNT; i++) {
         int64_t elapsed_us = now - s_telemetry.nodes[i].last_seen_us;
@@ -495,12 +519,12 @@ void low_bus_decoder_tick_100ms(void) {
         s_plot_brake.head = (idx + 1) % PLOT_POINTS_15S;
     }
 
-    // 4. Feed 15s Drive Rolling Scope Buffer (0.1 km/h res, aux = RPM / 10)
+    // 4. Feed 15s Drive Rolling Scope Buffer (0.1 km/h res, aux = speed delta in 0.1 km/h)
     if (!s_plot_drive.is_paused) {
         uint16_t idx = s_plot_drive.head;
         s_plot_drive.cmd[idx] = (int16_t)(s_telemetry.drive_cmd_kmh * 10.0f);
         s_plot_drive.act[idx] = (int16_t)(s_telemetry.drive_act_kmh * 10.0f);
-        s_plot_drive.aux[idx] = (int16_t)(s_telemetry.drive_motor_rpm / 10);
+        s_plot_drive.aux[idx] = (int16_t)(s_telemetry.drive_delta_kmh * 10.0f);
         s_plot_drive.head = (idx + 1) % PLOT_POINTS_15S;
     }
 

@@ -128,6 +128,7 @@ typedef struct {
     uint8_t steer_cmd_roll_cnt;
     uint8_t steer_cmd_veh_spd;      // Vehicle Speed: 0 to 255 km/h
     bool steer_cmd_chk_valid;
+    uint8_t ses_cmd_byte0;
 
     // Status Feedback (0x201 SES_Status, 10ms)
     bool ses_align_status;
@@ -160,6 +161,7 @@ typedef struct {
     float brake_cmd_kpa;           // Converted to kPa for display (1 MPa = 1000 kPa)
     uint8_t seb_cmd_roll_cnt;
     bool seb_cmd_chk_valid;
+    uint8_t seb_cmd_byte0;
 
     // Status Feedback (0x721)
     bool seb_align_status;
@@ -188,6 +190,7 @@ typedef struct {
     // 4. Powertrain & Drive (MTR: 0x204 CMD, 0x120/0x206 ACT, 0x502 STATUS)
     float drive_cmd_kmh;
     uint8_t drive_cmd_gear;
+    uint8_t drive_cmd_raw[5];
     float drive_act_kmh;
     uint16_t drive_motor_rpm;
     uint8_t drive_act_gear;

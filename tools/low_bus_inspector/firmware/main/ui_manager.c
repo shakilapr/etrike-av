@@ -42,6 +42,7 @@ static lv_obj_t *s_lbl_dash_gears[5] = {NULL};
 static lv_obj_t *s_card_dash_telltales[5] = {NULL};
 static lv_obj_t *s_lbl_dash_telltale_sym[5] = {NULL};
 static lv_obj_t *s_lbl_dash_telltale_lbl[5] = {NULL};
+static lv_obj_t *s_lbl_dash_telltale_st[5] = {NULL};
 
 // 3 Instruments
 static lv_obj_t *s_lbl_dash_speed_val = NULL;
@@ -67,19 +68,23 @@ static lv_obj_t *s_chart_steer_5s_cmd = NULL;
 static lv_chart_series_t *s_ser_steer_5s_cmd = NULL;
 static lv_obj_t *s_lbl_steer_target_spd = NULL;
 static lv_obj_t *s_lbl_steer_cmd_telemetry = NULL;
+static lv_obj_t *s_lbl_steer_vcu_stat = NULL;
 
 static lv_obj_t *s_lbl_steer_act = NULL;
 static lv_obj_t *s_chart_steer_5s_act = NULL;
 static lv_chart_series_t *s_ser_steer_5s_act = NULL;
 static lv_obj_t *s_lbl_steer_actual_spd = NULL;
 static lv_obj_t *s_lbl_steer_act_telemetry = NULL;
+static lv_obj_t *s_lbl_steer_align = NULL;
+static lv_obj_t *s_lbl_steer_feedback_stat = NULL;
 
-static lv_obj_t *s_card_steer_delta = NULL;
 static lv_obj_t *s_lbl_steer_delta_val = NULL;
-static lv_obj_t *s_card_steer_torque = NULL;
 static lv_obj_t *s_lbl_steer_torq = NULL;
 static lv_obj_t *s_lbl_steer_override = NULL;
+static lv_obj_t *s_lbl_steer_volt = NULL;
 static lv_obj_t *s_lbl_steer_dtc = NULL;
+static lv_obj_t *s_lbl_steer_watchdog = NULL;
+static lv_obj_t *s_lbl_steer_health = NULL;
 
 /* =========================================================================
  * Screen 2: Brake (SEB) Widgets + In-Box 5s Mini-Plots
@@ -88,16 +93,24 @@ static lv_obj_t *s_lbl_brake_cmd = NULL;
 static lv_obj_t *s_chart_brake_5s_cmd = NULL;
 static lv_chart_series_t *s_ser_brake_5s_cmd = NULL;
 static lv_obj_t *s_lbl_brake_target_stroke = NULL;
+static lv_obj_t *s_lbl_brake_cmd_telemetry = NULL;
+static lv_obj_t *s_lbl_brake_vcu_stat = NULL;
 
 static lv_obj_t *s_lbl_brake_act = NULL;
 static lv_obj_t *s_chart_brake_5s_act = NULL;
 static lv_chart_series_t *s_ser_brake_5s_act = NULL;
 static lv_obj_t *s_lbl_brake_act_stroke = NULL;
 static lv_obj_t *s_lbl_brake_act_telemetry = NULL;
+static lv_obj_t *s_lbl_brake_align = NULL;
+static lv_obj_t *s_lbl_brake_feedback_stat = NULL;
 
-static lv_obj_t *s_card_brake_delta = NULL;
 static lv_obj_t *s_lbl_brake_delta_val = NULL;
+static lv_obj_t *s_lbl_brake_piston_val = NULL;
+static lv_obj_t *s_lbl_brake_piston_delta = NULL;
+static lv_obj_t *s_lbl_brake_volt = NULL;
 static lv_obj_t *s_lbl_brake_dtc = NULL;
+static lv_obj_t *s_lbl_brake_watchdog = NULL;
+static lv_obj_t *s_lbl_brake_health = NULL;
 
 /* =========================================================================
  * Screen 3: Drive (MTR) Widgets + In-Box 5s Mini-Plots
@@ -106,16 +119,24 @@ static lv_obj_t *s_lbl_drive_cmd = NULL;
 static lv_obj_t *s_chart_drive_5s_cmd = NULL;
 static lv_chart_series_t *s_ser_drive_5s_cmd = NULL;
 static lv_obj_t *s_lbl_drive_target_gear = NULL;
+static lv_obj_t *s_lbl_drive_cmd_telemetry = NULL;
+static lv_obj_t *s_lbl_drive_rt_stat = NULL;
 
 static lv_obj_t *s_lbl_drive_act = NULL;
 static lv_obj_t *s_chart_drive_5s_act = NULL;
 static lv_chart_series_t *s_ser_drive_5s_act = NULL;
 static lv_obj_t *s_lbl_drive_act_gear = NULL;
 static lv_obj_t *s_lbl_drive_motor_telemetry = NULL;
+static lv_obj_t *s_lbl_drive_state_cutout = NULL;
+static lv_obj_t *s_lbl_drive_feedback_stat = NULL;
 
-static lv_obj_t *s_card_drive_delta = NULL;
 static lv_obj_t *s_lbl_drive_delta_val = NULL;
+static lv_obj_t *s_lbl_drive_interlock_val = NULL;
+static lv_obj_t *s_lbl_drive_brake_priority = NULL;
+static lv_obj_t *s_lbl_drive_volt = NULL;
 static lv_obj_t *s_lbl_drive_dtc = NULL;
+static lv_obj_t *s_lbl_drive_watchdog = NULL;
+static lv_obj_t *s_lbl_drive_health = NULL;
 
 /* =========================================================================
  * Screen 4: Detailed Bus & Safety Diagnostics
@@ -125,26 +146,40 @@ static lv_obj_t *s_lbl_bus_estop_origin = NULL;
 static lv_obj_t *s_lbl_bus_rail_volts = NULL;
 static lv_obj_t *s_lbl_bus_rate = NULL;
 static lv_obj_t *s_lbl_bus_tec_rec = NULL;
+static lv_obj_t *s_card_bus_nodes[5] = {NULL};
 static lv_obj_t *s_lbl_bus_node_rates[5] = {NULL};
 static lv_obj_t *s_lbl_bus_node_states[5] = {NULL};
+static lv_obj_t *s_lbl_bus_node_silent[5] = {NULL};
 
 /* =========================================================================
  * Screens 5, 6, 7: Expanded 15-Second Scope Plots
  * ========================================================================= */
 static lv_chart_series_t *s_ser_steer_15s_cmd = NULL;
 static lv_chart_series_t *s_ser_steer_15s_act = NULL;
+static lv_chart_series_t *s_ser_steer_15s_aux = NULL;
 static lv_obj_t *s_lbl_steer_15s_hdr = NULL;
 static lv_obj_t *s_chart_steer_15s = NULL;
 
 static lv_chart_series_t *s_ser_brake_15s_cmd = NULL;
 static lv_chart_series_t *s_ser_brake_15s_act = NULL;
+static lv_chart_series_t *s_ser_brake_15s_aux = NULL;
 static lv_obj_t *s_lbl_brake_15s_hdr = NULL;
 static lv_obj_t *s_chart_brake_15s = NULL;
 
 static lv_chart_series_t *s_ser_drive_15s_cmd = NULL;
 static lv_chart_series_t *s_ser_drive_15s_act = NULL;
+static lv_chart_series_t *s_ser_drive_15s_aux = NULL;
 static lv_obj_t *s_lbl_drive_15s_hdr = NULL;
 static lv_obj_t *s_chart_drive_15s = NULL;
+
+static lv_obj_t *s_card_steer_bitview = NULL;
+static lv_obj_t *s_lbl_steer_bitview = NULL;
+
+static lv_obj_t *s_card_brake_bitview = NULL;
+static lv_obj_t *s_lbl_brake_bitview = NULL;
+
+static lv_obj_t *s_card_drive_bitview = NULL;
+static lv_obj_t *s_lbl_drive_bitview = NULL;
 
 static bool s_scope_paused = false;
 
@@ -154,6 +189,19 @@ static bool s_scope_paused = false;
 static void btn_nav_event_cb(lv_event_t *e) {
     intptr_t target_win = (intptr_t)lv_event_get_user_data(e);
     ui_manager_switch_window((inspector_window_t)target_win);
+}
+
+static void chart_click_nav_cb(lv_event_t *e) {
+    intptr_t target_win = (intptr_t)lv_event_get_user_data(e);
+    ui_manager_switch_window((inspector_window_t)target_win);
+}
+
+static void screen_gesture_nav_cb(lv_event_t *e) {
+    lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
+    intptr_t target_win = (intptr_t)lv_event_get_user_data(e);
+    if (dir == LV_DIR_BOTTOM) {
+        ui_manager_switch_window((inspector_window_t)target_win);
+    }
 }
 
 static void btn_pause_event_cb(lv_event_t *e) {
@@ -224,13 +272,16 @@ static lv_obj_t *create_inbox_sparkline(lv_obj_t *parent, int w, int h, int y, i
     lv_chart_set_point_count(chart, PLOT_POINTS_5S);
     lv_chart_set_update_mode(chart, LV_CHART_UPDATE_MODE_SHIFT);
     lv_chart_set_range(chart, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+    lv_chart_set_div_line_count(chart, 0, 0);            // No division grid lines
+    lv_obj_set_style_line_width(chart, 0, LV_PART_MAIN); // Disable grid line drawing
     lv_obj_set_style_bg_color(chart, lv_color_hex(0x080808), 0);
     lv_obj_set_style_border_color(chart, lv_color_hex(UI_COLOR_BORDER), 0);
     lv_obj_set_style_border_width(chart, 1, 0);
     lv_obj_set_style_radius(chart, 6, 0);
-    lv_obj_set_style_size(chart, 0, LV_PART_INDICATOR); // no dots for smooth line
+    lv_obj_set_style_size(chart, 0, 0, LV_PART_INDICATOR); // no dots for smooth line
     lv_obj_set_style_line_width(chart, 2, LV_PART_ITEMS);
     lv_obj_set_style_pad_all(chart, 2, 0);
+    lv_obj_add_flag(chart, LV_OBJ_FLAG_CLICKABLE);
     return chart;
 }
 
@@ -353,11 +404,11 @@ void ui_manager_init(void) {
         lv_obj_set_style_text_color(s_lbl_dash_telltale_lbl[t], lv_color_hex(act_on ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
         lv_obj_align(s_lbl_dash_telltale_lbl[t], LV_ALIGN_CENTER, 4, 0);
 
-        lv_obj_t *lbl_st = lv_label_create(s_card_dash_telltales[t]);
-        lv_label_set_text(lbl_st, act_on ? "ACT" : "OFF");
-        lv_obj_set_style_text_font(lbl_st, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(lbl_st, lv_color_hex(act_on ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
-        lv_obj_align(lbl_st, LV_ALIGN_RIGHT_MID, -8, 0);
+        s_lbl_dash_telltale_st[t] = lv_label_create(s_card_dash_telltales[t]);
+        lv_label_set_text(s_lbl_dash_telltale_st[t], act_on ? "ACT" : "OFF");
+        lv_obj_set_style_text_font(s_lbl_dash_telltale_st[t], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(s_lbl_dash_telltale_st[t], lv_color_hex(act_on ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_align(s_lbl_dash_telltale_st[t], LV_ALIGN_RIGHT_MID, -8, 0);
     }
 
     // 3. Cockpit 3-Instrument Deck (Y=148, H=266)
@@ -401,13 +452,13 @@ void ui_manager_init(void) {
     lv_obj_set_style_pad_all(box_sp_cmd, 0, 0);
 
     s_lbl_dash_speed_cmd = lv_label_create(box_sp_cmd);
-    lv_label_set_text(s_lbl_dash_speed_cmd, "CMD: 15.0 km/h [Δ: 0.2]");
+    lv_label_set_text(s_lbl_dash_speed_cmd, "CMD: 15.0 km/h [DIFF: 0.2]");
     lv_obj_set_style_text_font(s_lbl_dash_speed_cmd, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_dash_speed_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
     lv_obj_align(s_lbl_dash_speed_cmd, LV_ALIGN_CENTER, 0, 0);
 
     s_lbl_dash_speed_aux = lv_label_create(c_dspd);
-    lv_label_set_text(s_lbl_dash_speed_aux, "MOTOR: 1,620 RPM • RATIO 8.5:1");
+    lv_label_set_text(s_lbl_dash_speed_aux, "GEAR: [ D ]  •  DIFF: 0.2 km/h");
     lv_obj_set_style_text_font(s_lbl_dash_speed_aux, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_dash_speed_aux, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_dash_speed_aux, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -422,13 +473,13 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(c_dsteer, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_STEER);
 
     lv_obj_t *lbl_stt = lv_label_create(c_dsteer);
-    lv_label_set_text(lbl_stt, "STEERING ANGLE (±45°)");
+    lv_label_set_text(lbl_stt, "STEERING ANGLE (+/-45 deg)");
     lv_obj_set_style_text_font(lbl_stt, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(lbl_stt, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(lbl_stt, LV_ALIGN_TOP_LEFT, 0, 0);
 
     s_lbl_dash_steer_val = lv_label_create(c_dsteer);
-    lv_label_set_text(s_lbl_dash_steer_val, "+14.7°");
+    lv_label_set_text(s_lbl_dash_steer_val, "+14.7 deg");
     lv_obj_set_style_text_font(s_lbl_dash_steer_val, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(s_lbl_dash_steer_val, lv_color_hex(UI_COLOR_STATE_OK), 0);
     lv_obj_align(s_lbl_dash_steer_val, LV_ALIGN_CENTER, 0, -32);
@@ -448,7 +499,7 @@ void ui_manager_init(void) {
     lv_obj_set_style_pad_all(box_st_cmd, 0, 0);
 
     s_lbl_dash_steer_cmd = lv_label_create(box_st_cmd);
-    lv_label_set_text(s_lbl_dash_steer_cmd, "CMD: +15.0° [Δ: 0.3° OK]");
+    lv_label_set_text(s_lbl_dash_steer_cmd, "CMD: +15.0 [DIFF: 0.3 OK]");
     lv_obj_set_style_text_font(s_lbl_dash_steer_cmd, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_dash_steer_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
     lv_obj_align(s_lbl_dash_steer_cmd, LV_ALIGN_CENTER, 0, 0);
@@ -537,15 +588,16 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_dash_bus_strip, LV_ALIGN_CENTER, 0, 0);
 
     // =========================================================================
-    // Window 1: 1. STEER (SES) - Full Height 352px Cards + In-Box 5s Plots
+    // Window 1: 1. STEER (SES) - Full Height 364px Cards + Live Bitview Deck
     // =========================================================================
     s_screens[WIN_STEER] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screens[WIN_STEER], lv_color_hex(UI_COLOR_BG), 0);
+    lv_obj_add_event_cb(s_screens[WIN_STEER], screen_gesture_nav_cb, LV_EVENT_GESTURE, (void *)(intptr_t)WIN_STEER_PLOT_15S);
     create_top_nav_bar(s_screens[WIN_STEER], WIN_STEER);
 
     const int act_w = 254;
-    const int u_h = 352;
-    const int u_y = 54;
+    const int u_h = 364;
+    const int u_y = 52;
 
     // Card 1: Command (VCU 0x169)
     lv_obj_t *c_scmd = lv_obj_create(s_screens[WIN_STEER]);
@@ -562,45 +614,39 @@ void ui_manager_init(void) {
     lv_obj_align(lbl_sc1, LV_ALIGN_TOP_LEFT, 0, 0);
 
     s_lbl_steer_cmd = lv_label_create(c_scmd);
-    lv_label_set_text(s_lbl_steer_cmd, "+15.0°");
+    lv_label_set_text(s_lbl_steer_cmd, "+15.0 deg");
     lv_obj_set_style_text_font(s_lbl_steer_cmd, &lv_font_montserrat_36, 0);
     lv_obj_set_style_text_color(s_lbl_steer_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
     lv_obj_align(s_lbl_steer_cmd, LV_ALIGN_TOP_MID, 0, 24);
 
-    // In-Box 5s Mini-Plot under value
+    // In-Box 5s Mini-Plot under value (Touch navigates to Full Scope)
     s_chart_steer_5s_cmd = create_inbox_sparkline(c_scmd, 226, 86, 74, -45, 45);
     s_ser_steer_5s_cmd = lv_chart_add_series(s_chart_steer_5s_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_add_event_cb(s_chart_steer_5s_cmd, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_STEER_PLOT_15S);
 
-    lv_obj_t *box_s_spd = lv_obj_create(c_scmd);
-    lv_obj_set_size(box_s_spd, 226, 32);
-    lv_obj_align(box_s_spd, LV_ALIGN_TOP_MID, 0, 168);
-    lv_obj_set_style_bg_color(box_s_spd, lv_color_hex(0x121A24), 0);
-    lv_obj_set_style_border_color(box_s_spd, lv_color_hex(0x1E3A50), 0);
-    lv_obj_set_style_radius(box_s_spd, 6, 0);
-    lv_obj_set_style_pad_all(box_s_spd, 0, 0);
-    s_lbl_steer_target_spd = lv_label_create(box_s_spd);
-    lv_label_set_text(s_lbl_steer_target_spd, "TARGET SPEED: 200 °/s");
-    lv_obj_set_style_text_font(s_lbl_steer_target_spd, &lv_font_montserrat_12, 0);
+    s_lbl_steer_target_spd = lv_label_create(c_scmd);
+    lv_label_set_text(s_lbl_steer_target_spd, "TARGET SPEED: 200 deg/s");
+    lv_obj_set_style_text_font(s_lbl_steer_target_spd, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_steer_target_spd, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_steer_target_spd, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(s_lbl_steer_target_spd, LV_ALIGN_TOP_LEFT, 0, 168);
 
     s_lbl_steer_cmd_telemetry = lv_label_create(c_scmd);
     lv_label_set_text(s_lbl_steer_cmd_telemetry, "ROLLING CNT: 7  •  CHK: VALID");
     lv_obj_set_style_text_font(s_lbl_steer_cmd_telemetry, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_cmd_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_steer_cmd_telemetry, LV_ALIGN_TOP_LEFT, 0, 212);
+    lv_obj_align(s_lbl_steer_cmd_telemetry, LV_ALIGN_TOP_LEFT, 0, 196);
 
     lv_obj_t *lbl_s_id = lv_label_create(c_scmd);
     lv_label_set_text(lbl_s_id, "CAN ID: 0x169 (20ms / 50 Hz)");
     lv_obj_set_style_text_font(lbl_s_id, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(lbl_s_id, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_s_id, LV_ALIGN_TOP_LEFT, 0, 236);
+    lv_obj_align(lbl_s_id, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_s_stat1 = lv_label_create(c_scmd);
-    lv_label_set_text(lbl_s_stat1, "[ OK ] TARGET STREAM ACTIVE");
-    lv_obj_set_style_text_font(lbl_s_stat1, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_s_stat1, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_s_stat1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_steer_vcu_stat = lv_label_create(c_scmd);
+    lv_label_set_text(s_lbl_steer_vcu_stat, "[ OK ] TARGET STREAM (50 Hz)");
+    lv_obj_set_style_text_font(s_lbl_steer_vcu_stat, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_vcu_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_steer_vcu_stat, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     // Card 2: Actuation (SES 0x201)
     lv_obj_t *c_sact = lv_obj_create(s_screens[WIN_STEER]);
@@ -617,47 +663,41 @@ void ui_manager_init(void) {
     lv_obj_align(lbl_sa1, LV_ALIGN_TOP_LEFT, 0, 0);
 
     s_lbl_steer_act = lv_label_create(c_sact);
-    lv_label_set_text(s_lbl_steer_act, "+14.7°");
+    lv_label_set_text(s_lbl_steer_act, "+14.7 deg");
     lv_obj_set_style_text_font(s_lbl_steer_act, &lv_font_montserrat_36, 0);
     lv_obj_set_style_text_color(s_lbl_steer_act, lv_color_hex(UI_COLOR_STATE_OK), 0);
     lv_obj_align(s_lbl_steer_act, LV_ALIGN_TOP_MID, 0, 24);
 
-    // In-Box 5s Mini-Plot under value
+    // In-Box 5s Mini-Plot under value (Touch navigates to Full Scope)
     s_chart_steer_5s_act = create_inbox_sparkline(c_sact, 226, 86, 74, -45, 45);
     s_ser_steer_5s_act = lv_chart_add_series(s_chart_steer_5s_act, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_add_event_cb(s_chart_steer_5s_act, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_STEER_PLOT_15S);
 
-    lv_obj_t *box_s_actspd = lv_obj_create(c_sact);
-    lv_obj_set_size(box_s_actspd, 226, 32);
-    lv_obj_align(box_s_actspd, LV_ALIGN_TOP_MID, 0, 168);
-    lv_obj_set_style_bg_color(box_s_actspd, lv_color_hex(0x0C2218), 0);
-    lv_obj_set_style_border_color(box_s_actspd, lv_color_hex(0x155032), 0);
-    lv_obj_set_style_radius(box_s_actspd, 6, 0);
-    lv_obj_set_style_pad_all(box_s_actspd, 0, 0);
-    s_lbl_steer_actual_spd = lv_label_create(box_s_actspd);
-    lv_label_set_text(s_lbl_steer_actual_spd, "ACTUAL SPEED: 198 °/s");
-    lv_obj_set_style_text_font(s_lbl_steer_actual_spd, &lv_font_montserrat_12, 0);
+    s_lbl_steer_actual_spd = lv_label_create(c_sact);
+    lv_label_set_text(s_lbl_steer_actual_spd, "ACTUAL SPEED: 198 deg/s");
+    lv_obj_set_style_text_font(s_lbl_steer_actual_spd, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_steer_actual_spd, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_steer_actual_spd, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(s_lbl_steer_actual_spd, LV_ALIGN_TOP_LEFT, 0, 168);
 
     s_lbl_steer_act_telemetry = lv_label_create(c_sact);
     lv_label_set_text(s_lbl_steer_act_telemetry, "MOTOR: 8.4 A  •  TEMP: 34°C");
     lv_obj_set_style_text_font(s_lbl_steer_act_telemetry, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_act_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_steer_act_telemetry, LV_ALIGN_TOP_LEFT, 0, 212);
+    lv_obj_align(s_lbl_steer_act_telemetry, LV_ALIGN_TOP_LEFT, 0, 196);
 
-    lv_obj_t *lbl_sa_sub = lv_label_create(c_sact);
-    lv_label_set_text(lbl_sa_sub, "ALIGNMENT: ZERO-POINT OK");
-    lv_obj_set_style_text_font(lbl_sa_sub, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_sa_sub, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_sa_sub, LV_ALIGN_TOP_LEFT, 0, 236);
+    s_lbl_steer_align = lv_label_create(c_sact);
+    lv_label_set_text(s_lbl_steer_align, "ALIGNMENT: ZERO-POINT OK");
+    lv_obj_set_style_text_font(s_lbl_steer_align, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_align, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_steer_align, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_s_stat2 = lv_label_create(c_sact);
-    lv_label_set_text(lbl_s_stat2, "[ OK ] FEEDBACK STREAM (100 Hz)");
-    lv_obj_set_style_text_font(lbl_s_stat2, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_s_stat2, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_s_stat2, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_steer_feedback_stat = lv_label_create(c_sact);
+    lv_label_set_text(s_lbl_steer_feedback_stat, "[ OK ] FEEDBACK STREAM (100 Hz)");
+    lv_obj_set_style_text_font(s_lbl_steer_feedback_stat, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_feedback_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_steer_feedback_stat, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Card 3: Delta, Torque & DTC Diagnostics
+    // Card 3: Delta, Torque & DTC Diagnostics (Flattened)
     lv_obj_t *c_sdt = lv_obj_create(s_screens[WIN_STEER]);
     lv_obj_set_size(c_sdt, act_w, u_h);
     lv_obj_align(c_sdt, LV_ALIGN_TOP_LEFT, 538, u_y);
@@ -665,91 +705,83 @@ void ui_manager_init(void) {
     lv_obj_set_style_border_color(c_sdt, lv_color_hex(UI_COLOR_BORDER), 0);
     lv_obj_set_style_radius(c_sdt, 8, 0);
 
-    s_card_steer_delta = lv_obj_create(c_sdt);
-    lv_obj_set_size(s_card_steer_delta, 226, 44);
-    lv_obj_align(s_card_steer_delta, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(s_card_steer_delta, lv_color_hex(0x064E3B), 0);
-    lv_obj_set_style_border_color(s_card_steer_delta, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_set_style_border_width(s_card_steer_delta, 2, 0);
-    lv_obj_set_style_radius(s_card_steer_delta, 6, 0);
-    lv_obj_set_style_pad_all(s_card_steer_delta, 0, 0);
-    s_lbl_steer_delta_val = lv_label_create(s_card_steer_delta);
-    lv_label_set_text(s_lbl_steer_delta_val, "Δ: 0.3°   [ TRACKING OK ]");
-    lv_obj_set_style_text_font(s_lbl_steer_delta_val, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(s_lbl_steer_delta_val, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_steer_delta_val, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *lbl_sdt_title = lv_label_create(c_sdt);
+    lv_label_set_text(lbl_sdt_title, "CLOSED-LOOP TRACKING");
+    lv_obj_set_style_text_font(lbl_sdt_title, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_sdt_title, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_sdt_title, LV_ALIGN_TOP_LEFT, 0, 0);
 
-    s_card_steer_torque = lv_obj_create(c_sdt);
-    lv_obj_set_size(s_card_steer_torque, 226, 110);
-    lv_obj_align(s_card_steer_torque, LV_ALIGN_TOP_MID, 0, 54);
-    lv_obj_set_style_bg_color(s_card_steer_torque, lv_color_hex(0x231806), 0);
-    lv_obj_set_style_border_color(s_card_steer_torque, lv_color_hex(UI_COLOR_STATE_WARN), 0);
-    lv_obj_set_style_border_width(s_card_steer_torque, 1, 0);
-    lv_obj_set_style_radius(s_card_steer_torque, 6, 0);
-    lv_obj_set_style_pad_all(s_card_steer_torque, 2, 0);
+    s_lbl_steer_delta_val = lv_label_create(c_sdt);
+    lv_label_set_text(s_lbl_steer_delta_val, "DIFF: 0.3 deg  [ OK ]");
+    lv_obj_set_style_text_font(s_lbl_steer_delta_val, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_delta_val, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_steer_delta_val, LV_ALIGN_TOP_LEFT, 0, 18);
 
-    lv_obj_t *lbl_tt = lv_label_create(s_card_steer_torque);
+    lv_obj_t *lbl_tt = lv_label_create(c_sdt);
     lv_label_set_text(lbl_tt, "DRIVER COLUMN TORQUE");
     lv_obj_set_style_text_font(lbl_tt, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_tt, lv_color_hex(UI_COLOR_STATE_WARN), 0);
-    lv_obj_align(lbl_tt, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_set_style_text_color(lbl_tt, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_tt, LV_ALIGN_TOP_LEFT, 0, 64);
 
-    s_lbl_steer_torq = lv_label_create(s_card_steer_torque);
+    s_lbl_steer_torq = lv_label_create(c_sdt);
     lv_label_set_text(s_lbl_steer_torq, "+0.2 Nm");
     lv_obj_set_style_text_font(s_lbl_steer_torq, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(s_lbl_steer_torq, lv_color_hex(UI_COLOR_STATE_WARN), 0);
-    lv_obj_align(s_lbl_steer_torq, LV_ALIGN_CENTER, 0, 4);
+    lv_obj_align(s_lbl_steer_torq, LV_ALIGN_TOP_LEFT, 0, 82);
 
-    s_lbl_steer_override = lv_label_create(s_card_steer_torque);
+    s_lbl_steer_override = lv_label_create(c_sdt);
     lv_label_set_text(s_lbl_steer_override, "[ NO OVERRIDE ]");
     lv_obj_set_style_text_font(s_lbl_steer_override, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_override, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_steer_override, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_obj_align(s_lbl_steer_override, LV_ALIGN_TOP_LEFT, 0, 116);
 
-    lv_obj_t *lbl_sv = lv_label_create(c_sdt);
-    lv_label_set_text(lbl_sv, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
-    lv_obj_set_style_text_font(lbl_sv, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_sv, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_sv, LV_ALIGN_TOP_LEFT, 0, 176);
+    s_lbl_steer_volt = lv_label_create(c_sdt);
+    lv_label_set_text(s_lbl_steer_volt, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
+    lv_obj_set_style_text_font(s_lbl_steer_volt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_volt, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(s_lbl_steer_volt, LV_ALIGN_TOP_LEFT, 0, 168);
 
     s_lbl_steer_dtc = lv_label_create(c_sdt);
     lv_label_set_text(s_lbl_steer_dtc, "DTC DIAGNOSIS: ALL CLEAR (0x0000)");
     lv_obj_set_style_text_font(s_lbl_steer_dtc, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_dtc, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_steer_dtc, LV_ALIGN_TOP_LEFT, 0, 202);
+    lv_obj_align(s_lbl_steer_dtc, LV_ALIGN_TOP_LEFT, 0, 196);
 
-    lv_obj_t *lbl_sw = lv_label_create(c_sdt);
-    lv_label_set_text(lbl_sw, "WATCHDOG: LAST SEEN 10ms AGO");
-    lv_obj_set_style_text_font(lbl_sw, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_sw, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_sw, LV_ALIGN_TOP_LEFT, 0, 228);
+    s_lbl_steer_watchdog = lv_label_create(c_sdt);
+    lv_label_set_text(s_lbl_steer_watchdog, "WATCHDOG: LAST SEEN 10ms AGO");
+    lv_obj_set_style_text_font(s_lbl_steer_watchdog, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_watchdog, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_steer_watchdog, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_sh = lv_label_create(c_sdt);
-    lv_label_set_text(lbl_sh, "[ OK ] SES HEALTHY (100 Hz)");
-    lv_obj_set_style_text_font(lbl_sh, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_sh, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_sh, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_steer_health = lv_label_create(c_sdt);
+    lv_label_set_text(s_lbl_steer_health, "[ OK ] SES HEALTHY (100 Hz)");
+    lv_obj_set_style_text_font(s_lbl_steer_health, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_health, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_steer_health, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Bottom Action Button
-    lv_obj_t *btn_expand_s = lv_button_create(s_screens[WIN_STEER]);
-    lv_obj_set_size(btn_expand_s, 784, 54);
-    lv_obj_align(btn_expand_s, LV_ALIGN_BOTTOM_MID, 0, -6);
-    lv_obj_set_style_bg_color(btn_expand_s, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
-    lv_obj_set_style_border_color(btn_expand_s, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
-    lv_obj_set_style_border_width(btn_expand_s, 2, 0);
-    lv_obj_set_style_radius(btn_expand_s, 8, 0);
-    lv_obj_t *lbl_bexp_s = lv_label_create(btn_expand_s);
-    lv_label_set_text(lbl_bexp_s, "VIEW 15-SECOND FULL STEERING SCOPE PLOT (OR SWIPE DOWN) >");
-    lv_obj_set_style_text_font(lbl_bexp_s, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(lbl_bexp_s, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_bexp_s, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_add_event_cb(btn_expand_s, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_STEER_PLOT_15S);
+    // Bottom Command Signal Bit View Deck (48px)
+    s_card_steer_bitview = lv_obj_create(s_screens[WIN_STEER]);
+    lv_obj_set_size(s_card_steer_bitview, 784, 48);
+    lv_obj_align(s_card_steer_bitview, LV_ALIGN_TOP_MID, 0, 424);
+    lv_obj_set_style_bg_color(s_card_steer_bitview, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(s_card_steer_bitview, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_set_style_border_width(s_card_steer_bitview, 1, 0);
+    lv_obj_set_style_radius(s_card_steer_bitview, 6, 0);
+    lv_obj_set_style_pad_all(s_card_steer_bitview, 0, 0);
+
+    s_lbl_steer_bitview = lv_label_create(s_card_steer_bitview);
+    lv_label_set_text(s_lbl_steer_bitview, "SES CMD [0x169 D0: 0x00]  EN:0  MODE:0  ALIGN:0  •  BITS: [0000 0000]  •  [TOUCH PLOT / SWIPE DOWN]");
+    lv_obj_set_style_text_font(s_lbl_steer_bitview, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_steer_bitview, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(s_lbl_steer_bitview, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_event_cb(s_card_steer_bitview, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_STEER_PLOT_15S);
 
     // =========================================================================
-    // Window 2: 2. BRAKE (SEB) - Full Height 352px Cards + In-Box 5s Plots
+    // Window 2: 2. BRAKE (SEB) - Full Height 364px Cards + Live Bitview Deck
     // =========================================================================
     s_screens[WIN_BRAKE] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screens[WIN_BRAKE], lv_color_hex(UI_COLOR_BG), 0);
+    lv_obj_add_event_cb(s_screens[WIN_BRAKE], screen_gesture_nav_cb, LV_EVENT_GESTURE, (void *)(intptr_t)WIN_BRAKE_PLOT_15S);
     create_top_nav_bar(s_screens[WIN_BRAKE], WIN_BRAKE);
 
     // Card 1: Command (VCU 0x7B9)
@@ -772,40 +804,34 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(s_lbl_brake_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
     lv_obj_align(s_lbl_brake_cmd, LV_ALIGN_TOP_MID, 0, 24);
 
-    // In-Box 5s Mini-Plot under value
+    // In-Box 5s Mini-Plot under value (Touch navigates to Full Scope)
     s_chart_brake_5s_cmd = create_inbox_sparkline(c_bcmd, 226, 86, 74, 0, 1200);
     s_ser_brake_5s_cmd = lv_chart_add_series(s_chart_brake_5s_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_add_event_cb(s_chart_brake_5s_cmd, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_BRAKE_PLOT_15S);
 
-    lv_obj_t *box_b_cmd = lv_obj_create(c_bcmd);
-    lv_obj_set_size(box_b_cmd, 226, 32);
-    lv_obj_align(box_b_cmd, LV_ALIGN_TOP_MID, 0, 168);
-    lv_obj_set_style_bg_color(box_b_cmd, lv_color_hex(0x121A24), 0);
-    lv_obj_set_style_border_color(box_b_cmd, lv_color_hex(0x1E3A50), 0);
-    lv_obj_set_style_radius(box_b_cmd, 6, 0);
-    lv_obj_set_style_pad_all(box_b_cmd, 0, 0);
-    s_lbl_brake_target_stroke = lv_label_create(box_b_cmd);
+    s_lbl_brake_target_stroke = lv_label_create(c_bcmd);
     lv_label_set_text(s_lbl_brake_target_stroke, "TARGET STROKE: 18.0 mm");
-    lv_obj_set_style_text_font(s_lbl_brake_target_stroke, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(s_lbl_brake_target_stroke, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_brake_target_stroke, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_brake_target_stroke, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(s_lbl_brake_target_stroke, LV_ALIGN_TOP_LEFT, 0, 168);
 
-    lv_obj_t *lbl_b_cmd_sub = lv_label_create(c_bcmd);
-    lv_label_set_text(lbl_b_cmd_sub, "ROLLING CNT: 7  •  CHK: VALID");
-    lv_obj_set_style_text_font(lbl_b_cmd_sub, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_b_cmd_sub, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_b_cmd_sub, LV_ALIGN_TOP_LEFT, 0, 212);
+    s_lbl_brake_cmd_telemetry = lv_label_create(c_bcmd);
+    lv_label_set_text(s_lbl_brake_cmd_telemetry, "ROLLING CNT: 0  •  MODE: PRES");
+    lv_obj_set_style_text_font(s_lbl_brake_cmd_telemetry, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_cmd_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(s_lbl_brake_cmd_telemetry, LV_ALIGN_TOP_LEFT, 0, 196);
 
     lv_obj_t *lbl_b_id = lv_label_create(c_bcmd);
     lv_label_set_text(lbl_b_id, "CAN ID: 0x7B9 (20ms / 50 Hz)");
     lv_obj_set_style_text_font(lbl_b_id, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(lbl_b_id, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_b_id, LV_ALIGN_TOP_LEFT, 0, 236);
+    lv_obj_align(lbl_b_id, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_b_stat1 = lv_label_create(c_bcmd);
-    lv_label_set_text(lbl_b_stat1, "[ OK ] TARGET STREAM ACTIVE");
-    lv_obj_set_style_text_font(lbl_b_stat1, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_b_stat1, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_b_stat1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_brake_vcu_stat = lv_label_create(c_bcmd);
+    lv_label_set_text(s_lbl_brake_vcu_stat, "[ OK ] TARGET STREAM (50 Hz)");
+    lv_obj_set_style_text_font(s_lbl_brake_vcu_stat, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_vcu_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_brake_vcu_stat, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     // Card 2: Actuation (SEB 0x721)
     lv_obj_t *c_bact = lv_obj_create(s_screens[WIN_BRAKE]);
@@ -827,42 +853,36 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(s_lbl_brake_act, lv_color_hex(UI_COLOR_STATE_OK), 0);
     lv_obj_align(s_lbl_brake_act, LV_ALIGN_TOP_MID, 0, 24);
 
-    // In-Box 5s Mini-Plot under value
+    // In-Box 5s Mini-Plot under value (Touch navigates to Full Scope)
     s_chart_brake_5s_act = create_inbox_sparkline(c_bact, 226, 86, 74, 0, 1200);
     s_ser_brake_5s_act = lv_chart_add_series(s_chart_brake_5s_act, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_add_event_cb(s_chart_brake_5s_act, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_BRAKE_PLOT_15S);
 
-    lv_obj_t *box_b_act = lv_obj_create(c_bact);
-    lv_obj_set_size(box_b_act, 226, 32);
-    lv_obj_align(box_b_act, LV_ALIGN_TOP_MID, 0, 168);
-    lv_obj_set_style_bg_color(box_b_act, lv_color_hex(0x0C2218), 0);
-    lv_obj_set_style_border_color(box_b_act, lv_color_hex(0x155032), 0);
-    lv_obj_set_style_radius(box_b_act, 6, 0);
-    lv_obj_set_style_pad_all(box_b_act, 0, 0);
-    s_lbl_brake_act_stroke = lv_label_create(box_b_act);
+    s_lbl_brake_act_stroke = lv_label_create(c_bact);
     lv_label_set_text(s_lbl_brake_act_stroke, "ACTUAL STROKE: 17.8 mm");
-    lv_obj_set_style_text_font(s_lbl_brake_act_stroke, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(s_lbl_brake_act_stroke, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_brake_act_stroke, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_brake_act_stroke, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(s_lbl_brake_act_stroke, LV_ALIGN_TOP_LEFT, 0, 168);
 
     s_lbl_brake_act_telemetry = lv_label_create(c_bact);
     lv_label_set_text(s_lbl_brake_act_telemetry, "MOTOR: 4.2 A  •  TEMP: 38°C");
     lv_obj_set_style_text_font(s_lbl_brake_act_telemetry, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_brake_act_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_brake_act_telemetry, LV_ALIGN_TOP_LEFT, 0, 212);
+    lv_obj_align(s_lbl_brake_act_telemetry, LV_ALIGN_TOP_LEFT, 0, 196);
 
-    lv_obj_t *lbl_ba_sub = lv_label_create(c_bact);
-    lv_label_set_text(lbl_ba_sub, "MODE: PRESSURE CLOSED-LOOP");
-    lv_obj_set_style_text_font(lbl_ba_sub, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_ba_sub, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_ba_sub, LV_ALIGN_TOP_LEFT, 0, 236);
+    s_lbl_brake_align = lv_label_create(c_bact);
+    lv_label_set_text(s_lbl_brake_align, "ALIGNMENT: SENSOR ZEROED");
+    lv_obj_set_style_text_font(s_lbl_brake_align, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_align, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_brake_align, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_b_stat2 = lv_label_create(c_bact);
-    lv_label_set_text(lbl_b_stat2, "[ OK ] FEEDBACK STREAM (100 Hz)");
-    lv_obj_set_style_text_font(lbl_b_stat2, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_b_stat2, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_b_stat2, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_brake_feedback_stat = lv_label_create(c_bact);
+    lv_label_set_text(s_lbl_brake_feedback_stat, "[ OK ] FEEDBACK STREAM (100 Hz)");
+    lv_obj_set_style_text_font(s_lbl_brake_feedback_stat, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_feedback_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_brake_feedback_stat, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Card 3: Delta, Stroke & Diagnostics
+    // Card 3: Delta, Stroke & Diagnostics (Flattened)
     lv_obj_t *c_bdt = lv_obj_create(s_screens[WIN_BRAKE]);
     lv_obj_set_size(c_bdt, act_w, u_h);
     lv_obj_align(c_bdt, LV_ALIGN_TOP_LEFT, 538, u_y);
@@ -870,90 +890,83 @@ void ui_manager_init(void) {
     lv_obj_set_style_border_color(c_bdt, lv_color_hex(UI_COLOR_BORDER), 0);
     lv_obj_set_style_radius(c_bdt, 8, 0);
 
-    s_card_brake_delta = lv_obj_create(c_bdt);
-    lv_obj_set_size(s_card_brake_delta, 226, 44);
-    lv_obj_align(s_card_brake_delta, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(s_card_brake_delta, lv_color_hex(0x064E3B), 0);
-    lv_obj_set_style_border_color(s_card_brake_delta, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_set_style_border_width(s_card_brake_delta, 2, 0);
-    lv_obj_set_style_radius(s_card_brake_delta, 6, 0);
-    lv_obj_set_style_pad_all(s_card_brake_delta, 0, 0);
-    s_lbl_brake_delta_val = lv_label_create(s_card_brake_delta);
-    lv_label_set_text(s_lbl_brake_delta_val, "Δ: -8 kPa   [ TRACKING OK ]");
-    lv_obj_set_style_text_font(s_lbl_brake_delta_val, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(s_lbl_brake_delta_val, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_brake_delta_val, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *lbl_bdt_title = lv_label_create(c_bdt);
+    lv_label_set_text(lbl_bdt_title, "CLOSED-LOOP TRACKING");
+    lv_obj_set_style_text_font(lbl_bdt_title, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_bdt_title, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_bdt_title, LV_ALIGN_TOP_LEFT, 0, 0);
 
-    lv_obj_t *box_b_sec = lv_obj_create(c_bdt);
-    lv_obj_set_size(box_b_sec, 226, 110);
-    lv_obj_align(box_b_sec, LV_ALIGN_TOP_MID, 0, 54);
-    lv_obj_set_style_bg_color(box_b_sec, lv_color_hex(0x121A24), 0);
-    lv_obj_set_style_border_color(box_b_sec, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
-    lv_obj_set_style_radius(box_b_sec, 6, 0);
-    lv_obj_set_style_pad_all(box_b_sec, 2, 0);
+    s_lbl_brake_delta_val = lv_label_create(c_bdt);
+    lv_label_set_text(s_lbl_brake_delta_val, "DIFF: -8 kPa  [ OK ]");
+    lv_obj_set_style_text_font(s_lbl_brake_delta_val, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_delta_val, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_brake_delta_val, LV_ALIGN_TOP_LEFT, 0, 18);
 
-    lv_obj_t *lbl_bst = lv_label_create(box_b_sec);
+    lv_obj_t *lbl_bst = lv_label_create(c_bdt);
     lv_label_set_text(lbl_bst, "PISTON DISPLACEMENT");
     lv_obj_set_style_text_font(lbl_bst, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_bst, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
-    lv_obj_align(lbl_bst, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_set_style_text_color(lbl_bst, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_bst, LV_ALIGN_TOP_LEFT, 0, 64);
 
-    lv_obj_t *lbl_b_stkval = lv_label_create(box_b_sec);
-    lv_label_set_text(lbl_b_stkval, "17.8 mm");
-    lv_obj_set_style_text_font(lbl_b_stkval, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(lbl_b_stkval, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_b_stkval, LV_ALIGN_CENTER, 0, 4);
+    s_lbl_brake_piston_val = lv_label_create(c_bdt);
+    lv_label_set_text(s_lbl_brake_piston_val, "17.8 mm");
+    lv_obj_set_style_text_font(s_lbl_brake_piston_val, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_piston_val, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(s_lbl_brake_piston_val, LV_ALIGN_TOP_LEFT, 0, 82);
 
-    lv_obj_t *lbl_b_stkok = lv_label_create(box_b_sec);
-    lv_label_set_text(lbl_b_stkok, "[ STROKE Δ: 0.2 mm OK ]");
-    lv_obj_set_style_text_font(lbl_b_stkok, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_b_stkok, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_b_stkok, LV_ALIGN_BOTTOM_MID, 0, -2);
+    s_lbl_brake_piston_delta = lv_label_create(c_bdt);
+    lv_label_set_text(s_lbl_brake_piston_delta, "[ STROKE DIFF: 0.2 mm OK ]");
+    lv_obj_set_style_text_font(s_lbl_brake_piston_delta, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_piston_delta, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_brake_piston_delta, LV_ALIGN_TOP_LEFT, 0, 116);
 
-    lv_obj_t *lbl_bv = lv_label_create(c_bdt);
-    lv_label_set_text(lbl_bv, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
-    lv_obj_set_style_text_font(lbl_bv, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_bv, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_bv, LV_ALIGN_TOP_LEFT, 0, 176);
+    s_lbl_brake_volt = lv_label_create(c_bdt);
+    lv_label_set_text(s_lbl_brake_volt, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
+    lv_obj_set_style_text_font(s_lbl_brake_volt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_volt, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(s_lbl_brake_volt, LV_ALIGN_TOP_LEFT, 0, 168);
 
     s_lbl_brake_dtc = lv_label_create(c_bdt);
     lv_label_set_text(s_lbl_brake_dtc, "DTC DIAGNOSIS: ALL CLEAR (0x0000)");
     lv_obj_set_style_text_font(s_lbl_brake_dtc, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_brake_dtc, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_brake_dtc, LV_ALIGN_TOP_LEFT, 0, 202);
+    lv_obj_align(s_lbl_brake_dtc, LV_ALIGN_TOP_LEFT, 0, 196);
 
-    lv_obj_t *lbl_bw = lv_label_create(c_bdt);
-    lv_label_set_text(lbl_bw, "WATCHDOG: LAST SEEN 10ms AGO");
-    lv_obj_set_style_text_font(lbl_bw, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_bw, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_bw, LV_ALIGN_TOP_LEFT, 0, 228);
+    s_lbl_brake_watchdog = lv_label_create(c_bdt);
+    lv_label_set_text(s_lbl_brake_watchdog, "WATCHDOG: LAST SEEN 10ms AGO");
+    lv_obj_set_style_text_font(s_lbl_brake_watchdog, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_watchdog, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_brake_watchdog, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_bh = lv_label_create(c_bdt);
-    lv_label_set_text(lbl_bh, "[ OK ] SEB HEALTHY (100 Hz)");
-    lv_obj_set_style_text_font(lbl_bh, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_bh, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_bh, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_brake_health = lv_label_create(c_bdt);
+    lv_label_set_text(s_lbl_brake_health, "[ OK ] SEB HEALTHY (100 Hz)");
+    lv_obj_set_style_text_font(s_lbl_brake_health, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_health, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_brake_health, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Bottom Action Button
-    lv_obj_t *btn_expand_b = lv_button_create(s_screens[WIN_BRAKE]);
-    lv_obj_set_size(btn_expand_b, 784, 54);
-    lv_obj_align(btn_expand_b, LV_ALIGN_BOTTOM_MID, 0, -6);
-    lv_obj_set_style_bg_color(btn_expand_b, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
-    lv_obj_set_style_border_color(btn_expand_b, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
-    lv_obj_set_style_border_width(btn_expand_b, 2, 0);
-    lv_obj_set_style_radius(btn_expand_b, 8, 0);
-    lv_obj_t *lbl_bexp_b = lv_label_create(btn_expand_b);
-    lv_label_set_text(lbl_bexp_b, "VIEW 15-SECOND FULL BRAKE PRESSURE SCOPE (OR SWIPE DOWN) >");
-    lv_obj_set_style_text_font(lbl_bexp_b, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(lbl_bexp_b, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_bexp_b, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_add_event_cb(btn_expand_b, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_BRAKE_PLOT_15S);
+    // Bottom Command Signal Bit View Deck (48px)
+    s_card_brake_bitview = lv_obj_create(s_screens[WIN_BRAKE]);
+    lv_obj_set_size(s_card_brake_bitview, 784, 48);
+    lv_obj_align(s_card_brake_bitview, LV_ALIGN_TOP_MID, 0, 424);
+    lv_obj_set_style_bg_color(s_card_brake_bitview, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(s_card_brake_bitview, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_set_style_border_width(s_card_brake_bitview, 1, 0);
+    lv_obj_set_style_radius(s_card_brake_bitview, 6, 0);
+    lv_obj_set_style_pad_all(s_card_brake_bitview, 0, 0);
+
+    s_lbl_brake_bitview = lv_label_create(s_card_brake_bitview);
+    lv_label_set_text(s_lbl_brake_bitview, "SEB CMD [0x7B9 D0: 0x00]  EN:0  MODE:PRES  AUTO:0  •  BITS: [0000 0000]  •  [TOUCH PLOT / SWIPE DOWN]");
+    lv_obj_set_style_text_font(s_lbl_brake_bitview, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_brake_bitview, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(s_lbl_brake_bitview, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_event_cb(s_card_brake_bitview, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_BRAKE_PLOT_15S);
 
     // =========================================================================
-    // Window 3: 3. DRIVE (MTR) - Full Height 352px Cards + In-Box 5s Plots
+    // Window 3: 3. DRIVE (MTR) - Full Height 364px Cards + Live Bitview Deck
     // =========================================================================
     s_screens[WIN_DRIVE] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screens[WIN_DRIVE], lv_color_hex(UI_COLOR_BG), 0);
+    lv_obj_add_event_cb(s_screens[WIN_DRIVE], screen_gesture_nav_cb, LV_EVENT_GESTURE, (void *)(intptr_t)WIN_DRIVE_PLOT_15S);
     create_top_nav_bar(s_screens[WIN_DRIVE], WIN_DRIVE);
 
     // Card 1: Command (VCU 0x204)
@@ -976,40 +989,34 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(s_lbl_drive_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
     lv_obj_align(s_lbl_drive_cmd, LV_ALIGN_TOP_MID, 0, 24);
 
-    // In-Box 5s Mini-Plot under value
+    // In-Box 5s Mini-Plot under value (Touch navigates to Full Scope)
     s_chart_drive_5s_cmd = create_inbox_sparkline(c_dcmd, 226, 86, 74, 0, 35);
     s_ser_drive_5s_cmd = lv_chart_add_series(s_chart_drive_5s_cmd, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_add_event_cb(s_chart_drive_5s_cmd, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE_PLOT_15S);
 
-    lv_obj_t *box_d_cmd = lv_obj_create(c_dcmd);
-    lv_obj_set_size(box_d_cmd, 226, 32);
-    lv_obj_align(box_d_cmd, LV_ALIGN_TOP_MID, 0, 168);
-    lv_obj_set_style_bg_color(box_d_cmd, lv_color_hex(0x121A24), 0);
-    lv_obj_set_style_border_color(box_d_cmd, lv_color_hex(0x1E3A50), 0);
-    lv_obj_set_style_radius(box_d_cmd, 6, 0);
-    lv_obj_set_style_pad_all(box_d_cmd, 0, 0);
-    s_lbl_drive_target_gear = lv_label_create(box_d_cmd);
+    s_lbl_drive_target_gear = lv_label_create(c_dcmd);
     lv_label_set_text(s_lbl_drive_target_gear, "TARGET GEAR: [ D ] (DRIVE)");
-    lv_obj_set_style_text_font(s_lbl_drive_target_gear, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(s_lbl_drive_target_gear, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_drive_target_gear, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_drive_target_gear, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(s_lbl_drive_target_gear, LV_ALIGN_TOP_LEFT, 0, 168);
 
-    lv_obj_t *lbl_d_cmd_sub = lv_label_create(c_dcmd);
-    lv_label_set_text(lbl_d_cmd_sub, "ROLLING CNT: 7  •  CHK: VALID");
-    lv_obj_set_style_text_font(lbl_d_cmd_sub, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_d_cmd_sub, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_d_cmd_sub, LV_ALIGN_TOP_LEFT, 0, 212);
+    s_lbl_drive_cmd_telemetry = lv_label_create(c_dcmd);
+    lv_label_set_text(s_lbl_drive_cmd_telemetry, "MODE: SPEED CTRL  •  LIM: 25 km/h");
+    lv_obj_set_style_text_font(s_lbl_drive_cmd_telemetry, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_cmd_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(s_lbl_drive_cmd_telemetry, LV_ALIGN_TOP_LEFT, 0, 196);
 
     lv_obj_t *lbl_d_id = lv_label_create(c_dcmd);
     lv_label_set_text(lbl_d_id, "CAN ID: 0x204 (20ms / 50 Hz)");
     lv_obj_set_style_text_font(lbl_d_id, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(lbl_d_id, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_d_id, LV_ALIGN_TOP_LEFT, 0, 236);
+    lv_obj_align(lbl_d_id, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_d_stat1 = lv_label_create(c_dcmd);
-    lv_label_set_text(lbl_d_stat1, "[ OK ] TARGET STREAM ACTIVE");
-    lv_obj_set_style_text_font(lbl_d_stat1, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_d_stat1, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_d_stat1, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_drive_rt_stat = lv_label_create(c_dcmd);
+    lv_label_set_text(s_lbl_drive_rt_stat, "[ OK ] TARGET STREAM (50 Hz)");
+    lv_obj_set_style_text_font(s_lbl_drive_rt_stat, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_rt_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_drive_rt_stat, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     // Card 2: Actuation (MTR 0x206)
     lv_obj_t *c_dact = lv_obj_create(s_screens[WIN_DRIVE]);
@@ -1031,42 +1038,36 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(s_lbl_drive_act, lv_color_hex(UI_COLOR_STATE_OK), 0);
     lv_obj_align(s_lbl_drive_act, LV_ALIGN_TOP_MID, 0, 24);
 
-    // In-Box 5s Mini-Plot under value
+    // In-Box 5s Mini-Plot under value (Touch navigates to Full Scope)
     s_chart_drive_5s_act = create_inbox_sparkline(c_dact, 226, 86, 74, 0, 35);
     s_ser_drive_5s_act = lv_chart_add_series(s_chart_drive_5s_act, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
+    lv_obj_add_event_cb(s_chart_drive_5s_act, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE_PLOT_15S);
 
-    lv_obj_t *box_d_act = lv_obj_create(c_dact);
-    lv_obj_set_size(box_d_act, 226, 32);
-    lv_obj_align(box_d_act, LV_ALIGN_TOP_MID, 0, 168);
-    lv_obj_set_style_bg_color(box_d_act, lv_color_hex(0x0C2218), 0);
-    lv_obj_set_style_border_color(box_d_act, lv_color_hex(0x155032), 0);
-    lv_obj_set_style_radius(box_d_act, 6, 0);
-    lv_obj_set_style_pad_all(box_d_act, 0, 0);
-    s_lbl_drive_act_gear = lv_label_create(box_d_act);
+    s_lbl_drive_act_gear = lv_label_create(c_dact);
     lv_label_set_text(s_lbl_drive_act_gear, "ENGAGED GEAR: [ D ] (ENGAGED)");
-    lv_obj_set_style_text_font(s_lbl_drive_act_gear, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(s_lbl_drive_act_gear, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_drive_act_gear, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_drive_act_gear, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(s_lbl_drive_act_gear, LV_ALIGN_TOP_LEFT, 0, 168);
 
     s_lbl_drive_motor_telemetry = lv_label_create(c_dact);
-    lv_label_set_text(s_lbl_drive_motor_telemetry, "MOTOR: 1,620 RPM  •  RATIO: 8.5:1");
+    lv_label_set_text(s_lbl_drive_motor_telemetry, "RATIO: 8.5:1  •  INV: CLOSED-LOOP");
     lv_obj_set_style_text_font(s_lbl_drive_motor_telemetry, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_motor_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_drive_motor_telemetry, LV_ALIGN_TOP_LEFT, 0, 212);
+    lv_obj_align(s_lbl_drive_motor_telemetry, LV_ALIGN_TOP_LEFT, 0, 196);
 
-    lv_obj_t *lbl_da_sub = lv_label_create(c_dact);
-    lv_label_set_text(lbl_da_sub, "STATE: RUN (0x03) • BRAKE CUTOUT: OK");
-    lv_obj_set_style_text_font(lbl_da_sub, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_da_sub, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_da_sub, LV_ALIGN_TOP_LEFT, 0, 236);
+    s_lbl_drive_state_cutout = lv_label_create(c_dact);
+    lv_label_set_text(s_lbl_drive_state_cutout, "STATE: RUN (0x03) • BRAKE CUT: OK");
+    lv_obj_set_style_text_font(s_lbl_drive_state_cutout, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_state_cutout, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_drive_state_cutout, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_d_stat2 = lv_label_create(c_dact);
-    lv_label_set_text(lbl_d_stat2, "[ OK ] FEEDBACK STREAM (100 Hz)");
-    lv_obj_set_style_text_font(lbl_d_stat2, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_d_stat2, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_d_stat2, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_drive_feedback_stat = lv_label_create(c_dact);
+    lv_label_set_text(s_lbl_drive_feedback_stat, "[ OK ] FEEDBACK STREAM (100 Hz)");
+    lv_obj_set_style_text_font(s_lbl_drive_feedback_stat, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_feedback_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_drive_feedback_stat, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Card 3: Delta, Interlocks & Diagnostics
+    // Card 3: Delta, Interlocks & Diagnostics (Flattened)
     lv_obj_t *c_ddt = lv_obj_create(s_screens[WIN_DRIVE]);
     lv_obj_set_size(c_ddt, act_w, u_h);
     lv_obj_align(c_ddt, LV_ALIGN_TOP_LEFT, 538, u_y);
@@ -1074,84 +1075,76 @@ void ui_manager_init(void) {
     lv_obj_set_style_border_color(c_ddt, lv_color_hex(UI_COLOR_BORDER), 0);
     lv_obj_set_style_radius(c_ddt, 8, 0);
 
-    s_card_drive_delta = lv_obj_create(c_ddt);
-    lv_obj_set_size(s_card_drive_delta, 226, 44);
-    lv_obj_align(s_card_drive_delta, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(s_card_drive_delta, lv_color_hex(0x064E3B), 0);
-    lv_obj_set_style_border_color(s_card_drive_delta, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_set_style_border_width(s_card_drive_delta, 2, 0);
-    lv_obj_set_style_radius(s_card_drive_delta, 6, 0);
-    lv_obj_set_style_pad_all(s_card_drive_delta, 0, 0);
-    s_lbl_drive_delta_val = lv_label_create(s_card_drive_delta);
-    lv_label_set_text(s_lbl_drive_delta_val, "Δ: 0.2 km/h   [ TRACKING OK ]");
-    lv_obj_set_style_text_font(s_lbl_drive_delta_val, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(s_lbl_drive_delta_val, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_drive_delta_val, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_t *lbl_ddt_title = lv_label_create(c_ddt);
+    lv_label_set_text(lbl_ddt_title, "CLOSED-LOOP TRACKING");
+    lv_obj_set_style_text_font(lbl_ddt_title, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_ddt_title, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_ddt_title, LV_ALIGN_TOP_LEFT, 0, 0);
 
-    lv_obj_t *box_d_sec = lv_obj_create(c_ddt);
-    lv_obj_set_size(box_d_sec, 226, 110);
-    lv_obj_align(box_d_sec, LV_ALIGN_TOP_MID, 0, 54);
-    lv_obj_set_style_bg_color(box_d_sec, lv_color_hex(0x0C2218), 0);
-    lv_obj_set_style_border_color(box_d_sec, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_set_style_radius(box_d_sec, 6, 0);
-    lv_obj_set_style_pad_all(box_d_sec, 2, 0);
+    s_lbl_drive_delta_val = lv_label_create(c_ddt);
+    lv_label_set_text(s_lbl_drive_delta_val, "DIFF: 0.2 km/h  [ OK ]");
+    lv_obj_set_style_text_font(s_lbl_drive_delta_val, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_delta_val, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_drive_delta_val, LV_ALIGN_TOP_LEFT, 0, 18);
 
-    lv_obj_t *lbl_dstitle = lv_label_create(box_d_sec);
+    lv_obj_t *lbl_dstitle = lv_label_create(c_ddt);
     lv_label_set_text(lbl_dstitle, "SAFETY INTERLOCKS");
     lv_obj_set_style_text_font(lbl_dstitle, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(lbl_dstitle, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_dstitle, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_align(lbl_dstitle, LV_ALIGN_TOP_LEFT, 0, 64);
 
-    lv_obj_t *lbl_d_allclr = lv_label_create(box_d_sec);
-    lv_label_set_text(lbl_d_allclr, "ALL CLEAR");
-    lv_obj_set_style_text_font(lbl_d_allclr, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(lbl_d_allclr, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_d_allclr, LV_ALIGN_CENTER, 0, 4);
+    s_lbl_drive_interlock_val = lv_label_create(c_ddt);
+    lv_label_set_text(s_lbl_drive_interlock_val, "ALL CLEAR");
+    lv_obj_set_style_text_font(s_lbl_drive_interlock_val, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_interlock_val, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_drive_interlock_val, LV_ALIGN_TOP_LEFT, 0, 84);
 
-    lv_obj_t *lbl_d_pr = lv_label_create(box_d_sec);
-    lv_label_set_text(lbl_d_pr, "[ BRAKE PRIORITY OK ]");
-    lv_obj_set_style_text_font(lbl_d_pr, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_d_pr, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_d_pr, LV_ALIGN_BOTTOM_MID, 0, -2);
+    s_lbl_drive_brake_priority = lv_label_create(c_ddt);
+    lv_label_set_text(s_lbl_drive_brake_priority, "[ BRAKE PRIORITY OK ]");
+    lv_obj_set_style_text_font(s_lbl_drive_brake_priority, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_brake_priority, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_drive_brake_priority, LV_ALIGN_TOP_LEFT, 0, 116);
 
-    lv_obj_t *lbl_dv = lv_label_create(c_ddt);
-    lv_label_set_text(lbl_dv, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
-    lv_obj_set_style_text_font(lbl_dv, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_dv, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_dv, LV_ALIGN_TOP_LEFT, 0, 176);
+    s_lbl_drive_volt = lv_label_create(c_ddt);
+    lv_label_set_text(s_lbl_drive_volt, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
+    lv_obj_set_style_text_font(s_lbl_drive_volt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_volt, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(s_lbl_drive_volt, LV_ALIGN_TOP_LEFT, 0, 168);
 
     s_lbl_drive_dtc = lv_label_create(c_ddt);
     lv_label_set_text(s_lbl_drive_dtc, "DTC DIAGNOSIS: ALL CLEAR (0x0000)");
     lv_obj_set_style_text_font(s_lbl_drive_dtc, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_dtc, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_drive_dtc, LV_ALIGN_TOP_LEFT, 0, 202);
+    lv_obj_align(s_lbl_drive_dtc, LV_ALIGN_TOP_LEFT, 0, 196);
 
-    lv_obj_t *lbl_dw = lv_label_create(c_ddt);
-    lv_label_set_text(lbl_dw, "WATCHDOG: LAST SEEN 10ms AGO");
-    lv_obj_set_style_text_font(lbl_dw, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_dw, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
-    lv_obj_align(lbl_dw, LV_ALIGN_TOP_LEFT, 0, 228);
+    s_lbl_drive_watchdog = lv_label_create(c_ddt);
+    lv_label_set_text(s_lbl_drive_watchdog, "WATCHDOG: LAST SEEN 10ms AGO");
+    lv_obj_set_style_text_font(s_lbl_drive_watchdog, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_watchdog, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_drive_watchdog, LV_ALIGN_TOP_LEFT, 0, 224);
 
-    lv_obj_t *lbl_dh = lv_label_create(c_ddt);
-    lv_label_set_text(lbl_dh, "[ OK ] MTR HEALTHY (50 Hz)");
-    lv_obj_set_style_text_font(lbl_dh, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_dh, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_dh, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_drive_health = lv_label_create(c_ddt);
+    lv_label_set_text(s_lbl_drive_health, "[ OK ] MTR HEALTHY (50 Hz)");
+    lv_obj_set_style_text_font(s_lbl_drive_health, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_health, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_drive_health, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Bottom Action Button
-    lv_obj_t *btn_expand_d = lv_button_create(s_screens[WIN_DRIVE]);
-    lv_obj_set_size(btn_expand_d, 784, 54);
-    lv_obj_align(btn_expand_d, LV_ALIGN_BOTTOM_MID, 0, -6);
-    lv_obj_set_style_bg_color(btn_expand_d, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
-    lv_obj_set_style_border_color(btn_expand_d, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
-    lv_obj_set_style_border_width(btn_expand_d, 2, 0);
-    lv_obj_set_style_radius(btn_expand_d, 8, 0);
-    lv_obj_t *lbl_bexp_d = lv_label_create(btn_expand_d);
-    lv_label_set_text(lbl_bexp_d, "VIEW 15-SECOND FULL DRIVE SPEED SCOPE (OR SWIPE DOWN) >");
-    lv_obj_set_style_text_font(lbl_bexp_d, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(lbl_bexp_d, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_bexp_d, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_add_event_cb(btn_expand_d, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE_PLOT_15S);
+    // Bottom Command Signal Bit View Deck (48px)
+    s_card_drive_bitview = lv_obj_create(s_screens[WIN_DRIVE]);
+    lv_obj_set_size(s_card_drive_bitview, 784, 48);
+    lv_obj_align(s_card_drive_bitview, LV_ALIGN_TOP_MID, 0, 424);
+    lv_obj_set_style_bg_color(s_card_drive_bitview, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(s_card_drive_bitview, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_set_style_border_width(s_card_drive_bitview, 1, 0);
+    lv_obj_set_style_radius(s_card_drive_bitview, 6, 0);
+    lv_obj_set_style_pad_all(s_card_drive_bitview, 0, 0);
+
+    s_lbl_drive_bitview = lv_label_create(s_card_drive_bitview);
+    lv_label_set_text(s_lbl_drive_bitview, "MTR CMD [0x204]  RAW: 00 00 00 00 00  •  GEAR: D  EN: 1  •  [TOUCH PLOT / SWIPE DOWN]");
+    lv_obj_set_style_text_font(s_lbl_drive_bitview, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_drive_bitview, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(s_lbl_drive_bitview, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_event_cb(s_card_drive_bitview, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE_PLOT_15S);
 
     // =========================================================================
     // Window 4: 4. BUS & NODES - Diagnostics & Watchdogs
@@ -1253,26 +1246,32 @@ void ui_manager_init(void) {
     const char *node_names[5] = {"SYS (0x011)", "RT (0x210)", "MTR (0x206)", "SES (0x201)", "SEB (0x721)"};
     const int w5_w = 152;
     for (int i = 0; i < 5; i++) {
-        lv_obj_t *c_node = lv_obj_create(s_screens[WIN_BUS_SAFETY]);
-        lv_obj_set_size(c_node, w5_w, 200);
-        lv_obj_align(c_node, LV_ALIGN_TOP_LEFT, 8 + i * (w5_w + 6), 268);
-        lv_obj_set_style_bg_color(c_node, lv_color_hex(UI_COLOR_SURFACE), 0);
-        lv_obj_set_style_border_color(c_node, lv_color_hex(UI_COLOR_BORDER), 0);
-        lv_obj_set_style_radius(c_node, 8, 0);
+        s_card_bus_nodes[i] = lv_obj_create(s_screens[WIN_BUS_SAFETY]);
+        lv_obj_set_size(s_card_bus_nodes[i], w5_w, 200);
+        lv_obj_align(s_card_bus_nodes[i], LV_ALIGN_TOP_LEFT, 8 + i * (w5_w + 6), 268);
+        lv_obj_set_style_bg_color(s_card_bus_nodes[i], lv_color_hex(UI_COLOR_SURFACE), 0);
+        lv_obj_set_style_border_color(s_card_bus_nodes[i], lv_color_hex(UI_COLOR_BORDER), 0);
+        lv_obj_set_style_radius(s_card_bus_nodes[i], 8, 0);
 
-        lv_obj_t *lbl_n = lv_label_create(c_node);
+        lv_obj_t *lbl_n = lv_label_create(s_card_bus_nodes[i]);
         lv_label_set_text(lbl_n, node_names[i]);
         lv_obj_set_style_text_font(lbl_n, &lv_font_montserrat_14, 0);
         lv_obj_align(lbl_n, LV_ALIGN_TOP_MID, 0, 4);
         lv_obj_set_style_text_color(lbl_n, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
 
-        s_lbl_bus_node_rates[i] = lv_label_create(c_node);
-        lv_label_set_text(s_lbl_bus_node_rates[i], "100 Hz");
+        s_lbl_bus_node_rates[i] = lv_label_create(s_card_bus_nodes[i]);
+        lv_label_set_text(s_lbl_bus_node_rates[i], "0 Hz");
         lv_obj_set_style_text_font(s_lbl_bus_node_rates[i], &lv_font_montserrat_24, 0);
-        lv_obj_align(s_lbl_bus_node_rates[i], LV_ALIGN_CENTER, 0, -10);
+        lv_obj_align(s_lbl_bus_node_rates[i], LV_ALIGN_CENTER, 0, -18);
         lv_obj_set_style_text_color(s_lbl_bus_node_rates[i], lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
 
-        s_lbl_bus_node_states[i] = lv_label_create(c_node);
+        s_lbl_bus_node_silent[i] = lv_label_create(s_card_bus_nodes[i]);
+        lv_label_set_text(s_lbl_bus_node_silent[i], "0 ms ago");
+        lv_obj_set_style_text_font(s_lbl_bus_node_silent[i], &lv_font_montserrat_12, 0);
+        lv_obj_align(s_lbl_bus_node_silent[i], LV_ALIGN_CENTER, 0, 10);
+        lv_obj_set_style_text_color(s_lbl_bus_node_silent[i], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+
+        s_lbl_bus_node_states[i] = lv_label_create(s_card_bus_nodes[i]);
         lv_label_set_text(s_lbl_bus_node_states[i], "[ OK ] ACTIVE");
         lv_obj_set_style_text_font(s_lbl_bus_node_states[i], &lv_font_montserrat_14, 0);
         lv_obj_align(s_lbl_bus_node_states[i], LV_ALIGN_BOTTOM_MID, 0, -8);
@@ -1280,20 +1279,21 @@ void ui_manager_init(void) {
     }
 
     // =========================================================================
-    // Window 5: 15-Second High-Resolution Steer Scope
+    // Window 5: 15-Second High-Resolution Steer Scope (Maximized 426px Height)
     // =========================================================================
     s_screens[WIN_STEER_PLOT_15S] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screens[WIN_STEER_PLOT_15S], lv_color_hex(UI_COLOR_BG), 0);
 
     lv_obj_t *hdr_s15 = lv_obj_create(s_screens[WIN_STEER_PLOT_15S]);
-    lv_obj_set_size(hdr_s15, 784, 48);
-    lv_obj_align(hdr_s15, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_set_size(hdr_s15, 784, 42);
+    lv_obj_align(hdr_s15, LV_ALIGN_TOP_MID, 0, 4);
     lv_obj_set_style_bg_color(hdr_s15, lv_color_hex(UI_COLOR_SURFACE), 0);
     lv_obj_set_style_border_color(hdr_s15, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_radius(hdr_s15, 8, 0);
+    lv_obj_set_style_radius(hdr_s15, 6, 0);
+    lv_obj_set_style_pad_all(hdr_s15, 0, 0);
 
     lv_obj_t *btn_back_s = lv_button_create(hdr_s15);
-    lv_obj_set_size(btn_back_s, 140, 36);
+    lv_obj_set_size(btn_back_s, 110, 32);
     lv_obj_align(btn_back_s, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_set_style_bg_color(btn_back_s, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
     lv_obj_t *lbl_bs = lv_label_create(btn_back_s);
@@ -1303,30 +1303,14 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(btn_back_s, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_STEER);
 
     s_lbl_steer_15s_hdr = lv_label_create(hdr_s15);
-    lv_label_set_text(s_lbl_steer_15s_hdr, "STEER 15s SCOPE  •  CMD: +15.0°  |  ACT: +14.7°  |  Δ: 0.3°  |  Torque: +0.2 Nm");
-    lv_obj_set_style_text_font(s_lbl_steer_15s_hdr, &lv_font_montserrat_14, 0);
+    lv_label_set_text(s_lbl_steer_15s_hdr, "STEER 15s SCOPE  •  CMD: +15.0 deg  |  ACT: +14.7 deg  |  DIFF: 0.3 deg  |  Torque: +0.2 Nm");
+    lv_obj_set_style_text_font(s_lbl_steer_15s_hdr, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_15s_hdr, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_steer_15s_hdr, LV_ALIGN_LEFT_MID, 160, 0);
+    lv_obj_align(s_lbl_steer_15s_hdr, LV_ALIGN_LEFT_MID, 122, 0);
 
-    s_chart_steer_15s = lv_chart_create(s_screens[WIN_STEER_PLOT_15S]);
-    lv_obj_set_size(s_chart_steer_15s, 784, 360);
-    lv_obj_align(s_chart_steer_15s, LV_ALIGN_TOP_MID, 0, 60);
-    lv_chart_set_type(s_chart_steer_15s, LV_CHART_TYPE_LINE);
-    lv_chart_set_point_count(s_chart_steer_15s, PLOT_POINTS_15S);
-    lv_chart_set_update_mode(s_chart_steer_15s, LV_CHART_UPDATE_MODE_SHIFT);
-    lv_chart_set_range(s_chart_steer_15s, LV_CHART_AXIS_PRIMARY_Y, -45, 45);
-    lv_obj_set_style_bg_color(s_chart_steer_15s, lv_color_hex(UI_COLOR_BG), 0);
-    lv_obj_set_style_border_color(s_chart_steer_15s, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_radius(s_chart_steer_15s, 8, 0);
-    lv_obj_set_style_size(s_chart_steer_15s, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_line_width(s_chart_steer_15s, 2, LV_PART_ITEMS);
-
-    s_ser_steer_15s_cmd = lv_chart_add_series(s_chart_steer_15s, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
-    s_ser_steer_15s_act = lv_chart_add_series(s_chart_steer_15s, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
-
-    lv_obj_t *btn_pause_s15 = lv_button_create(s_screens[WIN_STEER_PLOT_15S]);
-    lv_obj_set_size(btn_pause_s15, 180, 44);
-    lv_obj_align(btn_pause_s15, LV_ALIGN_BOTTOM_RIGHT, -8, -6);
+    lv_obj_t *btn_pause_s15 = lv_button_create(hdr_s15);
+    lv_obj_set_size(btn_pause_s15, 100, 32);
+    lv_obj_align(btn_pause_s15, LV_ALIGN_RIGHT_MID, -4, 0);
     lv_obj_set_style_bg_color(btn_pause_s15, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
     lv_obj_t *lbl_ps15 = lv_label_create(btn_pause_s15);
     lv_label_set_text(lbl_ps15, "|| FREEZE");
@@ -1334,21 +1318,84 @@ void ui_manager_init(void) {
     lv_obj_align(lbl_ps15, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_event_cb(btn_pause_s15, btn_pause_event_cb, LV_EVENT_CLICKED, NULL);
 
+    s_chart_steer_15s = lv_chart_create(s_screens[WIN_STEER_PLOT_15S]);
+    lv_obj_set_size(s_chart_steer_15s, 784, 426);
+    lv_obj_align(s_chart_steer_15s, LV_ALIGN_TOP_MID, 0, 50);
+    lv_chart_set_type(s_chart_steer_15s, LV_CHART_TYPE_LINE);
+    lv_chart_set_point_count(s_chart_steer_15s, PLOT_POINTS_15S);
+    lv_chart_set_update_mode(s_chart_steer_15s, LV_CHART_UPDATE_MODE_SHIFT);
+    lv_chart_set_range(s_chart_steer_15s, LV_CHART_AXIS_PRIMARY_Y, -45, 45);
+    lv_chart_set_range(s_chart_steer_15s, LV_CHART_AXIS_SECONDARY_Y, -10, 10);
+    lv_chart_set_div_line_count(s_chart_steer_15s, 5, 7);
+    lv_obj_set_style_bg_color(s_chart_steer_15s, lv_color_hex(0x080D14), 0);
+    lv_obj_set_style_border_color(s_chart_steer_15s, lv_color_hex(0x1E3A50), 0);
+    lv_obj_set_style_line_color(s_chart_steer_15s, lv_color_hex(0x152230), LV_PART_MAIN);
+    lv_obj_set_style_radius(s_chart_steer_15s, 6, 0);
+    lv_obj_set_style_size(s_chart_steer_15s, 0, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_line_width(s_chart_steer_15s, 2, LV_PART_ITEMS);
+
+    s_ser_steer_15s_cmd = lv_chart_add_series(s_chart_steer_15s, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
+    s_ser_steer_15s_act = lv_chart_add_series(s_chart_steer_15s, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
+    s_ser_steer_15s_aux = lv_chart_add_series(s_chart_steer_15s, lv_color_hex(UI_COLOR_STATE_WARN), LV_CHART_AXIS_SECONDARY_Y);
+
+    lv_obj_t *leg_s = lv_label_create(s_chart_steer_15s);
+    lv_label_set_text(leg_s, "[CYAN: CMD]    [GREEN: ACT]    [AMBER: TORQUE (+/-10 Nm)]");
+    lv_obj_set_style_text_font(leg_s, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(leg_s, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(leg_s, LV_ALIGN_TOP_MID, 0, 6);
+
+    lv_obj_t *lbl_s_yt = lv_label_create(s_chart_steer_15s);
+    lv_label_set_text(lbl_s_yt, "+45 deg");
+    lv_obj_set_style_text_font(lbl_s_yt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_s_yt, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(lbl_s_yt, LV_ALIGN_TOP_LEFT, 6, 6);
+
+    lv_obj_t *lbl_s_ym = lv_label_create(s_chart_steer_15s);
+    lv_label_set_text(lbl_s_ym, "0 deg");
+    lv_obj_set_style_text_font(lbl_s_ym, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_s_ym, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_s_ym, LV_ALIGN_LEFT_MID, 6, 0);
+
+    lv_obj_t *lbl_s_yb = lv_label_create(s_chart_steer_15s);
+    lv_label_set_text(lbl_s_yb, "-45 deg");
+    lv_obj_set_style_text_font(lbl_s_yb, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_s_yb, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(lbl_s_yb, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+
+    lv_obj_t *lbl_s_tt = lv_label_create(s_chart_steer_15s);
+    lv_label_set_text(lbl_s_tt, "+10 Nm");
+    lv_obj_set_style_text_font(lbl_s_tt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_s_tt, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+    lv_obj_align(lbl_s_tt, LV_ALIGN_TOP_RIGHT, -6, 6);
+
+    lv_obj_t *lbl_s_tb = lv_label_create(s_chart_steer_15s);
+    lv_label_set_text(lbl_s_tb, "-10 Nm");
+    lv_obj_set_style_text_font(lbl_s_tb, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_s_tb, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+    lv_obj_align(lbl_s_tb, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
+
+    lv_obj_t *lbl_s_time = lv_label_create(s_chart_steer_15s);
+    lv_label_set_text(lbl_s_time, "-15s                  -10s                  -5s                  NOW");
+    lv_obj_set_style_text_font(lbl_s_time, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_s_time, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_align(lbl_s_time, LV_ALIGN_BOTTOM_MID, 0, -6);
+
     // =========================================================================
-    // Window 6: 15-Second High-Resolution Brake Scope
+    // Window 6: 15-Second High-Resolution Brake Scope (Maximized 426px Height)
     // =========================================================================
     s_screens[WIN_BRAKE_PLOT_15S] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screens[WIN_BRAKE_PLOT_15S], lv_color_hex(UI_COLOR_BG), 0);
 
     lv_obj_t *hdr_b15 = lv_obj_create(s_screens[WIN_BRAKE_PLOT_15S]);
-    lv_obj_set_size(hdr_b15, 784, 48);
-    lv_obj_align(hdr_b15, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_set_size(hdr_b15, 784, 42);
+    lv_obj_align(hdr_b15, LV_ALIGN_TOP_MID, 0, 4);
     lv_obj_set_style_bg_color(hdr_b15, lv_color_hex(UI_COLOR_SURFACE), 0);
     lv_obj_set_style_border_color(hdr_b15, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_radius(hdr_b15, 8, 0);
+    lv_obj_set_style_radius(hdr_b15, 6, 0);
+    lv_obj_set_style_pad_all(hdr_b15, 0, 0);
 
     lv_obj_t *btn_back_b = lv_button_create(hdr_b15);
-    lv_obj_set_size(btn_back_b, 140, 36);
+    lv_obj_set_size(btn_back_b, 110, 32);
     lv_obj_align(btn_back_b, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_set_style_bg_color(btn_back_b, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
     lv_obj_t *lbl_bb = lv_label_create(btn_back_b);
@@ -1358,30 +1405,14 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(btn_back_b, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_BRAKE);
 
     s_lbl_brake_15s_hdr = lv_label_create(hdr_b15);
-    lv_label_set_text(s_lbl_brake_15s_hdr, "BRAKE 15s SCOPE  •  CMD: 450 kPa  |  ACT: 442 kPa  |  Δ: -8 kPa  |  Stroke: 17.8mm");
-    lv_obj_set_style_text_font(s_lbl_brake_15s_hdr, &lv_font_montserrat_14, 0);
+    lv_label_set_text(s_lbl_brake_15s_hdr, "BRAKE 15s SCOPE  •  CMD: 450 kPa  |  ACT: 442 kPa  |  DIFF: -8 kPa  |  Stroke: 17.8mm");
+    lv_obj_set_style_text_font(s_lbl_brake_15s_hdr, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_brake_15s_hdr, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_brake_15s_hdr, LV_ALIGN_LEFT_MID, 160, 0);
+    lv_obj_align(s_lbl_brake_15s_hdr, LV_ALIGN_LEFT_MID, 122, 0);
 
-    s_chart_brake_15s = lv_chart_create(s_screens[WIN_BRAKE_PLOT_15S]);
-    lv_obj_set_size(s_chart_brake_15s, 784, 360);
-    lv_obj_align(s_chart_brake_15s, LV_ALIGN_TOP_MID, 0, 60);
-    lv_chart_set_type(s_chart_brake_15s, LV_CHART_TYPE_LINE);
-    lv_chart_set_point_count(s_chart_brake_15s, PLOT_POINTS_15S);
-    lv_chart_set_update_mode(s_chart_brake_15s, LV_CHART_UPDATE_MODE_SHIFT);
-    lv_chart_set_range(s_chart_brake_15s, LV_CHART_AXIS_PRIMARY_Y, 0, 1200);
-    lv_obj_set_style_bg_color(s_chart_brake_15s, lv_color_hex(UI_COLOR_BG), 0);
-    lv_obj_set_style_border_color(s_chart_brake_15s, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_radius(s_chart_brake_15s, 8, 0);
-    lv_obj_set_style_size(s_chart_brake_15s, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_line_width(s_chart_brake_15s, 2, LV_PART_ITEMS);
-
-    s_ser_brake_15s_cmd = lv_chart_add_series(s_chart_brake_15s, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
-    s_ser_brake_15s_act = lv_chart_add_series(s_chart_brake_15s, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
-
-    lv_obj_t *btn_pause_b15 = lv_button_create(s_screens[WIN_BRAKE_PLOT_15S]);
-    lv_obj_set_size(btn_pause_b15, 180, 44);
-    lv_obj_align(btn_pause_b15, LV_ALIGN_BOTTOM_RIGHT, -8, -6);
+    lv_obj_t *btn_pause_b15 = lv_button_create(hdr_b15);
+    lv_obj_set_size(btn_pause_b15, 100, 32);
+    lv_obj_align(btn_pause_b15, LV_ALIGN_RIGHT_MID, -4, 0);
     lv_obj_set_style_bg_color(btn_pause_b15, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
     lv_obj_t *lbl_pb15 = lv_label_create(btn_pause_b15);
     lv_label_set_text(lbl_pb15, "|| FREEZE");
@@ -1389,21 +1420,84 @@ void ui_manager_init(void) {
     lv_obj_align(lbl_pb15, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_event_cb(btn_pause_b15, btn_pause_event_cb, LV_EVENT_CLICKED, NULL);
 
+    s_chart_brake_15s = lv_chart_create(s_screens[WIN_BRAKE_PLOT_15S]);
+    lv_obj_set_size(s_chart_brake_15s, 784, 426);
+    lv_obj_align(s_chart_brake_15s, LV_ALIGN_TOP_MID, 0, 50);
+    lv_chart_set_type(s_chart_brake_15s, LV_CHART_TYPE_LINE);
+    lv_chart_set_point_count(s_chart_brake_15s, PLOT_POINTS_15S);
+    lv_chart_set_update_mode(s_chart_brake_15s, LV_CHART_UPDATE_MODE_SHIFT);
+    lv_chart_set_range(s_chart_brake_15s, LV_CHART_AXIS_PRIMARY_Y, 0, 1200);
+    lv_chart_set_range(s_chart_brake_15s, LV_CHART_AXIS_SECONDARY_Y, 0, 25);
+    lv_chart_set_div_line_count(s_chart_brake_15s, 5, 7);
+    lv_obj_set_style_bg_color(s_chart_brake_15s, lv_color_hex(0x080D14), 0);
+    lv_obj_set_style_border_color(s_chart_brake_15s, lv_color_hex(0x1E3A50), 0);
+    lv_obj_set_style_line_color(s_chart_brake_15s, lv_color_hex(0x152230), LV_PART_MAIN);
+    lv_obj_set_style_radius(s_chart_brake_15s, 6, 0);
+    lv_obj_set_style_size(s_chart_brake_15s, 0, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_line_width(s_chart_brake_15s, 2, LV_PART_ITEMS);
+
+    s_ser_brake_15s_cmd = lv_chart_add_series(s_chart_brake_15s, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
+    s_ser_brake_15s_act = lv_chart_add_series(s_chart_brake_15s, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
+    s_ser_brake_15s_aux = lv_chart_add_series(s_chart_brake_15s, lv_color_hex(0xA855F7), LV_CHART_AXIS_SECONDARY_Y);
+
+    lv_obj_t *leg_b = lv_label_create(s_chart_brake_15s);
+    lv_label_set_text(leg_b, "[CYAN: CMD]    [GREEN: ACT]    [PURPLE: STROKE (0-25 mm)]");
+    lv_obj_set_style_text_font(leg_b, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(leg_b, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(leg_b, LV_ALIGN_TOP_MID, 0, 6);
+
+    lv_obj_t *lbl_b_yt = lv_label_create(s_chart_brake_15s);
+    lv_label_set_text(lbl_b_yt, "1200 kPa");
+    lv_obj_set_style_text_font(lbl_b_yt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_b_yt, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(lbl_b_yt, LV_ALIGN_TOP_LEFT, 6, 6);
+
+    lv_obj_t *lbl_b_ym = lv_label_create(s_chart_brake_15s);
+    lv_label_set_text(lbl_b_ym, "600 kPa");
+    lv_obj_set_style_text_font(lbl_b_ym, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_b_ym, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_b_ym, LV_ALIGN_LEFT_MID, 6, 0);
+
+    lv_obj_t *lbl_b_yb = lv_label_create(s_chart_brake_15s);
+    lv_label_set_text(lbl_b_yb, "0 kPa");
+    lv_obj_set_style_text_font(lbl_b_yb, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_b_yb, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(lbl_b_yb, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+
+    lv_obj_t *lbl_b_stk_t = lv_label_create(s_chart_brake_15s);
+    lv_label_set_text(lbl_b_stk_t, "25 mm");
+    lv_obj_set_style_text_font(lbl_b_stk_t, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_b_stk_t, lv_color_hex(0xA855F7), 0);
+    lv_obj_align(lbl_b_stk_t, LV_ALIGN_TOP_RIGHT, -6, 6);
+
+    lv_obj_t *lbl_b_stk_b = lv_label_create(s_chart_brake_15s);
+    lv_label_set_text(lbl_b_stk_b, "0 mm");
+    lv_obj_set_style_text_font(lbl_b_stk_b, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_b_stk_b, lv_color_hex(0xA855F7), 0);
+    lv_obj_align(lbl_b_stk_b, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
+
+    lv_obj_t *lbl_b_time = lv_label_create(s_chart_brake_15s);
+    lv_label_set_text(lbl_b_time, "-15s                  -10s                  -5s                  NOW");
+    lv_obj_set_style_text_font(lbl_b_time, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_b_time, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_align(lbl_b_time, LV_ALIGN_BOTTOM_MID, 0, -6);
+
     // =========================================================================
-    // Window 7: 15-Second High-Resolution Drive Scope
+    // Window 7: 15-Second High-Resolution Drive Scope (Maximized 426px Height)
     // =========================================================================
     s_screens[WIN_DRIVE_PLOT_15S] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screens[WIN_DRIVE_PLOT_15S], lv_color_hex(UI_COLOR_BG), 0);
 
     lv_obj_t *hdr_d15 = lv_obj_create(s_screens[WIN_DRIVE_PLOT_15S]);
-    lv_obj_set_size(hdr_d15, 784, 48);
-    lv_obj_align(hdr_d15, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_set_size(hdr_d15, 784, 42);
+    lv_obj_align(hdr_d15, LV_ALIGN_TOP_MID, 0, 4);
     lv_obj_set_style_bg_color(hdr_d15, lv_color_hex(UI_COLOR_SURFACE), 0);
     lv_obj_set_style_border_color(hdr_d15, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_radius(hdr_d15, 8, 0);
+    lv_obj_set_style_radius(hdr_d15, 6, 0);
+    lv_obj_set_style_pad_all(hdr_d15, 0, 0);
 
     lv_obj_t *btn_back_d = lv_button_create(hdr_d15);
-    lv_obj_set_size(btn_back_d, 140, 36);
+    lv_obj_set_size(btn_back_d, 110, 32);
     lv_obj_align(btn_back_d, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_set_style_bg_color(btn_back_d, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
     lv_obj_t *lbl_bd = lv_label_create(btn_back_d);
@@ -1413,36 +1507,82 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(btn_back_d, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE);
 
     s_lbl_drive_15s_hdr = lv_label_create(hdr_d15);
-    lv_label_set_text(s_lbl_drive_15s_hdr, "DRIVE 15s SCOPE  •  CMD: 15.0 km/h  |  ACT: 14.8 km/h  |  Δ: 0.2 km/h  |  1620 RPM");
-    lv_obj_set_style_text_font(s_lbl_drive_15s_hdr, &lv_font_montserrat_14, 0);
+    lv_label_set_text(s_lbl_drive_15s_hdr, "DRIVE 15s SCOPE  •  CMD: 15.0 km/h  |  ACT: 14.8 km/h  |  DIFF: 0.2 km/h  |  GEAR: D");
+    lv_obj_set_style_text_font(s_lbl_drive_15s_hdr, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_15s_hdr, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(s_lbl_drive_15s_hdr, LV_ALIGN_LEFT_MID, 160, 0);
+    lv_obj_align(s_lbl_drive_15s_hdr, LV_ALIGN_LEFT_MID, 122, 0);
 
-    s_chart_drive_15s = lv_chart_create(s_screens[WIN_DRIVE_PLOT_15S]);
-    lv_obj_set_size(s_chart_drive_15s, 784, 360);
-    lv_obj_align(s_chart_drive_15s, LV_ALIGN_TOP_MID, 0, 60);
-    lv_chart_set_type(s_chart_drive_15s, LV_CHART_TYPE_LINE);
-    lv_chart_set_point_count(s_chart_drive_15s, PLOT_POINTS_15S);
-    lv_chart_set_update_mode(s_chart_drive_15s, LV_CHART_UPDATE_MODE_SHIFT);
-    lv_chart_set_range(s_chart_drive_15s, LV_CHART_AXIS_PRIMARY_Y, 0, 35);
-    lv_obj_set_style_bg_color(s_chart_drive_15s, lv_color_hex(UI_COLOR_BG), 0);
-    lv_obj_set_style_border_color(s_chart_drive_15s, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_radius(s_chart_drive_15s, 8, 0);
-    lv_obj_set_style_size(s_chart_drive_15s, 0, LV_PART_INDICATOR);
-    lv_obj_set_style_line_width(s_chart_drive_15s, 2, LV_PART_ITEMS);
-
-    s_ser_drive_15s_cmd = lv_chart_add_series(s_chart_drive_15s, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
-    s_ser_drive_15s_act = lv_chart_add_series(s_chart_drive_15s, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
-
-    lv_obj_t *btn_pause_d15 = lv_button_create(s_screens[WIN_DRIVE_PLOT_15S]);
-    lv_obj_set_size(btn_pause_d15, 180, 44);
-    lv_obj_align(btn_pause_d15, LV_ALIGN_BOTTOM_RIGHT, -8, -6);
+    lv_obj_t *btn_pause_d15 = lv_button_create(hdr_d15);
+    lv_obj_set_size(btn_pause_d15, 100, 32);
+    lv_obj_align(btn_pause_d15, LV_ALIGN_RIGHT_MID, -4, 0);
     lv_obj_set_style_bg_color(btn_pause_d15, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
     lv_obj_t *lbl_pd15 = lv_label_create(btn_pause_d15);
     lv_label_set_text(lbl_pd15, "|| FREEZE");
     lv_obj_set_style_text_font(lbl_pd15, &lv_font_montserrat_12, 0);
     lv_obj_align(lbl_pd15, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_event_cb(btn_pause_d15, btn_pause_event_cb, LV_EVENT_CLICKED, NULL);
+
+    s_chart_drive_15s = lv_chart_create(s_screens[WIN_DRIVE_PLOT_15S]);
+    lv_obj_set_size(s_chart_drive_15s, 784, 426);
+    lv_obj_align(s_chart_drive_15s, LV_ALIGN_TOP_MID, 0, 50);
+    lv_chart_set_type(s_chart_drive_15s, LV_CHART_TYPE_LINE);
+    lv_chart_set_point_count(s_chart_drive_15s, PLOT_POINTS_15S);
+    lv_chart_set_update_mode(s_chart_drive_15s, LV_CHART_UPDATE_MODE_SHIFT);
+    lv_chart_set_range(s_chart_drive_15s, LV_CHART_AXIS_PRIMARY_Y, 0, 35);
+    lv_chart_set_range(s_chart_drive_15s, LV_CHART_AXIS_SECONDARY_Y, 0, 5);
+    lv_chart_set_div_line_count(s_chart_drive_15s, 5, 7);
+    lv_obj_set_style_bg_color(s_chart_drive_15s, lv_color_hex(0x080D14), 0);
+    lv_obj_set_style_border_color(s_chart_drive_15s, lv_color_hex(0x1E3A50), 0);
+    lv_obj_set_style_line_color(s_chart_drive_15s, lv_color_hex(0x152230), LV_PART_MAIN);
+    lv_obj_set_style_radius(s_chart_drive_15s, 6, 0);
+    lv_obj_set_style_size(s_chart_drive_15s, 0, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_line_width(s_chart_drive_15s, 2, LV_PART_ITEMS);
+
+    s_ser_drive_15s_cmd = lv_chart_add_series(s_chart_drive_15s, lv_color_hex(UI_COLOR_ACCENT_CMD), LV_CHART_AXIS_PRIMARY_Y);
+    s_ser_drive_15s_act = lv_chart_add_series(s_chart_drive_15s, lv_color_hex(UI_COLOR_ACCENT_ACT), LV_CHART_AXIS_PRIMARY_Y);
+    s_ser_drive_15s_aux = lv_chart_add_series(s_chart_drive_15s, lv_color_hex(UI_COLOR_STATE_WARN), LV_CHART_AXIS_SECONDARY_Y);
+
+    lv_obj_t *leg_d = lv_label_create(s_chart_drive_15s);
+    lv_label_set_text(leg_d, "[CYAN: CMD]    [GREEN: ACT]    [AMBER: SPEED DIFF (0-5 km/h)]");
+    lv_obj_set_style_text_font(leg_d, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(leg_d, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(leg_d, LV_ALIGN_TOP_MID, 0, 6);
+
+    lv_obj_t *lbl_d_yt = lv_label_create(s_chart_drive_15s);
+    lv_label_set_text(lbl_d_yt, "35 km/h");
+    lv_obj_set_style_text_font(lbl_d_yt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_d_yt, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(lbl_d_yt, LV_ALIGN_TOP_LEFT, 6, 6);
+
+    lv_obj_t *lbl_d_ym = lv_label_create(s_chart_drive_15s);
+    lv_label_set_text(lbl_d_ym, "17 km/h");
+    lv_obj_set_style_text_font(lbl_d_ym, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_d_ym, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(lbl_d_ym, LV_ALIGN_LEFT_MID, 6, 0);
+
+    lv_obj_t *lbl_d_yb = lv_label_create(s_chart_drive_15s);
+    lv_label_set_text(lbl_d_yb, "0 km/h");
+    lv_obj_set_style_text_font(lbl_d_yb, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_d_yb, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+    lv_obj_align(lbl_d_yb, LV_ALIGN_BOTTOM_LEFT, 6, -6);
+
+    lv_obj_t *lbl_d_diff_t = lv_label_create(s_chart_drive_15s);
+    lv_label_set_text(lbl_d_diff_t, "5 km/h");
+    lv_obj_set_style_text_font(lbl_d_diff_t, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_d_diff_t, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+    lv_obj_align(lbl_d_diff_t, LV_ALIGN_TOP_RIGHT, -6, 6);
+
+    lv_obj_t *lbl_d_diff_b = lv_label_create(s_chart_drive_15s);
+    lv_label_set_text(lbl_d_diff_b, "0 km/h");
+    lv_obj_set_style_text_font(lbl_d_diff_b, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_d_diff_b, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+    lv_obj_align(lbl_d_diff_b, LV_ALIGN_BOTTOM_RIGHT, -6, -6);
+
+    lv_obj_t *lbl_d_time = lv_label_create(s_chart_drive_15s);
+    lv_label_set_text(lbl_d_time, "-15s                  -10s                  -5s                  NOW");
+    lv_obj_set_style_text_font(lbl_d_time, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(lbl_d_time, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_align(lbl_d_time, LV_ALIGN_BOTTOM_MID, 0, -6);
 
     // Initial load: Dashboard
     lv_screen_load(s_screens[WIN_DASHBOARD]);
@@ -1461,7 +1601,7 @@ inspector_window_t ui_manager_get_current_window(void) {
 
 void ui_manager_update(const low_bus_telemetry_t *t) {
     if (!t) return;
-    char buf[80];
+    char buf[256];
 
     // Push data to in-box 5-second charts & 15-second charts if not paused
     if (!s_scope_paused) {
@@ -1487,14 +1627,23 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         if (s_chart_steer_15s && s_ser_steer_15s_cmd && s_ser_steer_15s_act) {
             lv_chart_set_next_value(s_chart_steer_15s, s_ser_steer_15s_cmd, (int32_t)t->steer_cmd_deg);
             lv_chart_set_next_value(s_chart_steer_15s, s_ser_steer_15s_act, (int32_t)t->steer_act_deg);
+            if (s_ser_steer_15s_aux) {
+                lv_chart_set_next_value(s_chart_steer_15s, s_ser_steer_15s_aux, (int32_t)t->steer_torque_nm);
+            }
         }
         if (s_chart_brake_15s && s_ser_brake_15s_cmd && s_ser_brake_15s_act) {
             lv_chart_set_next_value(s_chart_brake_15s, s_ser_brake_15s_cmd, (int32_t)t->brake_cmd_kpa);
             lv_chart_set_next_value(s_chart_brake_15s, s_ser_brake_15s_act, (int32_t)t->brake_act_kpa);
+            if (s_ser_brake_15s_aux) {
+                lv_chart_set_next_value(s_chart_brake_15s, s_ser_brake_15s_aux, (int32_t)t->brake_act_stroke_mm);
+            }
         }
         if (s_chart_drive_15s && s_ser_drive_15s_cmd && s_ser_drive_15s_act) {
             lv_chart_set_next_value(s_chart_drive_15s, s_ser_drive_15s_cmd, (int32_t)t->drive_cmd_kmh);
             lv_chart_set_next_value(s_chart_drive_15s, s_ser_drive_15s_act, (int32_t)t->drive_act_kmh);
+            if (s_ser_drive_15s_aux) {
+                lv_chart_set_next_value(s_chart_drive_15s, s_ser_drive_15s_aux, (int32_t)(fabsf(t->drive_delta_kmh)));
+            }
         }
     }
 
@@ -1524,12 +1673,77 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             }
         }
 
+        if (s_lbl_dash_mode) {
+            if (t->estop_active) {
+                lv_label_set_text(s_lbl_dash_mode, "EMERGENCY STOP");
+                lv_obj_set_style_text_color(s_lbl_dash_mode, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+                if (s_card_dash_mode) {
+                    lv_obj_set_style_bg_color(s_card_dash_mode, lv_color_hex(0x38080F), 0);
+                    lv_obj_set_style_border_color(s_card_dash_mode, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+                }
+            } else if (takeover) {
+                lv_label_set_text(s_lbl_dash_mode, "DRIVER TAKEOVER");
+                lv_obj_set_style_text_color(s_lbl_dash_mode, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+                if (s_card_dash_mode) {
+                    lv_obj_set_style_bg_color(s_card_dash_mode, lv_color_hex(0x382806), 0);
+                    lv_obj_set_style_border_color(s_card_dash_mode, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+                }
+            } else if (t->ses_control_mode_status == 1 && t->seb_control_enable_status) {
+                lv_label_set_text(s_lbl_dash_mode, "AUTONOMOUS");
+                lv_obj_set_style_text_color(s_lbl_dash_mode, lv_color_hex(UI_COLOR_STATE_OK), 0);
+                if (s_card_dash_mode) {
+                    lv_obj_set_style_bg_color(s_card_dash_mode, lv_color_hex(0x062817), 0);
+                    lv_obj_set_style_border_color(s_card_dash_mode, lv_color_hex(UI_COLOR_STATE_OK), 0);
+                }
+            } else if (t->drive_act_kmh > 0.5f || fabsf(t->steer_act_deg) > 1.0f) {
+                lv_label_set_text(s_lbl_dash_mode, "MANUAL DRIVE");
+                lv_obj_set_style_text_color(s_lbl_dash_mode, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+                if (s_card_dash_mode) {
+                    lv_obj_set_style_bg_color(s_card_dash_mode, lv_color_hex(0x121A24), 0);
+                    lv_obj_set_style_border_color(s_card_dash_mode, lv_color_hex(0x1E3A50), 0);
+                }
+            } else {
+                lv_label_set_text(s_lbl_dash_mode, "STANDBY");
+                lv_obj_set_style_text_color(s_lbl_dash_mode, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+                if (s_card_dash_mode) {
+                    lv_obj_set_style_bg_color(s_card_dash_mode, lv_color_hex(0x121212), 0);
+                    lv_obj_set_style_border_color(s_card_dash_mode, lv_color_hex(UI_COLOR_BORDER), 0);
+                }
+            }
+        }
+
         // Active Gear Highlight
         for (int i = 0; i < 5; i++) {
             if (s_btn_dash_gears[i] && s_lbl_dash_gears[i]) {
                 bool is_active = (i == t->drive_act_gear);
                 lv_obj_set_style_bg_color(s_btn_dash_gears[i], lv_color_hex(is_active ? UI_COLOR_ACCENT_CMD : 0x121212), 0);
                 lv_obj_set_style_text_color(s_lbl_dash_gears[i], lv_color_hex(is_active ? 0x000000 : UI_COLOR_TEXT_SECONDARY), 0);
+            }
+        }
+
+        // Update 5 ISO Telltales
+        bool tt_active[5];
+        tt_active[0] = (t->steer_act_deg < -5.0f); // LEFT
+        tt_active[1] = (t->steer_act_deg > 5.0f);  // RGHT
+        tt_active[2] = (t->estop_active || t->ses_errors.raw_bitmap != 0 || t->seb_errors.raw_bitmap != 0 || t->drive_block_mask != 0); // HAZD / DTC
+        tt_active[3] = (t->bus_rate_hz > 5.0f && !t->bus_off); // BEAM / COMMS OK
+        tt_active[4] = (t->brake_act_kpa > 50.0f); // BRK
+
+        for (int i = 0; i < 5; i++) {
+            if (s_card_dash_telltales[i] && s_lbl_dash_telltale_sym[i] && s_lbl_dash_telltale_st[i]) {
+                bool on = tt_active[i];
+                uint32_t bg = on ? (i == 2 ? 0x38080F : 0x0C2218) : 0x121212;
+                uint32_t fg = on ? (i == 2 ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK) : UI_COLOR_TEXT_SECONDARY;
+                uint32_t bdr = on ? (i == 2 ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK) : UI_COLOR_BORDER;
+
+                lv_obj_set_style_bg_color(s_card_dash_telltales[i], lv_color_hex(bg), 0);
+                lv_obj_set_style_border_color(s_card_dash_telltales[i], lv_color_hex(bdr), 0);
+                lv_obj_set_style_text_color(s_lbl_dash_telltale_sym[i], lv_color_hex(fg), 0);
+                if (s_lbl_dash_telltale_lbl[i]) {
+                    lv_obj_set_style_text_color(s_lbl_dash_telltale_lbl[i], lv_color_hex(fg), 0);
+                }
+                lv_label_set_text(s_lbl_dash_telltale_st[i], on ? (i == 2 ? "FLT" : "ACT") : "OFF");
+                lv_obj_set_style_text_color(s_lbl_dash_telltale_st[i], lv_color_hex(fg), 0);
             }
         }
 
@@ -1540,22 +1754,23 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         }
         if (s_lbl_dash_speed_cmd) {
             float delta = fabsf(t->drive_act_kmh - t->drive_cmd_kmh);
-            snprintf(buf, sizeof(buf), "CMD: %0.1f km/h [Δ: %0.1f]", t->drive_cmd_kmh, delta);
+            snprintf(buf, sizeof(buf), "CMD: %0.1f km/h [DIFF: %0.1f]", t->drive_cmd_kmh, delta);
             lv_label_set_text(s_lbl_dash_speed_cmd, buf);
         }
         if (s_lbl_dash_speed_aux) {
-            snprintf(buf, sizeof(buf), "MOTOR: %u RPM • RATIO 8.5:1", t->drive_motor_rpm);
+            float delta = fabsf(t->drive_act_kmh - t->drive_cmd_kmh);
+            snprintf(buf, sizeof(buf), "GEAR: [ %c ]  •  DIFF: %0.1f km/h", g, delta);
             lv_label_set_text(s_lbl_dash_speed_aux, buf);
         }
 
         // Instrument 2: Steering Angle
         if (s_lbl_dash_steer_val) {
-            snprintf(buf, sizeof(buf), "%+0.1f°", t->steer_act_deg);
+            snprintf(buf, sizeof(buf), "%+0.1f deg", t->steer_act_deg);
             lv_label_set_text(s_lbl_dash_steer_val, buf);
         }
         if (s_lbl_dash_steer_cmd) {
             float delta = fabsf(t->steer_cmd_deg - t->steer_act_deg);
-            snprintf(buf, sizeof(buf), "CMD: %+0.1f° [Δ: %0.1f° %s]",
+            snprintf(buf, sizeof(buf), "CMD: %+0.1f [DIFF: %0.1f %s]",
                      t->steer_cmd_deg, delta, delta > 2.0f ? "LAG" : "OK");
             lv_label_set_text(s_lbl_dash_steer_cmd, buf);
         }
@@ -1585,11 +1800,17 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
 
         // Bottom Strip
         if (s_lbl_dash_bus_strip) {
+            char rail_str[16];
+            if (t->rail_volts_12v > 1.0f) {
+                snprintf(rail_str, sizeof(rail_str), "%0.1f V", t->rail_volts_12v);
+            } else {
+                snprintf(rail_str, sizeof(rail_str), "--.- V");
+            }
             snprintf(buf, sizeof(buf),
-                     "LOW-BUS CAN: %.0f msg/s  •  TEC: %d | REC: %d [%s]  •  12V Rail: %0.1fV  •  Core: %0.0f°C",
+                     "LOW-BUS CAN: %.0f msg/s  •  TEC: %d | REC: %d [%s]  •  12V Rail: %s  •  Core: %0.0f°C",
                      t->bus_rate_hz, t->twai_tec, t->twai_rec,
                      t->twai_tec > 96 || t->twai_rec > 96 ? "WARN" : "BUS OK",
-                     t->rail_volts_12v, t->esp32_internal_temp_c);
+                     rail_str, t->esp32_internal_temp_c);
             lv_label_set_text(s_lbl_dash_bus_strip, buf);
         }
     }
@@ -1599,11 +1820,11 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
     // -------------------------------------------------------------------------
     else if (s_current_win == WIN_STEER) {
         if (s_lbl_steer_cmd) {
-            snprintf(buf, sizeof(buf), "%+0.1f°", t->steer_cmd_deg);
+            snprintf(buf, sizeof(buf), "%+0.1f deg", t->steer_cmd_deg);
             lv_label_set_text(s_lbl_steer_cmd, buf);
         }
         if (s_lbl_steer_target_spd) {
-            snprintf(buf, sizeof(buf), "TARGET SPEED: %0.0f °/s", t->steer_cmd_speed_deg_s);
+            snprintf(buf, sizeof(buf), "TARGET SPEED: %0.0f deg/s", t->steer_cmd_speed_deg_s);
             lv_label_set_text(s_lbl_steer_target_spd, buf);
         }
         if (s_lbl_steer_cmd_telemetry) {
@@ -1611,13 +1832,18 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                      t->steer_cmd_roll_cnt, t->steer_cmd_chk_valid ? "VALID" : "CRC ERR");
             lv_label_set_text(s_lbl_steer_cmd_telemetry, buf);
         }
+        if (s_lbl_steer_vcu_stat) {
+            bool en = t->ses_cmd_control_enable;
+            lv_label_set_text(s_lbl_steer_vcu_stat, en ? "[ ENABLED ] VCU CONTROL" : "[ DISABLED ] MANUAL MODE");
+            lv_obj_set_style_text_color(s_lbl_steer_vcu_stat, lv_color_hex(en ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
+        }
 
         if (s_lbl_steer_act) {
-            snprintf(buf, sizeof(buf), "%+0.1f°", t->steer_act_deg);
+            snprintf(buf, sizeof(buf), "%+0.1f deg", t->steer_act_deg);
             lv_label_set_text(s_lbl_steer_act, buf);
         }
         if (s_lbl_steer_actual_spd) {
-            snprintf(buf, sizeof(buf), "ACTUAL SPEED: %0.0f °/s", t->steer_act_speed_deg_s);
+            snprintf(buf, sizeof(buf), "ACTUAL SPEED: %0.0f deg/s", t->steer_act_speed_deg_s);
             lv_label_set_text(s_lbl_steer_actual_spd, buf);
         }
         if (s_lbl_steer_act_telemetry) {
@@ -1625,14 +1851,26 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                      t->ses_motor_current_a, t->ses_ecu_temp_c);
             lv_label_set_text(s_lbl_steer_act_telemetry, buf);
         }
+        if (s_lbl_steer_align) {
+            lv_label_set_text(s_lbl_steer_align, t->ses_align_status ? "ALIGNMENT: ZERO-POINT OK" : "ALIGNMENT: CALIBRATING...");
+            lv_obj_set_style_text_color(s_lbl_steer_align, lv_color_hex(t->ses_align_status ? UI_COLOR_STATE_OK : UI_COLOR_STATE_WARN), 0);
+        }
+        if (s_lbl_steer_feedback_stat) {
+            if (t->nodes[NODE_SES].timeout) {
+                lv_label_set_text(s_lbl_steer_feedback_stat, "[ TIMEOUT ] FEEDBACK LOST (>250ms)");
+                lv_obj_set_style_text_color(s_lbl_steer_feedback_stat, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                snprintf(buf, sizeof(buf), "[ OK ] FEEDBACK (%.0f Hz)", t->nodes[NODE_SES].rate_hz);
+                lv_label_set_text(s_lbl_steer_feedback_stat, buf);
+                lv_obj_set_style_text_color(s_lbl_steer_feedback_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
+        }
 
         if (s_lbl_steer_delta_val) {
             float delta = fabsf(t->steer_cmd_deg - t->steer_act_deg);
-            snprintf(buf, sizeof(buf), "Δ: %0.1f°   [ %s ]", delta, delta > 2.0f ? "TRACKING LAG" : "TRACKING OK");
+            snprintf(buf, sizeof(buf), "DIFF: %0.1f deg  [ %s ]", delta, delta > 2.0f ? "LAG" : "OK");
             lv_label_set_text(s_lbl_steer_delta_val, buf);
-            if (s_card_steer_delta) {
-                lv_obj_set_style_border_color(s_card_steer_delta, lv_color_hex(delta > 2.0f ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
-            }
+            lv_obj_set_style_text_color(s_lbl_steer_delta_val, lv_color_hex(delta > 2.0f ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
         }
         if (s_lbl_steer_torq) {
             snprintf(buf, sizeof(buf), "%+0.1f Nm", t->steer_torque_nm);
@@ -1641,6 +1879,16 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         if (s_lbl_steer_override) {
             lv_label_set_text(s_lbl_steer_override, takeover ? "[ TAKEOVER ACTIVE! ]" : "[ NO OVERRIDE ]");
             lv_obj_set_style_text_color(s_lbl_steer_override, lv_color_hex(takeover ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
+        }
+        if (s_lbl_steer_volt) {
+            float volt = t->ses_pow_volt_v > 5.0f ? t->ses_pow_volt_v : t->rail_volts_12v;
+            if (volt > 5.0f) {
+                float pwr = volt * fabsf(t->ses_motor_current_a);
+                snprintf(buf, sizeof(buf), "SUPPLY VOLT: %0.1f V  •  PWR: %0.0f W", volt, pwr);
+            } else {
+                snprintf(buf, sizeof(buf), "SUPPLY VOLT: --.- V  •  PWR: 0 W");
+            }
+            lv_label_set_text(s_lbl_steer_volt, buf);
         }
         if (s_lbl_steer_dtc) {
             if (t->ses_errors.raw_bitmap != 0) {
@@ -1653,6 +1901,35 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                 lv_label_set_text(s_lbl_steer_dtc, "DTC DIAGNOSIS: ALL CLEAR (0x0000)");
                 lv_obj_set_style_text_color(s_lbl_steer_dtc, lv_color_hex(UI_COLOR_STATE_OK), 0);
             }
+        }
+        if (s_lbl_steer_watchdog) {
+            snprintf(buf, sizeof(buf), "NODE SILENCE: %lu ms  •  RX: %lu",
+                     (unsigned long)t->nodes[NODE_SES].silent_ms, (unsigned long)t->nodes[NODE_SES].rx_count);
+            lv_label_set_text(s_lbl_steer_watchdog, buf);
+        }
+        if (s_lbl_steer_health) {
+            if (t->nodes[NODE_SES].timeout) {
+                lv_label_set_text(s_lbl_steer_health, "[ FAULT ] NODE OFFLINE");
+                lv_obj_set_style_text_color(s_lbl_steer_health, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else if (t->ses_errors.raw_bitmap != 0) {
+                lv_label_set_text(s_lbl_steer_health, "[ WARN ] DTC ACTIVE");
+                lv_obj_set_style_text_color(s_lbl_steer_health, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+            } else {
+                lv_label_set_text(s_lbl_steer_health, "[ OK ] ACTUATOR HEALTHY");
+                lv_obj_set_style_text_color(s_lbl_steer_health, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
+        }
+        if (s_lbl_steer_bitview) {
+            uint8_t b = t->ses_cmd_byte0;
+            snprintf(buf, sizeof(buf),
+                     "SES CMD [0x169 D0: 0x%02X]  EN:%d  MODE:%d  ALIGN:%d  •  BITS: [%c%c%c%c %c%c%c%c]  •  [TOUCH PLOT / SWIPE DOWN]",
+                     b,
+                     (b & 0x01) ? 1 : 0,
+                     (b & 0x02) ? 1 : 0,
+                     (b & 0x04) ? 1 : 0,
+                     (b & 0x80) ? '1' : '0', (b & 0x40) ? '1' : '0', (b & 0x20) ? '1' : '0', (b & 0x10) ? '1' : '0',
+                     (b & 0x08) ? '1' : '0', (b & 0x04) ? '1' : '0', (b & 0x02) ? '1' : '0', (b & 0x01) ? '1' : '0');
+            lv_label_set_text(s_lbl_steer_bitview, buf);
         }
     }
 
@@ -1668,6 +1945,16 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             snprintf(buf, sizeof(buf), "TARGET STROKE: %0.1f mm", t->brake_cmd_stroke_mm);
             lv_label_set_text(s_lbl_brake_target_stroke, buf);
         }
+        if (s_lbl_brake_cmd_telemetry) {
+            snprintf(buf, sizeof(buf), "ROLL CNT: %u  •  MODE: %s",
+                     t->seb_cmd_roll_cnt, t->seb_cmd_control_mode == 1 ? "PRES" : "STROKE");
+            lv_label_set_text(s_lbl_brake_cmd_telemetry, buf);
+        }
+        if (s_lbl_brake_vcu_stat) {
+            bool en = t->seb_cmd_control_enable;
+            lv_label_set_text(s_lbl_brake_vcu_stat, en ? "[ ENABLED ] VCU AUTO-BRAKE" : "[ DISABLED ] MANUAL MODE");
+            lv_obj_set_style_text_color(s_lbl_brake_vcu_stat, lv_color_hex(en ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
+        }
 
         if (s_lbl_brake_act) {
             snprintf(buf, sizeof(buf), "%.0f kPa", t->brake_act_kpa);
@@ -1682,14 +1969,46 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                      t->seb_motor_current_a, t->seb_ecu_temp_c);
             lv_label_set_text(s_lbl_brake_act_telemetry, buf);
         }
+        if (s_lbl_brake_align) {
+            lv_label_set_text(s_lbl_brake_align, t->seb_align_status ? "ALIGNMENT: SENSOR ZEROED" : "ALIGNMENT: UNALIGNED");
+            lv_obj_set_style_text_color(s_lbl_brake_align, lv_color_hex(t->seb_align_status ? UI_COLOR_STATE_OK : UI_COLOR_STATE_WARN), 0);
+        }
+        if (s_lbl_brake_feedback_stat) {
+            if (t->nodes[NODE_SEB].timeout) {
+                lv_label_set_text(s_lbl_brake_feedback_stat, "[ TIMEOUT ] FEEDBACK LOST (>250ms)");
+                lv_obj_set_style_text_color(s_lbl_brake_feedback_stat, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                snprintf(buf, sizeof(buf), "[ OK ] FEEDBACK (%.0f Hz)", t->nodes[NODE_SEB].rate_hz);
+                lv_label_set_text(s_lbl_brake_feedback_stat, buf);
+                lv_obj_set_style_text_color(s_lbl_brake_feedback_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
+        }
 
         if (s_lbl_brake_delta_val) {
             float delta = t->brake_act_kpa - t->brake_cmd_kpa;
-            snprintf(buf, sizeof(buf), "Δ: %+0.0f kPa   [ %s ]", delta, fabsf(delta) > 50.0f ? "TRACKING LAG" : "TRACKING OK");
+            snprintf(buf, sizeof(buf), "DIFF: %+0.0f kPa  [ %s ]", delta, fabsf(delta) > 50.0f ? "LAG" : "OK");
             lv_label_set_text(s_lbl_brake_delta_val, buf);
-            if (s_card_brake_delta) {
-                lv_obj_set_style_border_color(s_card_brake_delta, lv_color_hex(fabsf(delta) > 50.0f ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
+            lv_obj_set_style_text_color(s_lbl_brake_delta_val, lv_color_hex(fabsf(delta) > 50.0f ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
+        }
+        if (s_lbl_brake_piston_val) {
+            snprintf(buf, sizeof(buf), "%0.1f mm", t->brake_act_stroke_mm);
+            lv_label_set_text(s_lbl_brake_piston_val, buf);
+        }
+        if (s_lbl_brake_piston_delta) {
+            snprintf(buf, sizeof(buf), "[ STROKE DIFF: %+0.1f mm %s ]",
+                     t->brake_delta_stroke_mm, fabsf(t->brake_delta_stroke_mm) > 2.0f ? "LAG" : "OK");
+            lv_label_set_text(s_lbl_brake_piston_delta, buf);
+            lv_obj_set_style_text_color(s_lbl_brake_piston_delta, lv_color_hex(fabsf(t->brake_delta_stroke_mm) > 2.0f ? UI_COLOR_STATE_WARN : UI_COLOR_STATE_OK), 0);
+        }
+        if (s_lbl_brake_volt) {
+            float volt = t->seb_pow_volt_v > 5.0f ? t->seb_pow_volt_v : t->rail_volts_12v;
+            if (volt > 5.0f) {
+                float pwr = volt * fabsf(t->seb_motor_current_a);
+                snprintf(buf, sizeof(buf), "SUPPLY VOLT: %0.1f V  •  PWR: %0.0f W", volt, pwr);
+            } else {
+                snprintf(buf, sizeof(buf), "SUPPLY VOLT: --.- V  •  PWR: 0 W");
             }
+            lv_label_set_text(s_lbl_brake_volt, buf);
         }
         if (s_lbl_brake_dtc) {
             if (t->seb_errors.raw_bitmap != 0) {
@@ -1703,6 +2022,35 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                 lv_obj_set_style_text_color(s_lbl_brake_dtc, lv_color_hex(UI_COLOR_STATE_OK), 0);
             }
         }
+        if (s_lbl_brake_watchdog) {
+            snprintf(buf, sizeof(buf), "NODE SILENCE: %lu ms  •  RX: %lu",
+                     (unsigned long)t->nodes[NODE_SEB].silent_ms, (unsigned long)t->nodes[NODE_SEB].rx_count);
+            lv_label_set_text(s_lbl_brake_watchdog, buf);
+        }
+        if (s_lbl_brake_health) {
+            if (t->nodes[NODE_SEB].timeout) {
+                lv_label_set_text(s_lbl_brake_health, "[ FAULT ] NODE OFFLINE");
+                lv_obj_set_style_text_color(s_lbl_brake_health, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else if (t->seb_errors.raw_bitmap != 0) {
+                lv_label_set_text(s_lbl_brake_health, "[ WARN ] DTC ACTIVE");
+                lv_obj_set_style_text_color(s_lbl_brake_health, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+            } else {
+                lv_label_set_text(s_lbl_brake_health, "[ OK ] ACTUATOR HEALTHY");
+                lv_obj_set_style_text_color(s_lbl_brake_health, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
+        }
+        if (s_lbl_brake_bitview) {
+            uint8_t b = t->seb_cmd_byte0;
+            snprintf(buf, sizeof(buf),
+                     "SEB CMD [0x7B9 D0: 0x%02X]  EN:%d  MODE:%s  AUTO:%d  •  BITS: [%c%c%c%c %c%c%c%c]  •  [TOUCH PLOT / SWIPE DOWN]",
+                     b,
+                     (b & 0x01) ? 1 : 0,
+                     (b & 0x02) ? "PRES" : "STRK",
+                     (b & 0x04) ? 1 : 0,
+                     (b & 0x80) ? '1' : '0', (b & 0x40) ? '1' : '0', (b & 0x20) ? '1' : '0', (b & 0x10) ? '1' : '0',
+                     (b & 0x08) ? '1' : '0', (b & 0x04) ? '1' : '0', (b & 0x02) ? '1' : '0', (b & 0x01) ? '1' : '0');
+            lv_label_set_text(s_lbl_brake_bitview, buf);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -1713,6 +2061,20 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             snprintf(buf, sizeof(buf), "%0.1f km/h", t->drive_cmd_kmh);
             lv_label_set_text(s_lbl_drive_cmd, buf);
         }
+        if (s_lbl_drive_target_gear) {
+            char cmd_g = (t->drive_cmd_gear < 5) ? gear_chars[t->drive_cmd_gear] : 'D';
+            snprintf(buf, sizeof(buf), "TARGET GEAR: [ %c ]", cmd_g);
+            lv_label_set_text(s_lbl_drive_target_gear, buf);
+        }
+        if (s_lbl_drive_cmd_telemetry) {
+            snprintf(buf, sizeof(buf), "MODE: SPEED CTRL  •  LIM: 25 km/h");
+            lv_label_set_text(s_lbl_drive_cmd_telemetry, buf);
+        }
+        if (s_lbl_drive_rt_stat) {
+            lv_label_set_text(s_lbl_drive_rt_stat, t->estop_active ? "[ CUTOUT ] RT-SAFETY SHUTDOWN" : "[ ENABLED ] RT-SAFETY RUN");
+            lv_obj_set_style_text_color(s_lbl_drive_rt_stat, lv_color_hex(t->estop_active ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
+        }
+
         if (s_lbl_drive_act) {
             snprintf(buf, sizeof(buf), "%0.1f km/h", t->drive_act_kmh);
             lv_label_set_text(s_lbl_drive_act, buf);
@@ -1722,17 +2084,58 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             lv_label_set_text(s_lbl_drive_act_gear, buf);
         }
         if (s_lbl_drive_motor_telemetry) {
-            snprintf(buf, sizeof(buf), "MOTOR: %u RPM  •  RATIO: 8.5:1", t->drive_motor_rpm);
+            snprintf(buf, sizeof(buf), "RATIO: 8.5:1  •  INV: CLOSED-LOOP");
             lv_label_set_text(s_lbl_drive_motor_telemetry, buf);
+        }
+        if (s_lbl_drive_state_cutout) {
+            snprintf(buf, sizeof(buf), "STATE CODE: 0x%02X (%s)",
+                     t->drive_node_state,
+                     t->drive_node_state == 2 ? "READY" : (t->drive_node_state == 3 ? "RUN" : "STANDBY"));
+            lv_label_set_text(s_lbl_drive_state_cutout, buf);
+        }
+        if (s_lbl_drive_feedback_stat) {
+            if (t->nodes[NODE_MTR].timeout) {
+                lv_label_set_text(s_lbl_drive_feedback_stat, "[ TIMEOUT ] FEEDBACK LOST (>250ms)");
+                lv_obj_set_style_text_color(s_lbl_drive_feedback_stat, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                snprintf(buf, sizeof(buf), "[ OK ] FEEDBACK (%.0f Hz)", t->nodes[NODE_MTR].rate_hz);
+                lv_label_set_text(s_lbl_drive_feedback_stat, buf);
+                lv_obj_set_style_text_color(s_lbl_drive_feedback_stat, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
         }
 
         if (s_lbl_drive_delta_val) {
             float delta = fabsf(t->drive_act_kmh - t->drive_cmd_kmh);
-            snprintf(buf, sizeof(buf), "Δ: %0.1f km/h   [ %s ]", delta, delta > 2.0f ? "TRACKING LAG" : "TRACKING OK");
+            snprintf(buf, sizeof(buf), "DIFF: %0.1f km/h  [ %s ]", delta, delta > 2.0f ? "LAG" : "OK");
             lv_label_set_text(s_lbl_drive_delta_val, buf);
-            if (s_card_drive_delta) {
-                lv_obj_set_style_border_color(s_card_drive_delta, lv_color_hex(delta > 2.0f ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
+            lv_obj_set_style_text_color(s_lbl_drive_delta_val, lv_color_hex(delta > 2.0f ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK), 0);
+        }
+        if (s_lbl_drive_interlock_val) {
+            if (t->drive_block_mask != 0) {
+                snprintf(buf, sizeof(buf), "[ BLOCKED: MASK 0x%04X ]", t->drive_block_mask);
+                lv_label_set_text(s_lbl_drive_interlock_val, buf);
+                lv_obj_set_style_text_color(s_lbl_drive_interlock_val, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                lv_label_set_text(s_lbl_drive_interlock_val, "[ ALL INTERLOCKS CLEAR ]");
+                lv_obj_set_style_text_color(s_lbl_drive_interlock_val, lv_color_hex(UI_COLOR_STATE_OK), 0);
             }
+        }
+        if (s_lbl_drive_brake_priority) {
+            if (t->brake_act_kpa > 100.0f) {
+                lv_label_set_text(s_lbl_drive_brake_priority, "[ BRAKE CUTOUT ENGAGED ]");
+                lv_obj_set_style_text_color(s_lbl_drive_brake_priority, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                lv_label_set_text(s_lbl_drive_brake_priority, "[ ACCEL-BRAKE PRIORITY OK ]");
+                lv_obj_set_style_text_color(s_lbl_drive_brake_priority, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
+        }
+        if (s_lbl_drive_volt) {
+            if (t->rail_volts_12v > 1.0f) {
+                snprintf(buf, sizeof(buf), "BUS VOLTAGE: %0.1f V  •  CURRENT: OK", t->rail_volts_12v);
+            } else {
+                snprintf(buf, sizeof(buf), "BUS VOLTAGE: --.- V  •  CURRENT: OK");
+            }
+            lv_label_set_text(s_lbl_drive_volt, buf);
         }
         if (s_lbl_drive_dtc) {
             if (t->drive_block_mask != 0) {
@@ -1743,6 +2146,30 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                 lv_label_set_text(s_lbl_drive_dtc, "DTC DIAGNOSIS: ALL CLEAR (0x0000)");
                 lv_obj_set_style_text_color(s_lbl_drive_dtc, lv_color_hex(UI_COLOR_STATE_OK), 0);
             }
+        }
+        if (s_lbl_drive_watchdog) {
+            snprintf(buf, sizeof(buf), "NODE SILENCE: %lu ms  •  RX: %lu",
+                     (unsigned long)t->nodes[NODE_MTR].silent_ms, (unsigned long)t->nodes[NODE_MTR].rx_count);
+            lv_label_set_text(s_lbl_drive_watchdog, buf);
+        }
+        if (s_lbl_drive_health) {
+            if (t->nodes[NODE_MTR].timeout) {
+                lv_label_set_text(s_lbl_drive_health, "[ FAULT ] NODE OFFLINE");
+                lv_obj_set_style_text_color(s_lbl_drive_health, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else if (t->drive_block_mask != 0) {
+                lv_label_set_text(s_lbl_drive_health, "[ WARN ] INTERLOCK ENGAGED");
+                lv_obj_set_style_text_color(s_lbl_drive_health, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+            } else {
+                lv_label_set_text(s_lbl_drive_health, "[ OK ] INVERTER HEALTHY");
+                lv_obj_set_style_text_color(s_lbl_drive_health, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
+        }
+        if (s_lbl_drive_bitview) {
+            snprintf(buf, sizeof(buf),
+                     "MTR CMD [0x204]  RAW: %02X %02X %02X %02X %02X  •  GEAR:%c  EN:%d  •  [TOUCH PLOT / SWIPE DOWN]",
+                     t->drive_cmd_raw[0], t->drive_cmd_raw[1], t->drive_cmd_raw[2], t->drive_cmd_raw[3], t->drive_cmd_raw[4],
+                     g, t->estop_active ? 0 : 1);
+            lv_label_set_text(s_lbl_drive_bitview, buf);
         }
     }
 
@@ -1760,8 +2187,23 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                 lv_obj_set_style_text_color(s_lbl_bus_estop_status, lv_color_hex(UI_COLOR_STATE_OK), 0);
             }
         }
+        if (s_lbl_bus_estop_origin) {
+            if (t->estop_active) {
+                snprintf(buf, sizeof(buf), "ROOT CAUSE: TRIPPED BY NODE %d (REASON: 0x%02X)  •  LINE: LOW",
+                         t->estop_source_node, t->estop_reason_code);
+                lv_label_set_text(s_lbl_bus_estop_origin, buf);
+                lv_obj_set_style_text_color(s_lbl_bus_estop_origin, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                lv_label_set_text(s_lbl_bus_estop_origin, "ROOT CAUSE: NO TRIPS DETECTED  •  INTERLOCK HARDWARE LINE: HIGH");
+                lv_obj_set_style_text_color(s_lbl_bus_estop_origin, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+            }
+        }
         if (s_lbl_bus_rail_volts) {
-            snprintf(buf, sizeof(buf), "%0.1f V", t->rail_volts_12v);
+            if (t->rail_volts_12v > 1.0f) {
+                snprintf(buf, sizeof(buf), "%0.1f V", t->rail_volts_12v);
+            } else {
+                snprintf(buf, sizeof(buf), "--.- V");
+            }
             lv_label_set_text(s_lbl_bus_rail_volts, buf);
         }
         if (s_lbl_bus_rate) {
@@ -1778,10 +2220,18 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                 snprintf(buf, sizeof(buf), "%.0f Hz", t->nodes[i].rate_hz);
                 lv_label_set_text(s_lbl_bus_node_rates[i], buf);
             }
+            if (s_lbl_bus_node_silent[i]) {
+                snprintf(buf, sizeof(buf), "%lu ms ago", (unsigned long)t->nodes[i].silent_ms);
+                lv_label_set_text(s_lbl_bus_node_silent[i], buf);
+            }
             if (s_lbl_bus_node_states[i]) {
                 bool ok = !t->nodes[i].timeout;
                 lv_label_set_text(s_lbl_bus_node_states[i], ok ? "[ OK ] ACTIVE" : "[ TIMEOUT ]");
                 lv_obj_set_style_text_color(s_lbl_bus_node_states[i], lv_color_hex(ok ? UI_COLOR_STATE_OK : UI_COLOR_STATE_FAULT), 0);
+            }
+            if (s_card_bus_nodes[i]) {
+                bool ok = !t->nodes[i].timeout;
+                lv_obj_set_style_border_color(s_card_bus_nodes[i], lv_color_hex(ok ? UI_COLOR_BORDER : UI_COLOR_STATE_FAULT), 0);
             }
         }
     }
@@ -1792,22 +2242,22 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
     else if (s_current_win == WIN_STEER_PLOT_15S) {
         if (s_lbl_steer_15s_hdr) {
             float delta = fabsf(t->steer_cmd_deg - t->steer_act_deg);
-            snprintf(buf, sizeof(buf), "STEER 15s SCOPE • CMD: %+0.1f° | ACT: %+0.1f° | Δ: %0.1f° | Torq: %+0.1fNm",
+            snprintf(buf, sizeof(buf), "STEER 15s SCOPE • CMD: %+0.1f deg | ACT: %+0.1f deg | DIFF: %0.1f deg | Torq: %+0.1f Nm",
                      t->steer_cmd_deg, t->steer_act_deg, delta, t->steer_torque_nm);
             lv_label_set_text(s_lbl_steer_15s_hdr, buf);
         }
     } else if (s_current_win == WIN_BRAKE_PLOT_15S) {
         if (s_lbl_brake_15s_hdr) {
             float delta = t->brake_act_kpa - t->brake_cmd_kpa;
-            snprintf(buf, sizeof(buf), "BRAKE 15s SCOPE • CMD: %.0fkPa | ACT: %.0fkPa | Δ: %+0.0f | Strk: %0.1fmm",
+            snprintf(buf, sizeof(buf), "BRAKE 15s SCOPE • CMD: %.0f kPa | ACT: %.0f kPa | DIFF: %+0.0f | Strk: %0.1f mm",
                      t->brake_cmd_kpa, t->brake_act_kpa, delta, t->brake_act_stroke_mm);
             lv_label_set_text(s_lbl_brake_15s_hdr, buf);
         }
     } else if (s_current_win == WIN_DRIVE_PLOT_15S) {
         if (s_lbl_drive_15s_hdr) {
             float delta = fabsf(t->drive_act_kmh - t->drive_cmd_kmh);
-            snprintf(buf, sizeof(buf), "DRIVE 15s SCOPE • CMD: %0.1fkm/h | ACT: %0.1fkm/h | Δ: %0.1f | %u RPM",
-                     t->drive_cmd_kmh, t->drive_act_kmh, delta, t->drive_motor_rpm);
+            snprintf(buf, sizeof(buf), "DRIVE 15s SCOPE • CMD: %0.1f km/h | ACT: %0.1f km/h | DIFF: %0.1f km/h | GEAR: %c",
+                     t->drive_cmd_kmh, t->drive_act_kmh, delta, g);
             lv_label_set_text(s_lbl_drive_15s_hdr, buf);
         }
     }
