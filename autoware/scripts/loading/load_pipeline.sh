@@ -130,6 +130,10 @@ stop_all() {
   detect_can
   say "Stopping"
   docker exec "$CONTAINER" bash -c 'pkill -9 -f vehicle_bridge_node; pkill -9 -f planning_simulator; pkill -9 -f rviz2' >/dev/null 2>&1 || true
+  # Also stop CAN Watcher server and browser UI if running
+  pkill -f "tools.can_watcher.backend.server" 2>/dev/null || true
+  pkill -f "localhost:8000" 2>/dev/null || true
+
   if [ "$CAN_IFACE" = "can2" ] || [ "$CAN_DRIVER" = "canalyst" ]; then
     if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
       bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" down "$CAN_IFACE" >/dev/null 2>&1 || true
@@ -137,7 +141,7 @@ stop_all() {
   else
     sudo ip link set "$CAN_IFACE" down >/dev/null 2>&1 || true
   fi
-  echo "  bridge + simulator stopped; $CAN_IFACE down. (container left running)"
+  echo "  bridge, simulator, CAN Watcher stopped; $CAN_IFACE down. (container left running)"
 }
 
 case "$MODE" in
