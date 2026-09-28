@@ -1,26 +1,32 @@
 #!/bin/bash
 # ==============================================================================
-# E-Trike full-stack loader (Autoware Universe + CANable + bridge in sim mode)
+# E-Trike full-stack loader (Autoware Universe + CAN adapter + bridge in sim mode)
 #
-# Brings up the whole bench pipeline:
+# Brings up the bench pipeline:
 #   1. Docker container (autoware_test) with DISPLAY + X socket
 #   2. Autoware Universe planning simulator + RViz on the Jetson monitor
-#   3. CANable Pro USB-CAN (canable0) at 500 kbps
-#   4. autoware_vehicle_bridge in sim_mode on canable0
+#   3. USB-CAN adapter (auto-detects CANalyst-II on can2 or CANable Pro on canable0)
+#   4. autoware_vehicle_bridge in sim_mode (forwards steering/drive to CAN)
 #
 # Usage:
-#   bash scripts/loading/load_pipeline.sh            # full stack
-#   bash scripts/loading/load_pipeline.sh --universe  # only simulator + RViz
-#   bash scripts/loading/load_pipeline.sh --canable   # only CANable + bridge
-#   bash scripts/loading/load_pipeline.sh --bridge    # only the bridge
-#   bash scripts/loading/load_pipeline.sh --stop      # stop everything
+#   bash scripts/loading/load_pipeline.sh            # full stack (container + can + universe + bridge)
+#   bash scripts/loading/load_pipeline.sh --bench    # alias for full stack bench simulation
+#   bash scripts/loading/load_pipeline.sh --universe # only simulator + RViz
+#   bash scripts/loading/load_pipeline.sh --can      # only CAN adapter + bridge
+#   bash scripts/loading/load_pipeline.sh --bridge   # only the bridge (assumes CAN interface is up)
+#   bash scripts/loading/load_pipeline.sh --stop     # stop simulator, bridge, and CAN
 # ==============================================================================
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+if [ ! -d "$WORKSPACE_ROOT/scripts" ] && [ -d "$HOME/av_project/scripts" ]; then
+  WORKSPACE_ROOT="$HOME/av_project"
+fi
+
 CONTAINER="autoware_test"
 IMAGE="ghcr.io/autowarefoundation/autoware:universe-cuda-humble"
-CAN_IFACE="${CAN_IFACE:-canable0}"
 CAN_BITRATE="${CAN_BITRATE:-500000}"
 MAP_PATH="/autoware_map/sample-map-planning"
 VEHICLE_MODEL="etrike_vehicle"
@@ -29,6 +35,30 @@ SENSOR_MODEL="etrike_sensor_kit"
 MODE="${1:-all}"
 
 say() { echo; echo "==== $* ===="; }
+
+detect_can() {
+  if [ -n "$CAN_IFACE" ]; then
+    return
+  fi
+  # Auto-detect CAN adapter:
+  # Check if CANalyst-II USB device (04d8:0053) is plugged in
+  if lsusb 2>/dev/null | grep -q "04d8:0053"; then
+    CAN_IFACE="can2"
+    CAN_DRIVER="canalyst"
+  elif ip link show canable0 >/dev/null 2>&1; then
+    CAN_IFACE="canable0"
+    CAN_DRIVER="socketcan"
+  elif lsusb 2>/dev/null | grep -Eq "1d50:606f|0483:5740"; then
+    CAN_IFACE="canable0"
+    CAN_DRIVER="socketcan"
+  elif ip link show can2 >/dev/null 2>&1; then
+    CAN_IFACE="can2"
+    CAN_DRIVER="canalyst"
+  else
+    CAN_IFACE="can2"
+    CAN_DRIVER="canalyst"
+  fi
+}
 
 start_container() {
   say "Container: $CONTAINER"
@@ -63,18 +93,29 @@ start_universe() {
   echo "  launched. Wait ~40s for RViz; then in RViz: pose -> goal -> engage."
 }
 
-start_canable() {
-  say "CANable Pro: $CAN_IFACE @ $CAN_BITRATE"
-  if ! ip link show "$CAN_IFACE" >/dev/null 2>&1; then
-    echo "  ERROR: $CAN_IFACE not found. Re-plug / run 'scripts/setup_canable.sh install-udev'."
-    exit 1
+start_can() {
+  detect_can
+  say "CAN Interface: $CAN_IFACE ($CAN_DRIVER) @ $CAN_BITRATE"
+  if [ "$CAN_IFACE" = "can2" ] || [ "$CAN_DRIVER" = "canalyst" ]; then
+    if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
+      bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" up "$CAN_IFACE" "$CAN_BITRATE"
+    else
+      echo "  ERROR: $WORKSPACE_ROOT/scripts/setup_canalyst.sh not found."
+      exit 1
+    fi
+  else
+    if ! ip link show "$CAN_IFACE" >/dev/null 2>&1; then
+      echo "  ERROR: $CAN_IFACE not found. Re-plug / run 'scripts/setup_canable.sh install-udev'."
+      exit 1
+    fi
+    sudo ip link set "$CAN_IFACE" type can bitrate "$CAN_BITRATE"
+    sudo ip link set "$CAN_IFACE" up
+    echo "  UP.  (ip -details link show $CAN_IFACE to confirm)"
   fi
-  sudo ip link set "$CAN_IFACE" type can bitrate "$CAN_BITRATE"
-  sudo ip link set "$CAN_IFACE" up
-  echo "  UP.  (ip -details link show $CAN_IFACE to confirm)"
 }
 
 start_bridge() {
+  detect_can
   say "Vehicle bridge (sim_mode) on $CAN_IFACE"
   docker exec -d "$CONTAINER" bash -c "
     source /opt/autoware/setup.bash;
@@ -86,25 +127,32 @@ start_bridge() {
 }
 
 stop_all() {
+  detect_can
   say "Stopping"
   docker exec "$CONTAINER" bash -c 'pkill -9 -f vehicle_bridge_node; pkill -9 -f planning_simulator; pkill -9 -f rviz2' >/dev/null 2>&1 || true
-  sudo ip link set "$CAN_IFACE" down >/dev/null 2>&1 || true
+  if [ "$CAN_IFACE" = "can2" ] || [ "$CAN_DRIVER" = "canalyst" ]; then
+    if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
+      bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" down "$CAN_IFACE" >/dev/null 2>&1 || true
+    fi
+  else
+    sudo ip link set "$CAN_IFACE" down >/dev/null 2>&1 || true
+  fi
   echo "  bridge + simulator stopped; $CAN_IFACE down. (container left running)"
 }
 
 case "$MODE" in
-  all)
+  all|--bench)
     start_container
+    start_can
     start_universe
-    start_canable
     start_bridge
     ;;
   --universe)
     start_container
     start_universe
     ;;
-  --canable)
-    start_canable
+  --can|--canable)
+    start_can
     start_bridge
     ;;
   --bridge)
@@ -114,7 +162,7 @@ case "$MODE" in
     stop_all
     ;;
   *)
-    echo "Usage: $0 [all|--universe|--canable|--bridge|--stop]"
+    echo "Usage: $0 [all|--bench|--universe|--can|--bridge|--stop]"
     exit 1
     ;;
 esac

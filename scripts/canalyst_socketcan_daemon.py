@@ -189,6 +189,10 @@ class CanalystSocketCanBridge:
             except Exception as e:
                 self._err_count += 1
                 logger.warning("Failed forwarding to CANalyst-II: %s", e)
+                err_str = str(e).lower()
+                if "no such device" in err_str or "disconnected" in err_str or "pipe error" in err_str:
+                    logger.error("USB hardware disconnect detected. Triggering auto-reconnect...")
+                    raise
 
         listeners: List[Callable[[Any], None]] = [on_hw_frame]
         self._notifier = can.Notifier(self._hw_bus, listeners)

@@ -3,15 +3,17 @@
 How to run the full E-Trike stack on the Jetson for bench / simulator work:
 
 1. **Autoware Universe** (planning simulator) on the Jetson monitor (RViz).
-2. **CANable Pro** USB-CAN module (bench bus).
+2. **USB-CAN Adapter**:
+   - **CANalyst-II** (`can2`) - Chuangxin / Microchip dual-channel analyzer
+   - **CANable Pro** (`canable0`) - candleLight native SocketCAN
 3. **`autoware_vehicle_bridge`** in **sim mode** — passes whatever the simulator
    commands out onto the CAN bus, ignoring hardware feedback / engage / estop.
 
 > Detailed references: `docs/operations/AUTOWARE_UNIVERSE_MONITOR.md`,
-> `docs/hardware/CANABLE_PRO_SETUP.md`, `docs/operations/CAN_OPERATIONS.md`.
+> `docs/hardware/CANALYST_II_SETUP.md`, `docs/hardware/CANABLE_PRO_SETUP.md`, `docs/operations/CAN_OPERATIONS.md`.
 >
-> **One-command loader:** `bash autoware/scripts/loading/load_pipeline.sh` does
-> steps 1-4 below automatically (or `--universe` / `--canable` / `--bridge` /
+> **One-command loader:** `bash autoware/scripts/loading/load_pipeline.sh --bench` does
+> steps 1-4 below automatically (or `--universe` / `--can` / `--bridge` /
 > `--stop` for subsets).
 
 ---
@@ -21,7 +23,7 @@ How to run the full E-Trike stack on the Jetson for bench / simulator work:
 - Jetson reachable by SSH (`med1@<jetson-ip>`; IP can change — verify first).
 - Map present: `~/autoware_map/sample-map-planning`.
 - Workspace built: `~/av_project/autoware/install/`.
-- (Optional) CANable Pro plugged into a Jetson USB port.
+- USB CAN adapter plugged in (CANalyst-II or CANable Pro).
 
 ## 1. Start the container (with display)
 
@@ -67,27 +69,33 @@ docker exec autoware_test ps aux | grep rviz2    # expect .../rviz2 -d .../autow
 In RViz: **2D Pose Estimate** → set pose, **2D Goal Pose** → set goal, then
 **AutowareStatePanel → Engage** to start the simulated drive.
 
-## 3. Bring up the USB CAN module (CANable Pro)
+## 3. Bring up the USB CAN module
 
-On the Jetson host:
-
+### Option A: CANalyst-II (can2)
 ```bash
-sudo ip link set canable0 type can bitrate 500000 && sudo ip link set canable0 up
-ip -details link show canable0      # expect UP, bitrate 500000
+bash ~/av_project/scripts/setup_canalyst.sh up can2 500000
 ```
 
-Or use the helper: `./scripts/setup_canable.sh up canable0 500000`.
-
-> If `canable0` is missing (device shows as `canX`), re-run the udev install +
-> replug: `./scripts/setup_canable.sh install-udev`. See
-> `docs/hardware/CANABLE_PRO_SETUP.md`.
+### Option B: CANable Pro (canable0)
+```bash
+sudo ip link set canable0 type can bitrate 500000 && sudo ip link set canable0 up
+```
 
 ## 4. Run the vehicle bridge in sim mode
 
-Inside the container, launch the bridge pointed at the CANable bus in **sim
+Inside the container, launch the bridge pointed at the active CAN bus in **sim
 mode** (pass-through of whatever the simulator commands — no hardware gating):
 
 ```bash
+# For CANalyst-II (can2):
+docker exec -d autoware_test bash -c \
+  'source /opt/autoware/setup.bash; \
+   source /workspace/autoware/install/setup.bash; \
+   ros2 launch autoware_vehicle_bridge vehicle_bridge.launch.py \
+     can_interface:=can2 \
+     sim_mode:=true'
+
+# For CANable Pro (canable0):
 docker exec -d autoware_test bash -c \
   'source /opt/autoware/setup.bash; \
    source /workspace/autoware/install/setup.bash; \
@@ -99,8 +107,7 @@ docker exec -d autoware_test bash -c \
 Verify the bridge configured and is transmitting:
 
 ```bash
-docker exec autoware_test bash -c "tail -5 /tmp/bridge_can.log"   # or the log you redirect to
-ip -s link show canable0                                          # TX packets increasing
+docker exec autoware_test bash -c "tail -5 /tmp/bridge_can.log"
 ```
 
 > **Sim mode is for bench/testing only** — never on the real vehicle
@@ -110,8 +117,8 @@ ip -s link show canable0                                          # TX packets i
 ## 5. Verify the CAN output
 
 ```bash
-candump -tz canable0                       # live traffic
-candump -tz canable0,300:303,7FC:7FC       # host drive/steer + heartbeat
+candump -tz can2                           # live traffic (replace can2 with canable0 if using CANable)
+candump -tz can2,300:303,7FC:7FC           # host drive/steer + heartbeat
 ```
 
 Expected with the simulator engaged / driving:
@@ -127,9 +134,9 @@ Expected with the simulator engaged / driving:
 ## 6. Stop
 
 ```bash
-docker exec autoware_test bash -c 'pkill -9 -f vehicle_bridge_node'
-sudo ip link set canable0 down            # CANable OFF
-bash ~/av_project/scripts/kill_all.sh     # kill everything (container + nodes)
+docker exec autoware_test bash -c 'pkill -9 -f vehicle_bridge_node; pkill -9 -f planning_simulator; pkill -9 -f rviz2'
+bash ~/av_project/scripts/setup_canalyst.sh down can2   # if using CANalyst
+# OR: sudo ip link set canable0 down                   # if using CANable
 ```
 
 ---
@@ -140,8 +147,7 @@ bash ~/av_project/scripts/kill_all.sh     # kill everything (container + nodes)
 - Container must be started with `-e DISPLAY=:1` + `/tmp/.X11-unix` mount.
 - Only **one** `--net=host` Autoware ROS system per host (they share the ROS
   graph) — don't run a second bridge-test container alongside.
-- `canable0` with no other node on the bus may report `ERROR-PASSIVE` / no ACK —
-  normal for a lone transmitter.
+- `sim_mode:=true` is required for simulator commands (e.g. steering 4.7°) to be emitted on CAN. Without it, the bridge drops commands because physical vehicle ECU feedback is missing.
 - Old RViz "white vehicle" / duplicate-node issues: `bash scripts/kill_all.sh`
   and relaunch.
 
@@ -151,6 +157,7 @@ bash ~/av_project/scripts/kill_all.sh     # kill everything (container + nodes)
 |---|---|
 | Vehicle bridge | `autoware/src/our_packages/autoware_vehicle_bridge/` |
 | CAN codec (generated) | `autoware/src/our_packages/etrike_protocol/` |
+| CANalyst helper | `scripts/setup_canalyst.sh` |
 | CANable helper | `scripts/setup_canable.sh` |
 | **Full-stack loader** | `autoware/scripts/loading/load_pipeline.sh` |
 | Driving pipeline scripts | `autoware/scripts/loading/` |
@@ -159,4 +166,4 @@ bash ~/av_project/scripts/kill_all.sh     # kill everything (container + nodes)
 | Docs | `docs/hardware/`, `docs/operations/` |
 
 > `autoware/scripts/loading/load_pipeline.sh` automates steps 1-4 above
-> (`--universe`, `--canable`, `--bridge`, `--stop` subcommands).
+> (`--bench`, `--universe`, `--can`, `--bridge`, `--stop` subcommands).
