@@ -7,6 +7,23 @@ Here is your simple everyday checklist to get up and running on the AV Project.
 > - **DO NOT USE** `172.17.x.x` (This is an internal Docker IP and cannot be reached from Windows).
 > - **DO NOT USE** `127.0.x.x` (This is the local loopback address).
 > - **DO USE** `172.16.x.x` (This is the real local network IP you need for SSH and Syncthing).
+
+---
+
+## ⚡ Daily 3-Command Quick Reference (Bench Simulator & CAN Watch)
+
+| Action | Terminal Command (Run on Jetson host) |
+|---|---|
+| **1. Open Autoware Universe** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --bench` |
+| **2. Open CAN Watch** | `bash ~/av_project/scripts/open_can_watcher_display.sh can2` |
+| **3. Close All** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop` |
+
+- **Open Autoware Universe:** Starts the container, brings up the `can2` interface (CANalyst-II), launches Autoware planning simulator + RViz on the Jetson monitor, and starts `autoware_vehicle_bridge` in sim mode so commanded steering angles and velocities transmit directly to the CAN bus.
+- **Open CAN Watch:** Opens the visual telemetry cockpit directly on the Jetson monitor (`DISPLAY=:1`) and serves it across the network at `http://172.16.25.67:8000`.
+- **Close All:** Gracefully stops the simulator, RViz, vehicle bridge, CAN Watcher, and shuts down the CAN interface.
+
+---
+
 ## 1. Check Windows Sync
 Your Windows computer automatically syncs your files in the background. To check if it's working:
 - Open your web browser and go to: [http://127.0.0.1:8384](http://127.0.0.1:8384)

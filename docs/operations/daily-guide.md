@@ -2,6 +2,16 @@
 
 ---
 
+# ⚡ Daily 3-Command Quick Reference (Bench Simulator & CAN Watch)
+
+| Action | Terminal Command (Jetson Host) | Description |
+|---|---|---|
+| **1. Open Autoware Universe** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --bench` | Starts container, `can2`, simulator + RViz, and bridge in sim mode (forwards steering/speed to CAN). |
+| **2. Open CAN Watch** | `bash ~/av_project/scripts/open_can_watcher_display.sh can2` | Opens live visual telemetry cockpit on monitor (`:1`) & `http://172.16.25.67:8000`. |
+| **3. Close All** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop` | Stops simulator, RViz, bridge, CAN Watcher, and shuts down CAN. |
+
+---
+
 # SECTION 1: System & Network Setup
 
 ## 1.1 Check File Sync Status
