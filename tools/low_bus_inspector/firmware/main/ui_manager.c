@@ -35,8 +35,8 @@ static lv_obj_t *s_lbl_dash_safety_state = NULL;
 static lv_obj_t *s_card_dash_safety = NULL;
 static lv_obj_t *s_lbl_dash_mode = NULL;
 static lv_obj_t *s_card_dash_mode = NULL;
-static lv_obj_t *s_btn_dash_gears[5] = {NULL};
-static lv_obj_t *s_lbl_dash_gears[5] = {NULL};
+static lv_obj_t *s_btn_dash_gears[4] = {NULL};
+static lv_obj_t *s_lbl_dash_gears[4] = {NULL};
 
 // ISO 2575 Telltale cards & labels
 static lv_obj_t *s_card_dash_telltales[5] = {NULL};
@@ -346,13 +346,13 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(lbl_g_t, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
     lv_obj_align(lbl_g_t, LV_ALIGN_LEFT_MID, 410, 0);
 
-    const char *gear_names[5] = {"P", "R", "N", "D", "S"};
-    for (int g = 0; g < 5; g++) {
+    const char *gear_names[4] = {"R", "N", "D", "S"};
+    for (int g = 0; g < 4; g++) {
         s_btn_dash_gears[g] = lv_obj_create(c_dstate);
-        lv_obj_set_size(s_btn_dash_gears[g], 26, 26);
-        lv_obj_align(s_btn_dash_gears[g], LV_ALIGN_LEFT_MID, 460 + g * 32, 0);
-        bool is_d = (g == 3);
-        lv_obj_set_style_bg_color(s_btn_dash_gears[g], lv_color_hex(is_d ? UI_COLOR_ACCENT_CMD : 0x121212), 0);
+        lv_obj_set_size(s_btn_dash_gears[g], 28, 26);
+        lv_obj_align(s_btn_dash_gears[g], LV_ALIGN_LEFT_MID, 460 + g * 34, 0);
+        bool is_init_n = (g == 1);
+        lv_obj_set_style_bg_color(s_btn_dash_gears[g], lv_color_hex(is_init_n ? UI_COLOR_ACCENT_CMD : 0x121212), 0);
         lv_obj_set_style_border_color(s_btn_dash_gears[g], lv_color_hex(UI_COLOR_BORDER), 0);
         lv_obj_set_style_radius(s_btn_dash_gears[g], 4, 0);
         lv_obj_set_style_pad_all(s_btn_dash_gears[g], 0, 0);
@@ -360,7 +360,7 @@ void ui_manager_init(void) {
         s_lbl_dash_gears[g] = lv_label_create(s_btn_dash_gears[g]);
         lv_label_set_text(s_lbl_dash_gears[g], gear_names[g]);
         lv_obj_set_style_text_font(s_lbl_dash_gears[g], &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(s_lbl_dash_gears[g], lv_color_hex(is_d ? 0x000000 : UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_set_style_text_color(s_lbl_dash_gears[g], lv_color_hex(is_init_n ? 0x000000 : UI_COLOR_TEXT_SECONDARY), 0);
         lv_obj_align(s_lbl_dash_gears[g], LV_ALIGN_CENTER, 0, 0);
     }
 
@@ -458,7 +458,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_dash_speed_cmd, LV_ALIGN_CENTER, 0, 0);
 
     s_lbl_dash_speed_aux = lv_label_create(c_dspd);
-    lv_label_set_text(s_lbl_dash_speed_aux, "GEAR: [ D ]  •  DIFF: 0.2 km/h");
+    lv_label_set_text(s_lbl_dash_speed_aux, "GEAR: [ N ]     DIFF: 0.0 km/h");
     lv_obj_set_style_text_font(s_lbl_dash_speed_aux, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_dash_speed_aux, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_dash_speed_aux, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -995,7 +995,7 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(s_chart_drive_5s_cmd, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE_PLOT_15S);
 
     s_lbl_drive_target_gear = lv_label_create(c_dcmd);
-    lv_label_set_text(s_lbl_drive_target_gear, "TARGET GEAR: [ D ] (DRIVE)");
+    lv_label_set_text(s_lbl_drive_target_gear, "TARGET GEAR: [ N ] (NEUTRAL)");
     lv_obj_set_style_text_font(s_lbl_drive_target_gear, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_drive_target_gear, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_drive_target_gear, LV_ALIGN_TOP_LEFT, 0, 168);
@@ -1044,7 +1044,7 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(s_chart_drive_5s_act, chart_click_nav_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE_PLOT_15S);
 
     s_lbl_drive_act_gear = lv_label_create(c_dact);
-    lv_label_set_text(s_lbl_drive_act_gear, "ENGAGED GEAR: [ D ] (ENGAGED)");
+    lv_label_set_text(s_lbl_drive_act_gear, "ENGAGED GEAR: [ N ] (NEUTRAL)");
     lv_obj_set_style_text_font(s_lbl_drive_act_gear, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_lbl_drive_act_gear, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_drive_act_gear, LV_ALIGN_TOP_LEFT, 0, 168);
@@ -1140,7 +1140,7 @@ void ui_manager_init(void) {
     lv_obj_set_style_pad_all(s_card_drive_bitview, 0, 0);
 
     s_lbl_drive_bitview = lv_label_create(s_card_drive_bitview);
-    lv_label_set_text(s_lbl_drive_bitview, "MTR CMD [0x204]  RAW: 00 00 00 00 00  •  GEAR: D  EN: 1  •  [TOUCH PLOT / SWIPE DOWN]");
+    lv_label_set_text(s_lbl_drive_bitview, "MTR CMD [0x204]  RAW: 00 00 00 00 00  •  GEAR: N  EN: 0  •  [TOUCH PLOT / SWIPE DOWN]");
     lv_obj_set_style_text_font(s_lbl_drive_bitview, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_bitview, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
     lv_obj_align(s_lbl_drive_bitview, LV_ALIGN_CENTER, 0, 0);
@@ -1507,7 +1507,7 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(btn_back_d, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_DRIVE);
 
     s_lbl_drive_15s_hdr = lv_label_create(hdr_d15);
-    lv_label_set_text(s_lbl_drive_15s_hdr, "DRIVE 15s SCOPE  •  CMD: 15.0 km/h  |  ACT: 14.8 km/h  |  DIFF: 0.2 km/h  |  GEAR: D");
+    lv_label_set_text(s_lbl_drive_15s_hdr, "DRIVE 15s SCOPE  •  CMD: 0.0 km/h  |  ACT: 0.0 km/h  |  DIFF: 0.0 km/h  |  GEAR: N");
     lv_obj_set_style_text_font(s_lbl_drive_15s_hdr, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_15s_hdr, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_drive_15s_hdr, LV_ALIGN_LEFT_MID, 122, 0);
@@ -1647,8 +1647,7 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         }
     }
 
-    const char gear_chars[] = {'P', 'R', 'N', 'D', 'S'};
-    char g = (t->drive_act_gear < 5) ? gear_chars[t->drive_act_gear] : 'D';
+    char g = vehicle_gear_to_char(t->drive_act_gear);
     bool takeover = (t->ses_control_mode_status == 3);
 
     // -------------------------------------------------------------------------
@@ -1713,9 +1712,18 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         }
 
         // Active Gear Highlight
-        for (int i = 0; i < 5; i++) {
+        // Buttons: 0: R (gear==3), 1: N (gear==0), 2: D (gear==1), 3: S (gear==2)
+        int active_btn_idx = -1;
+        switch (t->drive_act_gear) {
+            case VEHICLE_GEAR_REVERSE: active_btn_idx = 0; break;
+            case VEHICLE_GEAR_NEUTRAL: active_btn_idx = 1; break;
+            case VEHICLE_GEAR_DRIVE:   active_btn_idx = 2; break;
+            case VEHICLE_GEAR_SPORT:   active_btn_idx = 3; break;
+            default: break;
+        }
+        for (int i = 0; i < 4; i++) {
             if (s_btn_dash_gears[i] && s_lbl_dash_gears[i]) {
-                bool is_active = (i == t->drive_act_gear);
+                bool is_active = (i == active_btn_idx);
                 lv_obj_set_style_bg_color(s_btn_dash_gears[i], lv_color_hex(is_active ? UI_COLOR_ACCENT_CMD : 0x121212), 0);
                 lv_obj_set_style_text_color(s_lbl_dash_gears[i], lv_color_hex(is_active ? 0x000000 : UI_COLOR_TEXT_SECONDARY), 0);
             }
@@ -2062,8 +2070,8 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             lv_label_set_text(s_lbl_drive_cmd, buf);
         }
         if (s_lbl_drive_target_gear) {
-            char cmd_g = (t->drive_cmd_gear < 5) ? gear_chars[t->drive_cmd_gear] : 'D';
-            snprintf(buf, sizeof(buf), "TARGET GEAR: [ %c ]", cmd_g);
+            char cmd_g = vehicle_gear_to_char(t->drive_cmd_gear);
+            snprintf(buf, sizeof(buf), "TARGET GEAR: [ %c ] (%s)", cmd_g, vehicle_gear_to_str(t->drive_cmd_gear));
             lv_label_set_text(s_lbl_drive_target_gear, buf);
         }
         if (s_lbl_drive_cmd_telemetry) {
@@ -2080,7 +2088,8 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             lv_label_set_text(s_lbl_drive_act, buf);
         }
         if (s_lbl_drive_act_gear) {
-            snprintf(buf, sizeof(buf), "ENGAGED GEAR: [ %c ] (ENGAGED)", g);
+            char act_g = vehicle_gear_to_char(t->drive_act_gear);
+            snprintf(buf, sizeof(buf), "ENGAGED GEAR: [ %c ] (%s)", act_g, vehicle_gear_to_str(t->drive_act_gear));
             lv_label_set_text(s_lbl_drive_act_gear, buf);
         }
         if (s_lbl_drive_motor_telemetry) {
@@ -2168,7 +2177,7 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             snprintf(buf, sizeof(buf),
                      "MTR CMD [0x204]  RAW: %02X %02X %02X %02X %02X  •  GEAR:%c  EN:%d  •  [TOUCH PLOT / SWIPE DOWN]",
                      t->drive_cmd_raw[0], t->drive_cmd_raw[1], t->drive_cmd_raw[2], t->drive_cmd_raw[3], t->drive_cmd_raw[4],
-                     g, t->estop_active ? 0 : 1);
+                     vehicle_gear_to_char(t->drive_cmd_gear), t->estop_active ? 0 : 1);
             lv_label_set_text(s_lbl_drive_bitview, buf);
         }
     }

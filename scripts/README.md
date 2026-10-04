@@ -47,6 +47,11 @@ This directory contains utility scripts for workspace management, testing, diagn
    - [update-protocol.ps1](file:///E:/work/av_project/scripts/update-protocol.ps1)
    - [check_bridge_protocol_gaps.py](file:///E:/work/av_project/scripts/check_bridge_protocol_gaps.py)
    - [bit_diff_analyzer.py](file:///E:/work/av_project/scripts/bit_diff_analyzer.py)
+10. [CAN Watcher (Ergonomic Single-Page Monitor)](#10-can-watcher-ergonomic-single-page-monitor)
+   - [run_can_watcher.sh](file:///E:/work/av_project/scripts/run_can_watcher.sh)
+   - [run_can_watcher.ps1](file:///E:/work/av_project/scripts/run_can_watcher.ps1)
+11. [AI & Workstation LLM Integration](#11-ai--workstation-llm-integration)
+   - [test_workstation_llm.py](file:///E:/work/av_project/scripts/test_workstation_llm.py)
 
 ---
 
@@ -880,5 +885,21 @@ This directory contains utility scripts for workspace management, testing, diagn
   ```powershell
   pwsh -File scripts/run_can_watcher.ps1 [-Interface can2] [-Port 8080] [-Sim]
   ```
+
+---
+
+## 11. AI & Workstation LLM Integration
+
+### [test_workstation_llm.py](file:///E:/work/av_project/scripts/test_workstation_llm.py)
+* **Description**: Smoke-testing and performance benchmarking CLI client for the Workstation vLLM inference server hosting Qwen3.8-27B. Validates server health, streams completions token-by-token, and calculates Time To First Token (TTFT), decode tokens/second, and total generation latency.
+* **Usage**:
+  ```bash
+  # Basic run against workstation (172.16.26.14:8000)
+  python scripts/test_workstation_llm.py
+
+  # Custom prompt and token limit
+  python scripts/test_workstation_llm.py --prompt "Explain ROS 2 LifecycleNode states" --max-tokens 512
+  ```
+
 
 

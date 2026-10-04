@@ -104,7 +104,7 @@ def update_telemetry_summary(can_id: int, decoded: Dict[str, Any], raw_data: byt
     elif can_id == 0x310:
         if len(raw_data) >= 2:
             ang_raw = (raw_data[0] << 8) | raw_data[1]
-            deg = (ang_raw - 3000) * 0.1
+            deg = (ang_raw - 30000) * 0.1
             telemetry_summary["steer_act_deg"] = round(deg, 1)
 
     # 5. Host Brake Req (0x301) - Commanded brake

@@ -68,4 +68,6 @@ the list of patches applied to upstream Autoware.
 | `docs/development/ETRIKE_AV_GIT_WORKFLOW.md` | Daily Git workflow + FAQ |
 | `docs/operations/RECOVERY.md` | Disaster recovery from GitHub only |
 | `docs/operations/ETRIKE_RUN.md` | Quick start: launch, drive, stop |
+| `docs/hardware/WORKSTATION_SSH.md` | Workstation remote access & credentials |
+| `docs/llm/LLM_WORKSTATION_INTEGRATION.md` | Dedicated AI Workstation & vLLM Qwen3.8-27B |
 | `UPSTREAM_MODIFICATIONS.md` | Upstream patches registry |

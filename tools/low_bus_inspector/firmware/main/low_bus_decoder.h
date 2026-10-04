@@ -29,6 +29,36 @@ typedef enum {
     NODE_COUNT = 5,
 } low_bus_node_t;
 
+/**
+ * @brief E-Trike Powertrain Low-Bus Gear State (0x204 byte 4, 0x206 byte 2)
+ */
+typedef enum {
+    VEHICLE_GEAR_NEUTRAL = 0,
+    VEHICLE_GEAR_DRIVE   = 1,
+    VEHICLE_GEAR_SPORT   = 2,
+    VEHICLE_GEAR_REVERSE = 3,
+} vehicle_gear_t;
+
+static inline char vehicle_gear_to_char(uint8_t gear) {
+    switch (gear) {
+        case VEHICLE_GEAR_NEUTRAL: return 'N';
+        case VEHICLE_GEAR_DRIVE:   return 'D';
+        case VEHICLE_GEAR_SPORT:   return 'S';
+        case VEHICLE_GEAR_REVERSE: return 'R';
+        default:                   return '?';
+    }
+}
+
+static inline const char *vehicle_gear_to_str(uint8_t gear) {
+    switch (gear) {
+        case VEHICLE_GEAR_NEUTRAL: return "NEUTRAL";
+        case VEHICLE_GEAR_DRIVE:   return "DRIVE";
+        case VEHICLE_GEAR_SPORT:   return "SPORT";
+        case VEHICLE_GEAR_REVERSE: return "REVERSE";
+        default:                   return "UNKNOWN";
+    }
+}
+
 typedef struct {
     uint32_t rx_count;
     float rate_hz;
