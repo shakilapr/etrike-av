@@ -90,25 +90,23 @@ class Ros2Bridge:
         """Background thread target that initializes rclpy and spins the node."""
         import rclpy
         from rclpy.node import Node
-        from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
+        from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 
         try:
             if not rclpy.ok():
                 rclpy.init(args=None)
 
             node = Node("av_dashboard_ros2_bridge")
+
+            # Universal sensor QoS profile: BEST_EFFORT + VOLATILE connects to BOTH reliable and best-effort publishers
             qos_sensor = QoSProfile(
                 reliability=QoSReliabilityPolicy.BEST_EFFORT,
-                history=QoSHistoryPolicy.KEEP_LAST,
-                depth=1,
-            )
-            qos_reliable = QoSProfile(
-                reliability=QoSReliabilityPolicy.RELIABLE,
+                durability=QoSDurabilityPolicy.VOLATILE,
                 history=QoSHistoryPolicy.KEEP_LAST,
                 depth=1,
             )
 
-            # 1. Ego Pose from Localization
+            # 1. Ego Pose from Localization (Multiple candidate topics)
             try:
                 from nav_msgs.msg import Odometry
                 node.create_subscription(
@@ -117,33 +115,81 @@ class Ros2Bridge:
                     self._on_odometry,
                     qos_sensor,
                 )
-                print("[ROS 2 Bridge] Subscribed to /localization/kinematic_state")
+                node.create_subscription(
+                    Odometry,
+                    "/localization/pose_twist_fusion_filter/kinematic_state",
+                    self._on_odometry,
+                    qos_sensor,
+                )
+                print("[ROS 2 Bridge] Subscribed to ego odometry topics")
             except Exception as e:
                 print(f"[ROS 2 Bridge] Odometry subscription failed: {e}")
 
-            # 2. Tracked Objects from Perception
+            try:
+                from geometry_msgs.msg import PoseStamped
+                node.create_subscription(
+                    PoseStamped,
+                    "/current_pose",
+                    self._on_pose_stamped,
+                    qos_sensor,
+                )
+                print("[ROS 2 Bridge] Subscribed to /current_pose")
+            except Exception:
+                pass
+
+            # 2. Perception Objects (TrackedObjects, PredictedObjects, DetectedObjects)
             try:
                 from autoware_perception_msgs.msg import TrackedObjects
                 node.create_subscription(
                     TrackedObjects,
                     "/perception/object_recognition/tracking/objects",
                     self._on_tracked_objects,
-                    qos_reliable,
+                    qos_sensor,
                 )
                 print("[ROS 2 Bridge] Subscribed to /perception/object_recognition/tracking/objects")
             except Exception as e:
-                print(f"[ROS 2 Bridge] TrackedObjects subscription failed (msgs installed?): {e}")
+                print(f"[ROS 2 Bridge] TrackedObjects subscription failed: {e}")
 
-            # 3. Planned Trajectory from Planning
+            try:
+                from autoware_perception_msgs.msg import PredictedObjects
+                node.create_subscription(
+                    PredictedObjects,
+                    "/perception/object_recognition/objects",
+                    self._on_predicted_objects,
+                    qos_sensor,
+                )
+                print("[ROS 2 Bridge] Subscribed to /perception/object_recognition/objects")
+            except Exception as e:
+                print(f"[ROS 2 Bridge] PredictedObjects subscription failed: {e}")
+
+            try:
+                from autoware_perception_msgs.msg import DetectedObjects
+                node.create_subscription(
+                    DetectedObjects,
+                    "/perception/object_recognition/detection/objects",
+                    self._on_detected_objects,
+                    qos_sensor,
+                )
+                print("[ROS 2 Bridge] Subscribed to /perception/object_recognition/detection/objects")
+            except Exception as e:
+                print(f"[ROS 2 Bridge] DetectedObjects subscription failed: {e}")
+
+            # 3. Planned Trajectory from Planning (Multiple candidate topics)
             try:
                 from autoware_planning_msgs.msg import Trajectory
                 node.create_subscription(
                     Trajectory,
                     "/planning/scenario_planning/trajectory",
                     self._on_trajectory,
-                    qos_reliable,
+                    qos_sensor,
                 )
-                print("[ROS 2 Bridge] Subscribed to /planning/scenario_planning/trajectory")
+                node.create_subscription(
+                    Trajectory,
+                    "/planning/trajectory",
+                    self._on_trajectory,
+                    qos_sensor,
+                )
+                print("[ROS 2 Bridge] Subscribed to planned trajectory topics")
             except Exception as e:
                 print(f"[ROS 2 Bridge] Trajectory subscription failed: {e}")
 
@@ -160,6 +206,19 @@ class Ros2Bridge:
         """Handle incoming ego odometry."""
         pos = msg.pose.pose.position
         ori = msg.pose.pose.orientation
+        yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
+
+        with self._lock:
+            self._ego_x = float(pos.x)
+            self._ego_y = float(pos.y)
+            self._ego_z = float(pos.z)
+            self._ego_yaw = yaw
+            self._has_ego_pose = True
+
+    def _on_pose_stamped(self, msg: Any) -> None:
+        """Handle incoming PoseStamped."""
+        pos = msg.pose.position
+        ori = msg.pose.orientation
         yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
 
         with self._lock:
@@ -203,16 +262,23 @@ class Ros2Bridge:
 
         return (round(three_x, 2), round(three_y, 2), round(three_z, 2), round(rel_yaw, 2))
 
-    def _on_tracked_objects(self, msg: Any) -> None:
-        """Handle incoming tracked objects from Autoware."""
+    def _process_objects_batch(self, objects: List[Any], frame_id: str, is_predicted: bool = False) -> None:
+        """Process and normalize raw Autoware perception objects."""
         now = time.time()
         converted: List[Dict[str, Any]] = []
+        is_map_frame = "map" in frame_id or "odom" in frame_id
 
-        is_map_frame = "map" in msg.header.frame_id or "odom" in msg.header.frame_id
+        for obj in objects:
+            # Handle kinematics pose differences between Tracked/Detected vs Predicted
+            if is_predicted and hasattr(obj.kinematics, "initial_pose_with_covariance"):
+                pose_cov = obj.kinematics.initial_pose_with_covariance
+            elif hasattr(obj.kinematics, "pose_with_covariance"):
+                pose_cov = obj.kinematics.pose_with_covariance
+            else:
+                continue
 
-        for obj in msg.objects:
-            pos = obj.kinematics.pose_with_covariance.pose.position
-            ori = obj.kinematics.pose_with_covariance.pose.orientation
+            pos = pose_cov.pose.position
+            ori = pose_cov.pose.orientation
             yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
 
             if is_map_frame:
@@ -220,23 +286,26 @@ class Ros2Bridge:
                     float(pos.x), float(pos.y), float(pos.z), yaw
                 )
             else:
-                # Already in base_link
+                # Already in base_link frame
                 tx = -float(pos.y)
                 ty = float(pos.z)
                 tz = -float(pos.x)
                 rel_yaw = yaw
 
-            # Determine best classification label
+            # Classification
             label = "UNKNOWN"
-            if obj.classification:
-                # Sort by confidence probability
-                best = max(obj.classification, key=lambda c: c.probability)
+            if hasattr(obj, "classification") and obj.classification:
+                best = max(obj.classification, key=lambda c: getattr(c, "probability", 0.0))
                 label = LABEL_MAP.get(int(best.label), "UNKNOWN")
 
-            # Extract 3D dimensions
-            dx = float(obj.shape.dimensions.x) if hasattr(obj.shape, "dimensions") else 2.0
-            dy = float(obj.shape.dimensions.z) if hasattr(obj.shape, "dimensions") else 1.5
-            dz = float(obj.shape.dimensions.y) if hasattr(obj.shape, "dimensions") else 4.0
+            # 3D Dimensions: x=length, y=width, z=height
+            dx = 2.0
+            dy = 1.8
+            dz = 1.5
+            if hasattr(obj, "shape") and hasattr(obj.shape, "dimensions"):
+                dx = float(obj.shape.dimensions.x)
+                dy = float(obj.shape.dimensions.y)
+                dz = float(obj.shape.dimensions.z)
 
             # Velocity in km/h
             speed_kmh = 0.0
@@ -244,9 +313,22 @@ class Ros2Bridge:
                 vx = obj.kinematics.twist_with_covariance.twist.linear.x
                 vy = obj.kinematics.twist_with_covariance.twist.linear.y
                 speed_kmh = round(math.sqrt(vx * vx + vy * vy) * 3.6, 1)
+            elif hasattr(obj.kinematics, "initial_twist_with_covariance"):
+                vx = obj.kinematics.initial_twist_with_covariance.twist.linear.x
+                vy = obj.kinematics.initial_twist_with_covariance.twist.linear.y
+                speed_kmh = round(math.sqrt(vx * vx + vy * vy) * 3.6, 1)
 
-            # Object ID (UUID bytes to string)
-            obj_id = str(getattr(obj, "object_id", ""))
+            # Object ID (convert uuid bytes to short hex)
+            obj_id = ""
+            if hasattr(obj, "object_id"):
+                raw_id = getattr(obj.object_id, "uuid", None)
+                if raw_id:
+                    try:
+                        obj_id = "".join(f"{b:02x}" for b in raw_id[:4])
+                    except Exception:
+                        obj_id = str(obj.object_id)
+                else:
+                    obj_id = str(obj.object_id)
 
             converted.append({
                 "id": obj_id,
@@ -271,13 +353,25 @@ class Ros2Bridge:
                 self._perception_timestamps.pop(0)
             self._perception_hz = round(len(self._perception_timestamps) / 1.0, 1)
 
+    def _on_tracked_objects(self, msg: Any) -> None:
+        """Handle incoming tracked objects from Autoware."""
+        self._process_objects_batch(msg.objects, msg.header.frame_id, is_predicted=False)
+
+    def _on_predicted_objects(self, msg: Any) -> None:
+        """Handle incoming predicted objects from Autoware."""
+        self._process_objects_batch(msg.objects, msg.header.frame_id, is_predicted=True)
+
+    def _on_detected_objects(self, msg: Any) -> None:
+        """Handle incoming detected objects from Autoware."""
+        self._process_objects_batch(msg.objects, msg.header.frame_id, is_predicted=False)
+
     def _on_trajectory(self, msg: Any) -> None:
         """Handle incoming planned trajectory points from Autoware."""
         now = time.time()
         is_map_frame = "map" in msg.header.frame_id or "odom" in msg.header.frame_id
         traj_points: List[Dict[str, float]] = []
 
-        # Downsample trajectory if too long (e.g. keep first 32 points)
+        # Downsample trajectory if too long (keep up to 32 points)
         step = max(1, len(msg.points) // 32)
         for i in range(0, len(msg.points), step):
             pt = msg.points[i]
@@ -311,5 +405,5 @@ class Ros2Bridge:
                 "hz": self._perception_hz if is_active else 0.0,
                 "tracked_count": self._perception_count if is_active else 0,
                 "objects": list(self._tracked_objects) if is_active else [],
-                "trajectory": list(self._planned_trajectory) if (now - self._last_trajectory_time) < 2.0 else [],
+                "trajectory": list(self._planned_trajectory) if (now - self._last_trajectory_time) < 2.5 else [],
             }

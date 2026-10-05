@@ -21,6 +21,24 @@ else
     echo "CAN interface '$INTERFACE' not found. Will start in simulation mode if unavailable."
 fi
 
+# Source ROS 2 and Autoware environments if present
+for setup_file in \
+    /opt/ros/humble/setup.bash \
+    /opt/ros/galactic/setup.bash \
+    /opt/ros/foxy/setup.bash \
+    /opt/autoware/setup.bash \
+    "$WORKSPACE_ROOT/autoware/install/setup.bash" \
+    /workspace/autoware/install/setup.bash \
+    "$HOME/autoware/install/setup.bash"; do
+    if [ -f "$setup_file" ]; then
+        echo "Sourcing $setup_file..."
+        # set +e to avoid premature exit if a setup script has harmless warnings
+        set +e
+        source "$setup_file" 2>/dev/null || true
+        set -e
+    fi
+done
+
 export PYTHONPATH="$WORKSPACE_ROOT:$PYTHONPATH"
 
 # Run Python server

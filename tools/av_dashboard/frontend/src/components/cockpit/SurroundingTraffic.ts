@@ -1,29 +1,11 @@
 import * as THREE from 'three';
 import { PerceptionObject } from '../../types/can';
 
-interface SimulatedActor {
-  id: string;
-  type: 'CAR' | 'TRUCK' | 'PEDESTRIAN' | 'BOX';
-  x: number;
-  z: number;
-  speedMs: number;
-  targetX: number;
-  heading: number;
-  color: number;
-  mesh: THREE.Group;
-  bboxMesh?: THREE.LineSegments;
-  bobPhase?: number;
-}
-
 export class SurroundingTraffic {
   public group: THREE.Group;
 
-  // Active simulated actors when offline
-  private actors: SimulatedActor[] = [];
-
   // Dynamic pool for live ROS2 perception objects
   private liveObjectPool: THREE.Group[] = [];
-  private activeLiveCount = 0;
 
   // Shared Geometries & Materials (cached for maximum WebGL performance)
   private carBodyGeo: THREE.BufferGeometry;
@@ -86,9 +68,6 @@ export class SurroundingTraffic {
       color: 0xd97706, // Industrial amber cardboard/crate
       roughness: 0.8,
     });
-
-    // 3. Initialize Procedural Simulated Traffic (Always lively when offline)
-    this.initSimulatedActors();
   }
 
   /** Builds a stylized 3D Car with FSD-style bounding wireframe */
@@ -202,148 +181,24 @@ export class SurroundingTraffic {
     return group;
   }
 
-  /** Initialize default simulated traffic for offline rich visual experience */
-  private initSimulatedActors() {
-    // 1. Lead Vehicle in adjacent left lane (overtaking at 26 km/h)
-    const car1Mesh = this.createCarMesh(0x0284c7); // Deep Blue
-    this.group.add(car1Mesh);
-    this.actors.push({
-      id: 'sim_car_1',
-      type: 'CAR',
-      x: -3.5,
-      z: -35.0,
-      speedMs: 7.2, // ~26 km/h
-      targetX: -3.5,
-      heading: 0,
-      color: 0x0284c7,
-      mesh: car1Mesh,
-    });
-
-    // 2. Slower vehicle ahead in right lane (cruising at 18 km/h)
-    const car2Mesh = this.createCarMesh(0x10b981); // Emerald Green
-    this.group.add(car2Mesh);
-    this.actors.push({
-      id: 'sim_car_2',
-      type: 'CAR',
-      x: 3.5,
-      z: -18.0,
-      speedMs: 5.0, // ~18 km/h
-      targetX: 3.5,
-      heading: 0,
-      color: 0x10b981,
-      mesh: car2Mesh,
-    });
-
-    // 3. Pedestrian walking along right sidewalk
-    const ped1Mesh = this.createPedestrianMesh();
-    this.group.add(ped1Mesh);
-    this.actors.push({
-      id: 'sim_ped_1',
-      type: 'PEDESTRIAN',
-      x: 7.8,
-      z: -15.0,
-      speedMs: 1.3, // ~4.6 km/h walking forward
-      targetX: 7.8,
-      heading: 0,
-      color: 0xf59e0b,
-      mesh: ped1Mesh,
-      bobPhase: 0,
-    });
-
-    // 4. Pedestrian on left curb
-    const ped2Mesh = this.createPedestrianMesh();
-    this.group.add(ped2Mesh);
-    this.actors.push({
-      id: 'sim_ped_2',
-      type: 'PEDESTRIAN',
-      x: -7.6,
-      z: -48.0,
-      speedMs: -0.9, // Walking toward vehicle
-      targetX: -7.6,
-      heading: Math.PI,
-      color: 0xf59e0b,
-      mesh: ped2Mesh,
-      bobPhase: 1.5,
-    });
-
-    // 5. Static Obstacle Box / Roadside Crate on shoulder
-    const boxMesh = this.createBoxMesh();
-    this.group.add(boxMesh);
-    this.actors.push({
-      id: 'sim_box_1',
-      type: 'BOX',
-      x: 5.8,
-      z: -65.0,
-      speedMs: 0.0, // Static
-      targetX: 5.8,
-      heading: 0.2,
-      color: 0xd97706,
-      mesh: boxMesh,
-    });
-  }
-
   /**
-   * Main per-frame update loop
-   * @param egoSpeedKmh Current e-trike speed in km/h
-   * @param perceptionList Optional live ROS 2 perception objects from WebSocket
-   * @param dt Frame delta time in seconds
+   * Main per-frame update loop.
+   * Strictly renders real-world Autoware perception objects only.
+   * If Autoware is offline or 0 objects are detected, no actors are rendered.
    */
   public update(
-    egoSpeedKmh: number,
+    _egoSpeedKmh: number,
     perceptionList: PerceptionObject[] | undefined,
-    rosActive: boolean,
-    dt: number
+    _rosActive: boolean,
+    _dt: number
   ) {
-    const egoSpeedMs = (egoSpeedKmh * 1000) / 3600;
-
-    // A. If ROS 2 Bridge is active:
-    // Strictly suppress procedural simulated actors so ONLY real Autoware objects are shown!
-    if (rosActive) {
-      for (const actor of this.actors) {
-        actor.mesh.visible = false;
+    if (perceptionList && perceptionList.length > 0) {
+      this.renderLivePerceptionObjects(perceptionList);
+    } else {
+      // Clear live pool when 0 objects detected
+      for (let i = 0; i < this.liveObjectPool.length; i++) {
+        this.liveObjectPool[i].visible = false;
       }
-      if (perceptionList && perceptionList.length > 0) {
-        this.renderLivePerceptionObjects(perceptionList);
-      } else {
-        // Clear live pool when 0 objects detected
-        for (let i = 0; i < this.liveObjectPool.length; i++) {
-          this.liveObjectPool[i].visible = false;
-        }
-      }
-      return;
-    }
-
-    // B. Fallback when ROS 2 is completely offline (simulation preview)
-    for (const actor of this.actors) {
-      actor.mesh.visible = true;
-
-      // Relative motion: actor speed minus ego speed
-      const relSpeed = actor.speedMs - egoSpeedMs;
-      actor.z += relSpeed * dt;
-
-      // Loop actors smoothly across horizon (-140m to +25m)
-      if (actor.z < -135) {
-        actor.z = 25.0; // Wrap to behind/approaching
-      } else if (actor.z > 28.0) {
-        actor.z = -130.0; // Wrap to far horizon
-      }
-
-      // Smooth lane following / slight drift
-      actor.x += (actor.targetX - actor.x) * (dt * 2.0);
-
-      actor.mesh.position.set(actor.x, 0, actor.z);
-      actor.mesh.rotation.y = actor.heading;
-
-      // Pedestrian walking bob
-      if (actor.type === 'PEDESTRIAN' && actor.bobPhase !== undefined) {
-        actor.bobPhase += dt * 8.0;
-        actor.mesh.position.y = Math.abs(Math.sin(actor.bobPhase)) * 0.08;
-      }
-    }
-
-    // Hide any unused pooled live objects
-    for (let i = 0; i < this.liveObjectPool.length; i++) {
-      this.liveObjectPool[i].visible = false;
     }
   }
 
@@ -396,9 +251,9 @@ export class SurroundingTraffic {
           if (pedChild) pedChild.visible = false;
           if (boxChild) boxChild.visible = false;
 
-          // Scale car if dimensions available
-          if (obj.dx && obj.dz) {
-            carChild?.scale.set(obj.dz / 1.8, 1.0, obj.dx / 4.0);
+          // Scale car if dimensions available (dx=length, dy=width, dz=height)
+          if (obj.dx && obj.dy) {
+            carChild?.scale.set(obj.dy / 1.8, (obj.dz || 1.4) / 1.4, obj.dx / 4.0);
           }
         }
       } else {

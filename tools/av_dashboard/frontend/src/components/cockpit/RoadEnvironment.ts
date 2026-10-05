@@ -8,18 +8,6 @@ export class RoadEnvironment {
   private boundaryLines: THREE.LineSegments;
   private pathRibbonMesh: THREE.Mesh;
   private pathGeometry: THREE.PlaneGeometry;
-
-  // 3D Trees (Instanced for maximum GPU performance)
-  private treeTrunkMesh: THREE.InstancedMesh;
-  private treeFoliageMesh: THREE.InstancedMesh;
-  private treeCount = 40; // 20 left, 20 right
-  private treeData: { x: number; baseZ: number; scale: number; rotY: number }[] = [];
-
-  // Street Lamp Posts
-  private lampPostMesh: THREE.InstancedMesh;
-  private lampHeadMesh: THREE.InstancedMesh;
-  private lampCount = 16; // 8 left, 8 right
-
   private dashCount = 30;
   private dashSpacing = 6.0; // meters between dashes
   private roadLength = 180;
@@ -100,61 +88,7 @@ export class RoadEnvironment {
     this.laneDashes.instanceMatrix.needsUpdate = true;
     this.group.add(this.laneDashes);
 
-    // 5. 3D Trees (Instanced Trunks & Polygonal Foliage)
-    const trunkGeo = new THREE.CylinderGeometry(0.2, 0.32, 2.4, 6);
-    trunkGeo.translate(0, 1.2, 0);
-    const trunkMat = new THREE.MeshStandardMaterial({
-      color: 0x292524, // Deep wood brown
-      roughness: 0.9,
-    });
-    this.treeTrunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, this.treeCount);
-
-    const foliageGeo = new THREE.ConeGeometry(1.8, 3.6, 7);
-    foliageGeo.translate(0, 3.8, 0);
-    const foliageMat = new THREE.MeshStandardMaterial({
-      color: 0x14532d, // Rich forest emerald
-      roughness: 0.7,
-      flatShading: true,
-    });
-    this.treeFoliageMesh = new THREE.InstancedMesh(foliageGeo, foliageMat, this.treeCount);
-
-    // Generate random tree positions along shoulders
-    for (let i = 0; i < this.treeCount; i++) {
-      const isLeft = i < this.treeCount / 2;
-      const sideIndex = isLeft ? i : i - this.treeCount / 2;
-      const zStep = 160 / (this.treeCount / 2);
-      const baseZ = 20 - sideIndex * zStep;
-      const xOffset = (Math.sin(i * 9.7) * 2.5);
-      const x = isLeft ? -13.5 - Math.abs(xOffset) : 13.5 + Math.abs(xOffset);
-      const scale = 0.85 + ((i % 5) * 0.12);
-      const rotY = (i * 1.3) % (Math.PI * 2);
-
-      this.treeData.push({ x, baseZ, scale, rotY });
-    }
-    this.group.add(this.treeTrunkMesh);
-    this.group.add(this.treeFoliageMesh);
-
-    // 6. Street Lamp Posts (Instanced)
-    const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 5.2, 6);
-    poleGeo.translate(0, 2.6, 0);
-    const poleMat = new THREE.MeshStandardMaterial({
-      color: 0x3f3f46,
-      roughness: 0.4,
-      metalness: 0.8,
-    });
-    this.lampPostMesh = new THREE.InstancedMesh(poleGeo, poleMat, this.lampCount);
-
-    const lampHeadGeo = new THREE.BoxGeometry(0.35, 0.12, 0.6);
-    lampHeadGeo.translate(0, 5.15, 0);
-    const lampHeadMat = new THREE.MeshBasicMaterial({
-      color: 0xe0f2fe, // Luminous cool white/cyan LED glow
-    });
-    this.lampHeadMesh = new THREE.InstancedMesh(lampHeadGeo, lampHeadMat, this.lampCount);
-
-    this.group.add(this.lampPostMesh);
-    this.group.add(this.lampHeadMesh);
-
-    // 7. Autonomous Planned Path Ribbon (Tesla FSD Style)
+    // 5. Autonomous Planned Path Ribbon (Tesla FSD Style)
     const segments = 32;
     this.pathGeometry = new THREE.PlaneGeometry(1.4, 32, 1, segments);
     this.pathGeometry.rotateX(-Math.PI / 2);
@@ -203,50 +137,7 @@ export class RoadEnvironment {
     }
     this.laneDashes.instanceMatrix.needsUpdate = true;
 
-    // 2. Scroll 3D Trees with vehicle speed
-    const treeLoopLength = 160.0;
-    const treeDummy = new THREE.Object3D();
-
-    for (let i = 0; i < this.treeCount; i++) {
-      const t = this.treeData[i];
-      let currentZ = ((t.baseZ + this.roadOffset) % treeLoopLength);
-      if (currentZ > 20) currentZ -= treeLoopLength;
-
-      treeDummy.position.set(t.x, 0, currentZ);
-      treeDummy.rotation.y = t.rotY;
-      treeDummy.scale.set(t.scale, t.scale, t.scale);
-      treeDummy.updateMatrix();
-
-      this.treeTrunkMesh.setMatrixAt(i, treeDummy.matrix);
-      this.treeFoliageMesh.setMatrixAt(i, treeDummy.matrix);
-    }
-    this.treeTrunkMesh.instanceMatrix.needsUpdate = true;
-    this.treeFoliageMesh.instanceMatrix.needsUpdate = true;
-
-    // 3. Scroll Street Lamp Posts
-    const lampSpacing = 20.0;
-    const lampLoopLength = this.lampCount * 0.5 * lampSpacing;
-    const lampDummy = new THREE.Object3D();
-
-    for (let i = 0; i < this.lampCount; i++) {
-      const isLeft = i < this.lampCount / 2;
-      const idx = isLeft ? i : i - this.lampCount / 2;
-      let currentZ = ((20 - idx * lampSpacing + this.roadOffset) % lampLoopLength);
-      if (currentZ > 20) currentZ -= lampLoopLength;
-
-      const x = isLeft ? -halfWidth - 0.4 : halfWidth + 0.4;
-      lampDummy.position.set(x, 0, currentZ);
-      lampDummy.rotation.y = isLeft ? Math.PI / 2 : -Math.PI / 2;
-      lampDummy.scale.set(1, 1, 1);
-      lampDummy.updateMatrix();
-
-      this.lampPostMesh.setMatrixAt(i, lampDummy.matrix);
-      this.lampHeadMesh.setMatrixAt(i, lampDummy.matrix);
-    }
-    this.lampPostMesh.instanceMatrix.needsUpdate = true;
-    this.lampHeadMesh.instanceMatrix.needsUpdate = true;
-
-    // 4. Update Autonomy Path Ribbon
+    // 2. Update Autonomy Path Ribbon
     const pos = this.pathGeometry.attributes.position;
     const halfRibbonWidth = 0.7;
     const segments = 32;

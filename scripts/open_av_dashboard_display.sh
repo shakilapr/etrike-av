@@ -31,6 +31,23 @@ echo " CAN Interface: $INTERFACE | URL: $URL"
 echo "======================================================================"
 
 # 2. Ensure AV Dashboard backend server is running
+# Source ROS 2 and Autoware environments if present
+for setup_file in \
+    /opt/ros/humble/setup.bash \
+    /opt/ros/galactic/setup.bash \
+    /opt/ros/foxy/setup.bash \
+    /opt/autoware/setup.bash \
+    "$WORKSPACE_ROOT/autoware/install/setup.bash" \
+    /workspace/autoware/install/setup.bash \
+    "$HOME/autoware/install/setup.bash"; do
+    if [ -f "$setup_file" ]; then
+        echo "Sourcing $setup_file..."
+        set +e
+        source "$setup_file" 2>/dev/null || true
+        set -e
+    fi
+done
+
 export PYTHONPATH="$WORKSPACE_ROOT:$PYTHONPATH"
 
 if curl -s "http://127.0.0.1:${PORT}/api/v1/status" >/dev/null 2>&1; then

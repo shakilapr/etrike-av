@@ -388,7 +388,7 @@ export const CockpitHud: React.FC = () => {
               <span className={rosStatus.active ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]' : 'text-neutral-500'}>
                 {rosStatus.active
                   ? `AUTOWARE UNIVERSE LIVE • ${rosStatus.tracked_count} OBJECTS (${rosStatus.hz} Hz)`
-                  : 'AUTOWARE UNIVERSE OFFLINE • SIMULATED PREVIEW'}
+                  : 'AUTOWARE UNIVERSE OFFLINE • WAITING FOR TOPICS'}
               </span>
             </div>
           </div>
