@@ -145,12 +145,13 @@ start_watcher() {
 stop_all() {
   detect_can
   say "Stopping"
-  docker exec "$CONTAINER" bash -c 'pkill -9 -f vehicle_bridge_node; pkill -9 -f planning_simulator; pkill -9 -f rviz2' >/dev/null 2>&1 || true
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    docker restart "$CONTAINER" >/dev/null 2>&1 || true
+  fi
   # Also stop CAN Watcher and AV Dashboard server and browser UI if running
-  pkill -f "tools.can_watcher.backend.server" 2>/dev/null || true
-  pkill -f "tools.av_dashboard.backend.server" 2>/dev/null || true
-  pkill -f "localhost:8000" 2>/dev/null || true
-  pkill -f "localhost:8080" 2>/dev/null || true
+  pkill -9 -f "tools.can_watcher.backend.server" 2>/dev/null || true
+  pkill -9 -f "tools.av_dashboard.backend.server" 2>/dev/null || true
+  pkill -9 -f "chromium" 2>/dev/null || true
 
   if [ "$CAN_IFACE" = "can2" ] || [ "$CAN_DRIVER" = "canalyst" ]; then
     if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then

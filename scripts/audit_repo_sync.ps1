@@ -75,6 +75,9 @@ $expectedPatches = @{
         "src/nebula_hesai/nebula_hesai_decoders/include/nebula_hesai_decoders/decoders/hesai_decoder.hpp",
         "src/nebula_hesai/nebula_hesai/src/hesai_ros_wrapper.cpp"
     )
+    "launcher/autoware_launch" = @(
+        "autoware_launch/config/planning/scenario_planning/common/common.param.yaml"
+    )
 }
 
 $issues = 0

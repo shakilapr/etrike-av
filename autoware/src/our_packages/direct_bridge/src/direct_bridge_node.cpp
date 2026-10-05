@@ -322,9 +322,9 @@ DirectBridgeNode::DirectBridgeNode(const rclcpp::NodeOptions & options)
   declare_parameter("enable_mtr", true);
   declare_parameter("enable_ses", true);
   declare_parameter("enable_seb", true);
-  declare_parameter("max_speed_forward", 3.0);
+  declare_parameter("max_speed_forward", 2.78);
   declare_parameter("max_speed_reverse", 0.5);
-  declare_parameter("max_steering_angle", 0.747);
+  declare_parameter("max_steering_angle", 0.314);
   declare_parameter("max_deceleration", 5.0);
   declare_parameter("max_brake_pressure_kpa", 5000.0);
   declare_parameter("command_timeout_ms", 200);

@@ -76,6 +76,13 @@ else
     echo "  [SKIP] $PATCH_SCRIPT not found"
 fi
 
+PATCH_SPEED_SCRIPT="$SCRIPT_DIR/../patches/apply_planning_velocity_limit_patch.sh"
+if [ -f "$PATCH_SPEED_SCRIPT" ]; then
+    bash "$PATCH_SPEED_SCRIPT"
+else
+    echo "  [SKIP] $PATCH_SPEED_SCRIPT not found"
+fi
+
 # --- 5. Verify our_packages exist ---
 echo ""
 echo "[STEP 4] Verifying E-Trike packages ..."

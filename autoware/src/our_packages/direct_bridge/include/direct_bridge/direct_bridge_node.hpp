@@ -72,9 +72,9 @@ struct DirectBridgeParams
   bool enable_mtr{true};
   bool enable_ses{true};
   bool enable_seb{true};
-  double max_speed_forward{3.0};
+  double max_speed_forward{2.78};
   double max_speed_reverse{0.5};
-  double max_steering_angle{0.747};
+  double max_steering_angle{0.314};
   double max_deceleration{5.0};
   double max_brake_pressure_kpa{5000.0};
   int command_timeout_ms{200};

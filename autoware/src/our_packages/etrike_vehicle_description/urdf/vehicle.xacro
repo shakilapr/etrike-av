@@ -12,7 +12,7 @@
   <xacro:property name="half_rear_track" value="0.575"/>
   <xacro:property name="wheel_radius" value="0.203"/>
   <xacro:property name="wheel_width" value="0.102"/>
-  <xacro:property name="max_steer_angle" value="0.747"/>
+  <xacro:property name="max_steer_angle" value="0.314"/>
 
   <xacro:property name="overall_length" value="2.635"/>
   <xacro:property name="overall_width" value="1.300"/>

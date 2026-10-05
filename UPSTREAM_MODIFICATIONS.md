@@ -31,3 +31,18 @@ Every deviation from upstream Autoware is documented here. If you're wondering
 ./patches/apply_nebula_firetime_patch.sh
 # Should print "PATCH VERIFIED" — if any marker is missing, upstream changed
 ```
+
+## Autoware Launch — Planning Velocity Limit (10 km/h)
+
+| Field | Value |
+|-------|-------|
+| **Component** | `launcher/autoware_launch` |
+| **Base** | Pinned in `repositories/autoware.repos` |
+| **Patch** | `patches/apply_planning_velocity_limit_patch.py` / `patches/apply_planning_velocity_limit_patch.sh` |
+| **Files modified** | `autoware_launch/config/planning/scenario_planning/common/common.param.yaml` |
+| **Reason** | Restrict maximum scenario planning velocity to 2.78 m/s (10.0 km/h) to maintain safe stability margins on the 3-wheeled E-Trike platform |
+| **Owner** | Vehicle motion / planning integration |
+| **Tests** | `python patches/apply_planning_velocity_limit_patch.py` |
+| **Upstream** | Specific to vehicle operating requirements |
+| **Removal condition** | Retain as long as 10 km/h speed governor is required |
+
