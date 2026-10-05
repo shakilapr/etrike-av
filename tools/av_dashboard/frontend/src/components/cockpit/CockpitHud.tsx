@@ -32,6 +32,7 @@ export const CockpitHud: React.FC = () => {
     toggleActiveView,
     framesById,
     isConnected,
+    rosStatus,
   } = useCanStore();
 
   // Speed calculation
@@ -377,11 +378,19 @@ export const CockpitHud: React.FC = () => {
             ))}
           </div>
 
-          {/* Bottom-Center: Clean Road Corridor Status */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 flex flex-col items-center pointer-events-none">
-            <span className="text-[11px] text-neutral-400 uppercase tracking-widest font-bold drop-shadow-md">
+          {/* Bottom-Center: Drive Mode & Autoware Universe Perception Status */}
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 flex flex-col items-center pointer-events-none gap-0.5">
+            <span className="text-[11px] text-neutral-300 uppercase tracking-widest font-black drop-shadow-md">
               {isAuto ? 'AUTONOMOUS DRIVING SYSTEM • DRIVE-BY-WIRE ACTIVE' : 'MANUAL DRIVE OVERRIDE'}
             </span>
+            <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider">
+              <div className={`w-2 h-2 rounded-full ${rosStatus.active ? 'bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(6,182,212,1)]' : 'bg-neutral-600'}`} />
+              <span className={rosStatus.active ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]' : 'text-neutral-500'}>
+                {rosStatus.active
+                  ? `AUTOWARE UNIVERSE LIVE • ${rosStatus.tracked_count} OBJECTS (${rosStatus.hz} Hz)`
+                  : 'AUTOWARE UNIVERSE OFFLINE • SIMULATED PREVIEW'}
+              </span>
+            </div>
           </div>
 
           {/* Bottom-Right: Speed Unit Switcher & Return to CAN Monitor (44px touch targets) */}

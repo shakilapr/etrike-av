@@ -115,6 +115,7 @@ export const DriveCockpit3D: React.FC = () => {
         telemetry.speed_act_kmh,
         telemetry.steer_act_deg,
         isAuto,
+        state.plannedTrajectory,
         dt
       );
 
@@ -122,6 +123,7 @@ export const DriveCockpit3D: React.FC = () => {
       traffic.update(
         telemetry.speed_act_kmh,
         state.perceptionObjects,
+        state.rosStatus.active,
         dt
       );
 
