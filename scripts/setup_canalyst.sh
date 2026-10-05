@@ -103,8 +103,7 @@ case "$ACTION" in
     down)
         echo "========================================"
         echo " Stopping CANalyst-II Bridge ($IFACE)"
-        echo "========================================"
-        pkill -f "canalyst_socketcan_daemon.py" 2>/dev/null || true
+        pkill -9 -f "canalyst_socketcan_daemon.py" 2>/dev/null || true
         if ip link show "$IFACE" >/dev/null 2>&1; then
             sudo ip link set down "$IFACE" 2>/dev/null || true
             echo "  [OK] Interface $IFACE brought DOWN."

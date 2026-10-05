@@ -25,9 +25,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from tools.av_dashboard.backend.contracts import ContractRegistry
+from tools.av_dashboard.backend.ros2_bridge import Ros2Bridge
 from tools.av_dashboard.backend.transport import BaseCanTransport, CanFrame, create_transport
 
 app = FastAPI(title="AV Dashboard API", version="2.0.0")
+
+ros_bridge = Ros2Bridge()
 
 # Enable CORS for Vite dev server during development
 app.add_middleware(
@@ -211,12 +214,20 @@ async def ingest_can_loop() -> None:
                 if (now - last_broadcast) >= 0.040:
                     last_broadcast = now
                     if active_websockets and pending_updates:
+                        ros_data = ros_bridge.get_latest_data()
                         payload = {
                             "type": "batch",
                             "total_frames": total_frames,
                             "uptime_sec": round(now - start_time, 1),
                             "frames": list(pending_updates.values()),
                             "telemetry": telemetry_summary,
+                            "ros_status": {
+                                "active": ros_data["active"],
+                                "hz": ros_data["hz"],
+                                "tracked_count": ros_data["tracked_count"],
+                            },
+                            "perception_objects": ros_data["objects"],
+                            "planned_trajectory": ros_data["trajectory"],
                         }
                         msg_text = json.dumps(payload)
                         pending_updates.clear()
@@ -243,6 +254,7 @@ async def ingest_can_loop() -> None:
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    ros_bridge.start()
     asyncio.create_task(ingest_can_loop())
 
 
@@ -262,6 +274,7 @@ async def get_catalog() -> JSONResponse:
 @app.get("/api/v1/status")
 async def get_status() -> JSONResponse:
     """Return backend status, interface, and live frame counter."""
+    ros_data = ros_bridge.get_latest_data()
     return JSONResponse(
         {
             "total_frames": total_frames,
@@ -269,8 +282,19 @@ async def get_status() -> JSONResponse:
             "active_clients": len(active_websockets),
             "contracts_source": registry.source_description,
             "telemetry": telemetry_summary,
+            "ros": {
+                "active": ros_data["active"],
+                "hz": ros_data["hz"],
+                "tracked_count": ros_data["tracked_count"],
+            },
         }
     )
+
+
+@app.get("/api/v1/ros")
+async def get_ros_data() -> JSONResponse:
+    """Return live ROS 2 perception and planning bridge state."""
+    return JSONResponse(ros_bridge.get_latest_data())
 
 
 # Canonical WebSocket /ws/v1/stream endpoint
@@ -280,12 +304,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     active_websockets.add(websocket)
     try:
+        ros_data = ros_bridge.get_latest_data()
         snapshot = {
             "type": "snapshot",
             "total_frames": total_frames,
             "uptime_sec": round(time.time() - start_time, 1),
             "frames": list(latest_frames.values()),
             "telemetry": telemetry_summary,
+            "ros_status": {
+                "active": ros_data["active"],
+                "hz": ros_data["hz"],
+                "tracked_count": ros_data["tracked_count"],
+            },
+            "perception_objects": ros_data["objects"],
+            "planned_trajectory": ros_data["trajectory"],
         }
         await websocket.send_text(json.dumps(snapshot))
         while True:
