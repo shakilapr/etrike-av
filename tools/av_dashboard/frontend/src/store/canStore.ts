@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { FrameSnapshot, MessageDef, TelemetrySummary } from '../types/can';
+import { FrameSnapshot, MessageDef, TelemetrySummary, PerceptionObject } from '../types/can';
 
 interface CanState {
   catalog: MessageDef[];
@@ -8,6 +8,7 @@ interface CanState {
   selectedCanId: number;
   hoveredSignal: string | null;
   telemetry: TelemetrySummary;
+  perceptionObjects: PerceptionObject[];
   totalFrames: number;
   uptimeSec: number;
   isConnected: boolean;
@@ -58,6 +59,7 @@ export const useCanStore = create<CanState>((set, get) => ({
     lights_cmd: { left: false, right: false, hazard: false, headlight: false, brake: false },
     lights_act: { left: false, right: false, hazard: false, headlight: false, brake: false },
   },
+  perceptionObjects: [],
   totalFrames: 0,
   uptimeSec: 0,
   isConnected: false,
@@ -168,6 +170,9 @@ export const useCanStore = create<CanState>((set, get) => ({
                 currentFrames[f.id] = f;
               }
               updates.framesById = currentFrames;
+            }
+            if (data.perception_objects && Array.isArray(data.perception_objects)) {
+              updates.perceptionObjects = data.perception_objects;
             }
 
             set(updates);

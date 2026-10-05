@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useCanStore } from '../../store/canStore';
 import { TuktukVehicle } from './TuktukVehicle';
 import { RoadEnvironment } from './RoadEnvironment';
+import { SurroundingTraffic } from './SurroundingTraffic';
 import { CockpitHud } from './CockpitHud';
 
 export const DriveCockpit3D: React.FC = () => {
@@ -72,12 +73,15 @@ export const DriveCockpit3D: React.FC = () => {
     const rimLight = new THREE.HemisphereLight(0x06b6d4, 0x18181b, 0.6);
     scene.add(rimLight);
 
-    // 6. Road Environment & Tuktuk Vehicle
+    // 6. Road Environment, Tuktuk Vehicle & Surrounding Traffic
     const road = new RoadEnvironment();
     scene.add(road.group);
 
     const tuktuk = new TuktukVehicle();
     scene.add(tuktuk.group);
+
+    const traffic = new SurroundingTraffic();
+    scene.add(traffic.group);
 
     // 7. Animation & Game Motion Loop
     let animationFrameId: number;
@@ -111,6 +115,13 @@ export const DriveCockpit3D: React.FC = () => {
         telemetry.speed_act_kmh,
         telemetry.steer_act_deg,
         isAuto,
+        dt
+      );
+
+      // Update Surrounding Traffic, Pedestrians & Obstacles
+      traffic.update(
+        telemetry.speed_act_kmh,
+        state.perceptionObjects,
         dt
       );
 

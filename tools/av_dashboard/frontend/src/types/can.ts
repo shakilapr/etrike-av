@@ -75,3 +75,16 @@ export interface TelemetrySummary {
     brake: boolean;
   };
 }
+
+export interface PerceptionObject {
+  id: string | number;
+  label: 'CAR' | 'TRUCK' | 'BUS' | 'PEDESTRIAN' | 'BICYCLE' | 'BOX' | 'UNKNOWN';
+  x: number; // lateral position (meters, left is negative, right is positive)
+  y: number; // vertical height (meters)
+  z: number; // longitudinal position (meters ahead, forward is negative Z in Three.js)
+  dx?: number; // length
+  dy?: number; // height
+  dz?: number; // width
+  yaw?: number; // heading in radians
+  speed_kmh?: number;
+}
