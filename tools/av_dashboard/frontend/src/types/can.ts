@@ -88,3 +88,15 @@ export interface PerceptionObject {
   yaw?: number; // heading in radians
   speed_kmh?: number;
 }
+
+export interface TrajectoryPoint {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface RosStatus {
+  active: boolean;
+  hz: number;
+  tracked_count: number;
+}
