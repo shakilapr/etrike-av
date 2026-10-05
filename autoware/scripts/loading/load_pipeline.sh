@@ -126,13 +126,31 @@ start_bridge() {
   echo "  launched (log: /tmp/bridge_can.log). Verify with: candump -tz $CAN_IFACE"
 }
 
+start_dashboard() {
+  detect_can
+  say "AV Dashboard on $CAN_IFACE"
+  if [ -f "$WORKSPACE_ROOT/scripts/open_av_dashboard_display.sh" ]; then
+    bash "$WORKSPACE_ROOT/scripts/open_av_dashboard_display.sh" "$CAN_IFACE"
+  fi
+}
+
+start_watcher() {
+  detect_can
+  say "CAN Watcher on $CAN_IFACE"
+  if [ -f "$WORKSPACE_ROOT/scripts/open_can_watcher_display.sh" ]; then
+    bash "$WORKSPACE_ROOT/scripts/open_can_watcher_display.sh" "$CAN_IFACE"
+  fi
+}
+
 stop_all() {
   detect_can
   say "Stopping"
   docker exec "$CONTAINER" bash -c 'pkill -9 -f vehicle_bridge_node; pkill -9 -f planning_simulator; pkill -9 -f rviz2' >/dev/null 2>&1 || true
-  # Also stop CAN Watcher server and browser UI if running
+  # Also stop CAN Watcher and AV Dashboard server and browser UI if running
   pkill -f "tools.can_watcher.backend.server" 2>/dev/null || true
+  pkill -f "tools.av_dashboard.backend.server" 2>/dev/null || true
   pkill -f "localhost:8000" 2>/dev/null || true
+  pkill -f "localhost:8080" 2>/dev/null || true
 
   if [ "$CAN_IFACE" = "can2" ] || [ "$CAN_DRIVER" = "canalyst" ]; then
     if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
@@ -141,7 +159,7 @@ stop_all() {
   else
     sudo ip link set "$CAN_IFACE" down >/dev/null 2>&1 || true
   fi
-  echo "  bridge, simulator, CAN Watcher stopped; $CAN_IFACE down. (container left running)"
+  echo "  bridge, simulator, CAN Watcher, AV Dashboard stopped; $CAN_IFACE down. (container left running)"
 }
 
 case "$MODE" in
@@ -162,11 +180,17 @@ case "$MODE" in
   --bridge)
     start_bridge
     ;;
+  --dashboard)
+    start_dashboard
+    ;;
+  --watcher|--canwatch)
+    start_watcher
+    ;;
   --stop)
     stop_all
     ;;
   *)
-    echo "Usage: $0 [all|--bench|--universe|--can|--bridge|--stop]"
+    echo "Usage: $0 [all|--bench|--universe|--can|--bridge|--dashboard|--watcher|--stop]"
     exit 1
     ;;
 esac

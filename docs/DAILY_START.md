@@ -10,17 +10,19 @@ Here is your simple everyday checklist to get up and running on the AV Project.
 
 ---
 
-## ⚡ Daily 3-Command Quick Reference (Bench Simulator & CAN Watch)
+## ⚡ Daily Command Quick Reference (Bench Simulator & Dashboards)
 
 | Action | Terminal Command (Run on Jetson host) |
 |---|---|
 | **1. Open Autoware Universe** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --bench` |
-| **2. Open CAN Watch** | `bash ~/av_project/scripts/open_can_watcher_display.sh can2` |
+| **2a. Open CAN Watch** | `bash ~/av_project/scripts/open_can_watch.sh` *(or `open_can_watcher_display.sh can2`)* |
+| **2b. Open AV Dashboard** | `bash ~/av_project/scripts/open_av_dashboard.sh` *(or `open_av_dashboard_display.sh can2`)* |
 | **3. Close All** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop` |
 
 - **Open Autoware Universe:** Starts the container, brings up the `can2` interface (CANalyst-II), launches Autoware planning simulator + RViz on the Jetson monitor, and starts `autoware_vehicle_bridge` in sim mode so commanded steering angles and velocities transmit directly to the CAN bus.
-- **Open CAN Watch:** Opens the visual telemetry cockpit directly on the Jetson monitor (`DISPLAY=:1`) and serves it across the network at `http://172.16.25.67:8000`.
-- **Close All:** Gracefully stops the simulator, RViz, vehicle bridge, CAN Watcher, and shuts down the CAN interface.
+- **Open CAN Watch:** Opens the real-time CAN bus bit matrix and telemetry analyzer on the Jetson monitor (`DISPLAY=:1`) and at `http://172.16.25.67:8000`.
+- **Open AV Dashboard:** Opens the 3D vehicle & AV cockpit telemetry dashboard on the Jetson monitor (`DISPLAY=:1`) and at `http://172.16.25.67:8080`.
+- **Close All:** Gracefully stops the simulator, RViz, vehicle bridge, CAN Watcher, AV Dashboard, and shuts down the CAN interface.
 
 ---
 
