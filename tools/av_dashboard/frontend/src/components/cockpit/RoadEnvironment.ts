@@ -172,7 +172,13 @@ export class RoadEnvironment {
     this.group.add(this.pathRibbonMesh);
   }
 
-  public update(speedKmh: number, steerDeg: number, isAutoMode: boolean, dt: number) {
+  public update(
+    speedKmh: number,
+    steerDeg: number,
+    isAutoMode: boolean,
+    plannedTrajectory: { x: number; y: number; z: number }[] | undefined,
+    dt: number
+  ) {
     const speedMs = (speedKmh * 1000) / 3600;
 
     // 1. Scroll Lane Dashes backward
@@ -240,26 +246,38 @@ export class RoadEnvironment {
     this.lampPostMesh.instanceMatrix.needsUpdate = true;
     this.lampHeadMesh.instanceMatrix.needsUpdate = true;
 
-    // 4. Update Autonomy Path Ribbon Curvature (Tesla FSD Style)
-    const L = 2.0; // Wheelbase
-    const steerRad = (steerDeg * Math.PI) / 180;
-    const kappa = Math.tan(steerRad) / L; // Curvature
-
+    // 4. Update Autonomy Path Ribbon
     const pos = this.pathGeometry.attributes.position;
     const halfRibbonWidth = 0.7;
-    const length = 32.0;
     const segments = 32;
-
     this.pathPulseOffset += dt * 2.5;
 
-    for (let j = 0; j <= segments; j++) {
-      const t = j / segments;
-      const z = -t * length; // -Z is forward
-      const curveX = -0.45 * kappa * z * z; // Lateral offset
+    if (plannedTrajectory && plannedTrajectory.length >= 3) {
+      // Use real Autoware Universe trajectory waypoints
+      for (let j = 0; j <= segments; j++) {
+        const t = j / segments;
+        const ptIdx = Math.min(Math.floor(t * (plannedTrajectory.length - 1)), plannedTrajectory.length - 1);
+        const pt = plannedTrajectory[ptIdx];
+        const vIdx = j * 2;
+        pos.setXYZ(vIdx, pt.x - halfRibbonWidth, 0.02, pt.z);
+        pos.setXYZ(vIdx + 1, pt.x + halfRibbonWidth, 0.02, pt.z);
+      }
+    } else {
+      // Kinematic vehicle curvature fallback
+      const L = 2.0; // Wheelbase
+      const steerRad = (steerDeg * Math.PI) / 180;
+      const kappa = Math.tan(steerRad) / L;
+      const length = 32.0;
 
-      const vIdx = j * 2;
-      pos.setXYZ(vIdx, curveX - halfRibbonWidth, 0.02, z);
-      pos.setXYZ(vIdx + 1, curveX + halfRibbonWidth, 0.02, z);
+      for (let j = 0; j <= segments; j++) {
+        const t = j / segments;
+        const z = -t * length;
+        const curveX = -0.45 * kappa * z * z;
+
+        const vIdx = j * 2;
+        pos.setXYZ(vIdx, curveX - halfRibbonWidth, 0.02, z);
+        pos.setXYZ(vIdx + 1, curveX + halfRibbonWidth, 0.02, z);
+      }
     }
     pos.needsUpdate = true;
 

@@ -288,20 +288,32 @@ export class SurroundingTraffic {
    * @param perceptionList Optional live ROS 2 perception objects from WebSocket
    * @param dt Frame delta time in seconds
    */
-  public update(egoSpeedKmh: number, perceptionList: PerceptionObject[] | undefined, dt: number) {
+  public update(
+    egoSpeedKmh: number,
+    perceptionList: PerceptionObject[] | undefined,
+    rosActive: boolean,
+    dt: number
+  ) {
     const egoSpeedMs = (egoSpeedKmh * 1000) / 3600;
 
-    // A. If live ROS 2 perception objects are available, render them
-    if (perceptionList && perceptionList.length > 0) {
-      // Hide simulated actors
+    // A. If ROS 2 Bridge is active:
+    // Strictly suppress procedural simulated actors so ONLY real Autoware objects are shown!
+    if (rosActive) {
       for (const actor of this.actors) {
         actor.mesh.visible = false;
       }
-      this.renderLivePerceptionObjects(perceptionList);
+      if (perceptionList && perceptionList.length > 0) {
+        this.renderLivePerceptionObjects(perceptionList);
+      } else {
+        // Clear live pool when 0 objects detected
+        for (let i = 0; i < this.liveObjectPool.length; i++) {
+          this.liveObjectPool[i].visible = false;
+        }
+      }
       return;
     }
 
-    // B. Otherwise run smooth procedural simulation
+    // B. Fallback when ROS 2 is completely offline (simulation preview)
     for (const actor of this.actors) {
       actor.mesh.visible = true;
 
