@@ -44,6 +44,7 @@ docker run -it --rm \
     colcon build --symlink-install \
       --cmake-args -DCMAKE_BUILD_TYPE=Release \
       --packages-select \
+        autoware_launch \
         autoware_vehicle_bridge \
         etrike_protocol \
         etrike_vehicle_description \
