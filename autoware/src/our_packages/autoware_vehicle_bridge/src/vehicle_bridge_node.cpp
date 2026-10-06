@@ -1162,10 +1162,11 @@ void VehicleBridgeNode::tick_control()
   }
 
   // 0x301 HOST_BRAKE_REQ
-  if (encoder_->encode_brake(*ctrl, frame)) {
-    can_->send(frame);
-  }
-  if (park_requested_.load(std::memory_order_relaxed) && encoder_->encode_brake_hold(frame)) {
+  if (park_requested_.load(std::memory_order_relaxed)) {
+    if (encoder_->encode_brake_hold(frame)) {
+      can_->send(frame);
+    }
+  } else if (encoder_->encode_brake(*ctrl, frame)) {
     can_->send(frame);
   }
 
