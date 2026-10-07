@@ -68,20 +68,23 @@ void can_decoder_process_frame(const twai_message_t *frame) {
 
         // 0x121: RT_MOTION_RPT (Speed, Gear, Yaw Rate)
         case 0x121:
-            if (dlc >= 4) {
-                // speed_mmps (int32 big endian)
-                int32_t speed_mmps = (int32_t)((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]);
+            if (dlc >= 2) {
+                // speed_mmps (int16 big endian)
+                int16_t speed_mmps = (int16_t)((d[0] << 8) | d[1]);
                 s_telemetry.speed_act_kmh = (float)speed_mmps * 0.0036f;
                 if (s_telemetry.speed_act_kmh < 0.0f) s_telemetry.speed_act_kmh = 0.0f;
                 s_telemetry.motor_rpm = (uint16_t)(s_telemetry.speed_act_kmh * 110.0f);
                 s_telemetry.throttle_percent = (uint8_t)fminf((s_telemetry.speed_act_kmh / 45.0f) * 100.0f, 100.0f);
             }
-            if (dlc >= 6) {
-                // yaw_rate_mrad_s (int16 big endian)
-                s_telemetry.yaw_rate_mrad_s = (int16_t)((d[4] << 8) | d[5]);
+            if (dlc >= 5) {
+                // yaw_rate_mrad_s (int24 big endian signed)
+                int32_t raw_yaw = ((int32_t)d[2] << 16) | ((int32_t)d[3] << 8) | d[4];
+                if (raw_yaw & 0x800000) raw_yaw |= 0xFF000000;
+                s_telemetry.yaw_rate_mrad_s = (int16_t)(raw_yaw > 32767 ? 32767 : (raw_yaw < -32768 ? -32768 : raw_yaw));
             }
-            if (dlc >= 7) {
-                uint8_t g = d[6];
+            if (dlc >= 6) {
+                // gear is byte 5 (0: N, 1: D, 2: S, 3: R)
+                uint8_t g = d[5];
                 s_telemetry.gear = (g == 1) ? GEAR_D : (g == 2) ? GEAR_S : (g == 3) ? GEAR_R : GEAR_N;
             }
             break;

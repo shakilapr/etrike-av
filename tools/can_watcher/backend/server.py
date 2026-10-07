@@ -58,6 +58,8 @@ telemetry_summary = {
     "estop": False,
     "estop_reason": 0,
     "gear": "N",
+    "gear_cmd": "N",
+    "gear_act": "N",
     "speed_cmd_kmh": 0.0,
     "speed_act_kmh": 0.0,
     "steer_cmd_deg": 0.0,
@@ -82,15 +84,29 @@ def update_telemetry_summary(can_id: int, decoded: Dict[str, Any], raw_data: byt
             telemetry_summary["speed_cmd_kmh"] = round(s_raw * 0.0036, 1)
         if len(raw_data) >= 8:
             gear_raw = raw_data[7]
-            telemetry_summary["gear"] = {0: "N", 1: "D", 2: "S", 3: "R"}.get(gear_raw, "N")
+            g_cmd = {0: "N", 1: "D", 2: "S", 3: "R"}.get(gear_raw, "N")
+            telemetry_summary["gear_cmd"] = g_cmd
+            if telemetry_summary.get("mode") == "AUTO" or telemetry_summary.get("gear_act") == "N":
+                telemetry_summary["gear"] = g_cmd
 
     # 2. RT Motion Report (0x121) - Feedback speed and yaw
     elif can_id == 0x121:
         if "speed_mmps" in decoded:
             telemetry_summary["speed_act_kmh"] = round(decoded["speed_mmps"]["value"] * 0.0036, 1)
+        elif len(raw_data) >= 2:
+            s_raw = struct.unpack(">h", raw_data[:2])[0]
+            telemetry_summary["speed_act_kmh"] = round(s_raw * 0.0036, 1)
         if "gear" in decoded:
             g_val = int(decoded["gear"]["raw"])
-            telemetry_summary["gear"] = {0: "N", 1: "D", 2: "S", 3: "R"}.get(g_val, "N")
+            g_act = {0: "N", 1: "D", 2: "S", 3: "R"}.get(g_val, "N")
+            telemetry_summary["gear_act"] = g_act
+            if telemetry_summary.get("mode") != "AUTO":
+                telemetry_summary["gear"] = g_act
+        elif len(raw_data) >= 6:
+            g_act = {0: "N", 1: "D", 2: "S", 3: "R"}.get(raw_data[5], "N")
+            telemetry_summary["gear_act"] = g_act
+            if telemetry_summary.get("mode") != "AUTO":
+                telemetry_summary["gear"] = g_act
 
     # 3. Host Steer Cmd (0x303) - Commanded steering
     elif can_id == 0x303:
