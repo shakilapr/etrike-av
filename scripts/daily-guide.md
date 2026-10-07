@@ -24,6 +24,48 @@
 
 ---
 
+## 🚀 How to Run the Bench Hardware Actuation Test (Step-by-Step)
+
+Follow these exact steps to actuate the physical wheel motor, steering mechanism, and brakes directly from the Autoware Universe simulation:
+
+### Step 1: Connect Hardware & Check Power
+1. Ensure the USB-CAN adapter (CANalyst-II or CANable Pro) is plugged into the Jetson and connected to the vehicle CAN bus (`can2`).
+2. Ensure vehicle 12V and actuator power supplies are switched ON.
+
+### Step 2: Start the Pipeline
+Run this command in a terminal on the Linux host (or via SSH `ssh med1@172.16.25.67`):
+```bash
+bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --bench
+```
+*What this does:*
+- Configures `can2` at 500k bitrate.
+- Launches Autoware Universe planning simulator + RViz on the Jetson monitor (`DISPLAY=:1`).
+- Starts `autoware_vehicle_bridge` in `sim_mode:=true`, which listens to simulated trajectory commands and forwards them onto CAN (`0x300`, `0x303`, `0x301`).
+
+### Step 3: Plan and Engage in RViz
+Look at RViz on the Jetson monitor (wait ~30–40s for full startup):
+1. **Set Initial Pose:** Click the **`2D Pose Estimate`** button on the top toolbar of RViz, then click and drag an arrow on the lanelet map where the vehicle starts.
+2. **Set Goal:** Click the **`2D Goal Pose`** button on the top toolbar of RViz, then click and drag an arrow down the lanelet road. Autoware will calculate and display a green planned path.
+3. **Engage Driving:** In the Autoware State Panel (bottom-left of RViz), click the **`Engage`** button (or click **`AUTO`**).
+
+### Step 4: Observe Physical Actuation on the Bench
+As the vehicle in RViz follows the green path at 10 km/h:
+- **Wheel Motor:** Rotates forward at commanded speed (`0x300` HOST_DRIVE_CMD, DRIVE gear).
+- **Steering Actuator:** Moves left and right following the trajectory curves (`0x303` HOST_STEER_CMD).
+- **Brakes:** 5000 kPa park brake hold unlatches automatically upon engage; brakes apply smoothly when the vehicle slows down or reaches the destination (`0x301` HOST_BRAKE_REQ).
+
+### Step 5: Live Telemetry Monitoring (Optional)
+To view real-time CAN signals and 3D cockpit telemetry while running:
+- **CAN Watcher:** `bash ~/av_project/scripts/open_can_watch.sh` (or in browser at `http://172.16.25.67:8000`)
+- **AV 3D Cockpit:** `bash ~/av_project/scripts/open_av_dashboard.sh` (or in browser at `http://172.16.25.67:8080`)
+
+### Step 6: Stop When Finished
+```bash
+bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop
+```
+
+---
+
 # SECTION 1: System & Network Setup
 
 ## 1.1 Check File Sync Status
