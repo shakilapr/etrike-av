@@ -953,6 +953,9 @@ void VehicleBridgeNode::on_control(const autoware_control_msgs::msg::Control::Sh
   {
     return;
   }
+  if (std::abs(msg->longitudinal.velocity) > 0.05f) {
+    park_requested_.store(false, std::memory_order_relaxed);
+  }
   latest_control_ = msg;
   last_cmd_time_ = now();
 }
@@ -1149,6 +1152,21 @@ void VehicleBridgeNode::tick_control()
     has_gear = true;
   }
 
+  // Active longitudinal motion overrides stale park latch and selects directional gear
+  if (ctrl && ctrl->longitudinal.velocity > 0.05f &&
+    (params_.sim_mode || engaged_.load(std::memory_order_relaxed)))
+  {
+    gear_val = gear::CAN_D;
+    has_gear = true;
+    park_requested_.store(false, std::memory_order_relaxed);
+  } else if (ctrl && ctrl->longitudinal.velocity < -0.05f &&
+    (params_.sim_mode || engaged_.load(std::memory_order_relaxed)))
+  {
+    gear_val = gear::CAN_R;
+    has_gear = true;
+    park_requested_.store(false, std::memory_order_relaxed);
+  }
+
   struct can_frame frame;
 
   // 0x300 HOST_DRIVE_CMD
@@ -1162,7 +1180,9 @@ void VehicleBridgeNode::tick_control()
   }
 
   // 0x301 HOST_BRAKE_REQ
-  if (park_requested_.load(std::memory_order_relaxed)) {
+  if (park_requested_.load(std::memory_order_relaxed) &&
+    (!ctrl || std::abs(ctrl->longitudinal.velocity) <= 0.05f))
+  {
     if (encoder_->encode_brake_hold(frame)) {
       can_->send(frame);
     }
@@ -1319,8 +1339,8 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
           {
             gear_report.report = autoware_vehicle_msgs::msg::GearReport::PARK;
           }
-          if (pub_velocity_->is_activated()) {pub_velocity_->publish(velocity);}
-          if (pub_gear_->is_activated()) {pub_gear_->publish(gear_report);}
+          if (!params_.sim_mode && pub_velocity_->is_activated()) {pub_velocity_->publish(velocity);}
+          if (!params_.sim_mode && pub_gear_->is_activated()) {pub_gear_->publish(gear_report);}
         }
         break;
       }
@@ -1361,13 +1381,13 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
           } else {
             turn.report = autoware_vehicle_msgs::msg::TurnIndicatorsReport::DISABLE;
           }
-          if (pub_turn_status_->is_activated()) {pub_turn_status_->publish(turn);}
+          if (!params_.sim_mode && pub_turn_status_->is_activated()) {pub_turn_status_->publish(turn);}
 
           autoware_vehicle_msgs::msg::HazardLightsReport hazard;
           hazard.report = ((lights & 0x03) == 0x03) ?
             autoware_vehicle_msgs::msg::HazardLightsReport::ENABLE :
             autoware_vehicle_msgs::msg::HazardLightsReport::DISABLE;
-          if (pub_hazard_status_->is_activated()) {pub_hazard_status_->publish(hazard);}
+          if (!params_.sim_mode && pub_hazard_status_->is_activated()) {pub_hazard_status_->publish(hazard);}
         }
         break;
       }
@@ -1382,7 +1402,7 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
         autoware_vehicle_msgs::msg::ControlModeReport mode;
         autoware_vehicle_msgs::msg::GearReport gear;
         if (decoder_->decode_state(frame, mode, gear)) {
-          if (pub_mode_->is_activated()) {pub_mode_->publish(mode);}
+          if (!params_.sim_mode && pub_mode_->is_activated()) {pub_mode_->publish(mode);}
         }
         break;
       }
@@ -1402,7 +1422,7 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
         autoware_vehicle_msgs::msg::SteeringReport steer;
         steer.stamp = now();
         steer.steering_tire_angle = motion::universe_steering_rad(trike_angle);
-        if (pub_steering_->is_activated()) {pub_steering_->publish(steer);}
+        if (!params_.sim_mode && pub_steering_->is_activated()) {pub_steering_->publish(steer);}
         break;
       }
 
