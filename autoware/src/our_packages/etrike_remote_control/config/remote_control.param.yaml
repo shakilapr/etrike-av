@@ -1,0 +1,17 @@
+/**:
+  ros__parameters:
+    control_topic: "/control/command/control_cmd"
+    gear_topic: "/control/command/gear_cmd"
+    turn_topic: "/control/command/turn_indicators_cmd"
+    hazard_topic: "/control/command/hazard_lights_cmd"
+    engage_topic: "/api/autoware/get/engage"
+    emergency_topic: "/control/command/emergency_cmd"
+    control_mode_service: "/control/control_mode_request"
+
+    publish_rate_hz: 25.0
+
+    max_speed_forward: 2.78
+    max_speed_reverse: 0.50
+    max_steering_angle: 0.314
+    max_acceleration: 2.0
+    max_deceleration: 5.0
