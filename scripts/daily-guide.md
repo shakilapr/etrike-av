@@ -66,6 +66,27 @@ bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop
 
 ---
 
+## ⚙️ System Configurations & Operational Modes
+
+### 1. Pipeline Execution Modes (`load_pipeline.sh`)
+- **`--bench` (or default):** Full bench testbed configuration. Runs Docker + CAN (`can2`) + planning simulator in RViz + `autoware_vehicle_bridge` (`sim_mode:=true`). Translates virtual trajectory commands into physical CAN frames (`0x300` motor speed & gear, `0x303` steering angle, `0x301` brake requests) while suppressing feedback topic collisions. Use for testing physical actuator movement on the bench.
+- **`--universe`:** Pure software simulation mode. Runs simulator + RViz only. Does not initialize CAN adapters or communicate with hardware. Use for map/route development without hardware.
+- **`--can`:** Hardware bridge mode only. Initializes the SocketCAN interface and bridge without launching the Autoware planning simulator.
+- **`--dashboard`:** Launches the 3D digital twin & vehicle cockpit HUD on port `8080`.
+- **`--watcher`:** Launches the engineering CAN bit-matrix & frame rate analyzer on port `8000`.
+- **`--stop`:** Shuts down all running nodes, containers, web servers, and CAN interfaces cleanly.
+
+### 2. Vehicle Bridge Configurations (`vehicle_bridge_node`)
+- **`sim_mode:=true` (Stage 1 - Current Bench Actuation):** Command forwarder mode. Passes simulated commands directly to CAN actuators, automatically unlatches park brake hold upon motion, and suppresses publishing to `/vehicle/status/*` so `simple_planning_simulator` remains authoritative.
+- **`sim_mode:=false` (Stage 2 - Full Vehicle Integration):** Production closed-loop mode. Enforces fail-closed safety (validates RT/SYS heartbeats and E-Stop state), and publishes real CAN feedback (`0x121` speed/gear, `0x310` steering) into Autoware's localization and velocity estimator.
+
+### 3. Display & Telemetry Interfaces
+- **ESP32 Cockpit HMI (`tools/esp32_cockpit_hmi`):** Standalone embedded driver display on Waveshare 4.3" Touch LCD (800x480). Reads raw CAN bus directly to render speedometer, PRND gear, steering angle bar, and ISO 2575 telltales.
+- **AV Dashboard (`tools/av_dashboard`):** Browser-based 3D digital twin with automotive HUD (`http://172.16.25.67:8080`).
+- **CAN Watcher (`tools/can_watcher`):** Engineering diagnostics tool with bit-level decoding and live message frequencies (`http://172.16.25.67:8000`).
+
+---
+
 # SECTION 1: System & Network Setup
 
 ## 1.1 Check File Sync Status

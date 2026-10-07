@@ -11,6 +11,80 @@
 | **2b. Open AV Dashboard** | `bash ~/av_project/scripts/open_av_dashboard.sh` *(or `open_av_dashboard_display.sh can2`)* | Opens 3D vehicle & cockpit dashboard on monitor (`:1`) & `http://172.16.25.67:8080`. |
 | **3. Close All** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop` | Stops simulator, RViz, bridge, CAN Watcher, AV Dashboard, and shuts down CAN. |
 
+> [!NOTE]
+> **Current Integration Stage: Bench Actuation (Step-by-Step Integration)**
+> Currently, the setup operates in **Stage 1 (Hardware Actuation Mode)**:
+> - The planning simulator (`simple_planning_simulator`) generates simulated vehicle kinematics in RViz.
+> - `autoware_vehicle_bridge` forwards those simulated commands directly onto the CAN bus:
+>   - `0x300` (`HOST_DRIVE_CMD`): wheel speed & drive gear
+>   - `0x303` (`HOST_STEER_CMD`): steering angle
+>   - `0x301` (`HOST_BRAKE_REQ`): deceleration brake pressure
+> - This actuates the physical vehicle wheels, steering, and brakes to follow the simulation.
+> - In this mode, bridge feedback publishing on `/vehicle/status/*` is suppressed to prevent dual-publisher collisions (avoiding gear/speed flicker), and park brake hold is unlatched when motion begins. Full closed-loop sensor & odometry feedback will be integrated in the next stage.
+
+---
+
+## 🚀 How to Run the Bench Hardware Actuation Test (Step-by-Step)
+
+Follow these exact steps to actuate the physical wheel motor, steering mechanism, and brakes directly from the Autoware Universe simulation:
+
+### Step 1: Connect Hardware & Check Power
+1. Ensure the USB-CAN adapter (CANalyst-II or CANable Pro) is plugged into the Jetson and connected to the vehicle CAN bus (`can2`).
+2. Ensure vehicle 12V and actuator power supplies are switched ON.
+
+### Step 2: Start the Pipeline
+Run this command in a terminal on the Linux host (or via SSH `ssh med1@172.16.25.67`):
+```bash
+bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --bench
+```
+*What this does:*
+- Configures `can2` at 500k bitrate.
+- Launches Autoware Universe planning simulator + RViz on the Jetson monitor (`DISPLAY=:1`).
+- Starts `autoware_vehicle_bridge` in `sim_mode:=true`, which listens to simulated trajectory commands and forwards them onto CAN (`0x300`, `0x303`, `0x301`).
+
+### Step 3: Plan and Engage in RViz
+Look at RViz on the Jetson monitor (wait ~30–40s for full startup):
+1. **Set Initial Pose:** Click the **`2D Pose Estimate`** button on the top toolbar of RViz, then click and drag an arrow on the lanelet map where the vehicle starts.
+2. **Set Goal:** Click the **`2D Goal Pose`** button on the top toolbar of RViz, then click and drag an arrow down the lanelet road. Autoware will calculate and display a green planned path.
+3. **Engage Driving:** In the Autoware State Panel (bottom-left of RViz), click the **`Engage`** button (or click **`AUTO`**).
+
+### Step 4: Observe Physical Actuation on the Bench
+As the vehicle in RViz follows the green path at 10 km/h:
+- **Wheel Motor:** Rotates forward at commanded speed (`0x300` HOST_DRIVE_CMD, DRIVE gear).
+- **Steering Actuator:** Moves left and right following the trajectory curves (`0x303` HOST_STEER_CMD).
+- **Brakes:** 5000 kPa park brake hold unlatches automatically upon engage; brakes apply smoothly when the vehicle slows down or reaches the destination (`0x301` HOST_BRAKE_REQ).
+
+### Step 5: Live Telemetry Monitoring (Optional)
+To view real-time CAN signals and 3D cockpit telemetry while running:
+- **CAN Watcher:** `bash ~/av_project/scripts/open_can_watch.sh` (or in browser at `http://172.16.25.67:8000`)
+- **AV 3D Cockpit:** `bash ~/av_project/scripts/open_av_dashboard.sh` (or in browser at `http://172.16.25.67:8080`)
+
+### Step 6: Stop When Finished
+```bash
+bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop
+```
+
+---
+
+## ⚙️ System Configurations & Operational Modes
+
+### 1. Pipeline Execution Modes (`load_pipeline.sh`)
+- **`--bench` (or default):** Full bench testbed configuration. Runs Docker + CAN (`can2`) + planning simulator in RViz + `autoware_vehicle_bridge` (`sim_mode:=true`). Translates virtual trajectory commands into physical CAN frames (`0x300` motor speed & gear, `0x303` steering angle, `0x301` brake requests) while suppressing feedback topic collisions. Use for testing physical actuator movement on the bench.
+- **`--universe`:** Pure software simulation mode. Runs simulator + RViz only. Does not initialize CAN adapters or communicate with hardware. Use for map/route development without hardware.
+- **`--can`:** Hardware bridge mode only. Initializes the SocketCAN interface and bridge without launching the Autoware planning simulator.
+- **`--dashboard`:** Launches the 3D digital twin & vehicle cockpit HUD on port `8080`.
+- **`--watcher`:** Launches the engineering CAN bit-matrix & frame rate analyzer on port `8000`.
+- **`--stop`:** Shuts down all running nodes, containers, web servers, and CAN interfaces cleanly.
+
+### 2. Vehicle Bridge Configurations (`vehicle_bridge_node`)
+- **`sim_mode:=true` (Stage 1 - Current Bench Actuation):** Command forwarder mode. Passes simulated commands directly to CAN actuators, automatically unlatches park brake hold upon motion, and suppresses publishing to `/vehicle/status/*` so `simple_planning_simulator` remains authoritative.
+- **`sim_mode:=false` (Stage 2 - Full Vehicle Integration):** Production closed-loop mode. Enforces fail-closed safety (validates RT/SYS heartbeats and E-Stop state), and publishes real CAN feedback (`0x121` speed/gear, `0x310` steering) into Autoware's localization and velocity estimator.
+
+### 3. Display & Telemetry Interfaces
+- **ESP32 Cockpit HMI (`tools/esp32_cockpit_hmi`):** Standalone embedded driver display on Waveshare 4.3" Touch LCD (800x480). Reads raw CAN bus directly to render speedometer, PRND gear, steering angle bar, and ISO 2575 telltales.
+- **AV Dashboard (`tools/av_dashboard`):** Browser-based 3D digital twin with automotive HUD (`http://172.16.25.67:8080`).
+- **CAN Watcher (`tools/can_watcher`):** Engineering diagnostics tool with bit-level decoding and live message frequencies (`http://172.16.25.67:8000`).
+
 ---
 
 # SECTION 1: System & Network Setup
