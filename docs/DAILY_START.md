@@ -24,6 +24,17 @@ Here is your simple everyday checklist to get up and running on the AV Project.
 - **Open AV Dashboard:** Opens the 3D vehicle & AV cockpit telemetry dashboard on the Jetson monitor (`DISPLAY=:1`) and at `http://172.16.25.67:8080`.
 - **Close All:** Gracefully stops the simulator, RViz, vehicle bridge, CAN Watcher, AV Dashboard, and shuts down the CAN interface.
 
+> [!NOTE]
+> **Current Integration Stage: Bench Actuation (Step-by-Step Integration)**
+> Currently, the setup operates in **Stage 1 (Hardware Actuation Mode)**:
+> - The planning simulator (`simple_planning_simulator`) generates simulated vehicle kinematics in RViz.
+> - `autoware_vehicle_bridge` forwards those simulated commands directly onto the CAN bus:
+>   - `0x300` (`HOST_DRIVE_CMD`): wheel speed & drive gear
+>   - `0x303` (`HOST_STEER_CMD`): steering angle
+>   - `0x301` (`HOST_BRAKE_REQ`): deceleration brake pressure
+> - This actuates the physical vehicle wheels, steering, and brakes to follow the simulation.
+> - In this mode, bridge feedback publishing on `/vehicle/status/*` is suppressed to prevent dual-publisher collisions (avoiding gear/speed flicker), and park brake hold is unlatched when motion begins. Full closed-loop sensor & odometry feedback will be integrated in the next stage.
+
 ---
 
 ## 1. Check Windows Sync
