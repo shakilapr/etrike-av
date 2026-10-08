@@ -65,19 +65,19 @@ All required mapping packages (`ndt_omp`, `lidarslam_ros2`) are pre-integrated i
 2. Install system dependencies and build the mapping packages:
    ```bash
    # Inside container
-   sudo apt update && sudo apt install -y libgtsam-dev ros-humble-pcl-ros pcl-tools
+   sudo apt update && sudo apt install -y ros-humble-gtsam ros-humble-libg2o libsuitesparse-dev ros-humble-pcl-ros pcl-tools
 
    source /opt/autoware/setup.bash
    cd /workspace/autoware
 
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
-     --packages-select ndt_omp lidarslam etrike_common_launch
+     --packages-select ndt_omp_ros2 lidarslam_msgs scanmatcher graph_based_slam lidarslam etrike_common_launch etrike_sensor_kit_launch
 
    source install/setup.bash
    ```
 3. Confirm nodes are discoverable:
    ```bash
-   ros2 pkg list | grep -E 'lidarslam|ndt_omp'
+   ros2 pkg list | grep -E 'lidarslam|scanmatcher|graph_based_slam'
    ```
 
 ---
