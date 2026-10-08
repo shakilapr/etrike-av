@@ -1,122 +1,197 @@
-# E-Trike Mapping Guide
+# E-Trike LiDAR-Only Offline Mapping & Autoware Universe Integration Guide
 
-This document outlines the end-to-end offline mapping workflow: recording sensor data, building a point cloud map (`.pcd`), previewing the result, and loading it back into Autoware.
+This document outlines the end-to-end workflow for generating high-definition 3D point cloud maps (`pointcloud_map.pcd`) for the **Bajaj RE Autonomous Vehicle** using the **Hesai XT32M2X LiDAR** without an IMU, and deploying them for localization in **Autoware Universe**.
+
+---
+
+## 1. System Architecture & Autoware Compatibility
+
+```
+  Live Vehicle Mapping Recording                 Offline SLAM Processing                        Autoware Universe Runtime
+ ┌───────────────────────────────┐              ┌─────────────────────────────┐               ┌───────────────────────────┐
+ │ Hesai XT32M2X (192.168.1.201) │              │    Recorded ROS 2 Bag       │               │ Live XT32M2X (lidar_link) │
+ └──────────────┬────────────────┘              └──────────────┬──────────────┘               └─────────────┬─────────────┘
+                │ UDP :2368                                    │ Replay (--clock, 0.5x)                     │
+                ▼                                              ▼                                            ▼
+ ┌───────────────────────────────┐              ┌─────────────────────────────┐               ┌───────────────────────────┐
+ │ Nebula Driver (PandarXT32M)   │              │ lidarslam_ros2 (NDT/GICP)   │               │ Autoware Preprocessor     │
+ │ pointcloud_raw_ex (lidar_link)│              │ robot_frame_id: "base_link" │               │ CropBox Filter (no self)  │
+ └──────────────┬────────────────┘              └──────────────┬──────────────┘               └─────────────┬─────────────┘
+                │                                              │                                            │
+                ▼                                              ▼                                            ▼
+ ┌───────────────────────────────┐              ┌─────────────────────────────┐               ┌───────────────────────────┐
+ │ Autoware Preprocessor         │              │ map.pcd -> pointcloud_map   │               │ pointcloud_before_sync    │
+ │ pointcloud_before_sync        │              │ projector_type: Local       │               └─────────────┬─────────────┘
+ └──────────────┬────────────────┘              └──────────────┬──────────────┘                             │
+                │                                              │                                            │
+                ▼                                              └──────────────────────┐                     │
+ ┌───────────────────────────────┐                                                    ▼                     ▼
+ │ ROS 2 Bag Recording           │                                     ┌──────────────────────────────────────────┐
+ │ (/sensing/lidar/top/..., /tf) │                                     │ ndt_scan_matcher (tier4_localization)    │
+ └───────────────────────────────┘                                     │ 1:1 scan-to-map pose alignment           │
+                                                                       └──────────────────────────────────────────┘
+```
+
+### Why this pipeline guarantees Autoware Universe compatibility:
+1. **Identical Reference Frame (`base_link`):** The mapper is configured with `robot_frame_id: "base_link"`. Maps are generated at vehicle chassis/ground level ($Z = 0$), matching Autoware's TF expectations.
+2. **CropBox Filtered Input (`pointcloud_before_sync`):** Self-reflections from the Bajaj RE's roof and cabin are removed during both mapping and live driving, preventing registration errors in NDT scan matching.
+3. **Format & Metadata:** Outputs a standard binary PCL file with local coordinates (`projector_type: Local`), loaded natively by Autoware's `pointcloud_map_loader`.
+
+---
+
+## 2. Hardware Notice: IMU-less Driving Protocol
 
 > [!WARNING]
-> **Missing Hardware IMU:** The E-Trike currently uses an IMU stub. Without a real hardware IMU, mapping algorithms rely purely on LiDAR odometry and vehicle kinematics, which can result in drift or distorted maps during sharp turns. Install the physical IMU (e.g., Tamagawa) for production-grade mapping.
+> **Missing Hardware IMU:**
+> The E-Trike currently uses an IMU stub. Without high-frequency angular velocity feedback, scan deskewing during sharp turns is limited.
+> 
+> **To prevent map twisting and distortion during mapping:**
+> - Keep vehicle speed under **$10\text{ km/h}$** (walking pace).
+> - Steer smoothly and avoid abrupt turns or hard braking.
+> - Drive a closed loop (revisiting the starting position by 10–20 meters) so the pose-graph backend can close the loop and eliminate drift.
 
 ---
 
-## 1. Record the Data (Live on Vehicle)
+## 3. Step-by-Step Implementation
 
-To build a map, you must record a ROS 2 bag of the raw LiDAR data while driving the environment.
+### Step 1: Compile the SLAM Packages (Inside Docker)
+All required mapping packages (`ndt_omp`, `lidarslam_ros2`) are pre-integrated in `autoware/src/our_packages/mapping/`.
 
-**Q: Can I see a preview of the cloud while recording?**
-**Yes!** You can use the lightweight standalone script to preview the LiDAR without spinning up the heavy Autoware localization stack.
+1. Enter the Docker container on the Jetson:
+   ```bash
+   cd ~/av_project
+   ./docker/shell.sh
+   ```
+2. Install system dependencies and build the mapping packages:
+   ```bash
+   # Inside container
+   sudo apt update && sudo apt install -y libgtsam-dev ros-humble-pcl-ros pcl-tools
 
-**Terminal 1 (Preview):**
-Open a terminal on the Jetson, enter the Docker container, and start the viewer:
-```bash
-cd ~/av_project
-./docker/shell.sh
-./scripts/lidar_standalone.sh
-```
-*(This launches the driver and RViz2 so you can monitor the live cloud).*
+   source /opt/autoware/setup.bash
+   cd /workspace/autoware
 
-**Terminal 2 (Record):**
-Open a second terminal, enter the container, and start recording the essential mapping topics:
-```bash
-cd ~/av_project
-./docker/shell.sh
-ros2 bag record \
-  /sensing/lidar/top/pointcloud_raw_ex \
-  /sensing/lidar/top/pointcloud_before_sync \
-  /tf \
-  /tf_static
-```
-Drive the environment smoothly in loops to ensure good coverage. When finished, press `Ctrl+C` to stop recording. The bag will be saved as a directory in your current folder.
+   colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+     --packages-select ndt_omp lidarslam etrike_common_launch
 
----
-
-## 2. Build the Map (Offline)
-
-Autoware Universe does not map live. You must process the bag offline to generate the map. We have integrated **`lidarslam_ros2`** directly into your workspace. It uses NDT/GICP scan matching and graph optimization, which works beautifully without an IMU.
-
-### 2.1 Compile the Mapping Software
-Before your first mapping session, ensure the system libraries are installed and compile the new mapping nodes inside the Autoware container:
-```bash
-cd ~/av_project
-./docker/shell.sh
-# Inside the container:
-sudo apt update && sudo apt install -y libgtsam-dev ros-humble-pcl-ros
-cd /workspace/autoware
-colcon build --symlink-install --packages-select ndt_omp lidarslam etrike_common_launch
-source install/setup.bash
-```
-
-### 2.2 Run the Mapper
-Once compiled, you can run the mapping node in one terminal, and play back your recorded ROS bag in a second terminal.
-
-**Terminal 1 (Mapper):**
-```bash
-cd ~/av_project
-./docker/shell.sh
-# Inside the container:
-ros2 launch etrike_common_launch etrike_mapping.launch.xml save_dir:=/workspace/data
-```
-*(This will launch the SLAM node and RViz2 so you can watch the map being built).*
-
-**Terminal 2 (Play Bag):**
-```bash
-cd ~/av_project
-./docker/shell.sh
-# Inside the container:
-ros2 bag play <path_to_your_bag_folder> --clock
-```
-*Note: The `--clock` flag is critical so the mapper uses the bag's recorded time.*
-
-Once the bag finishes playing, go to Terminal 1 and press `Ctrl+C`. The mapping node will optimize the final graph and save `map.pcd` to your `~/av_project/data/` folder.
+   source install/setup.bash
+   ```
+3. Confirm nodes are discoverable:
+   ```bash
+   ros2 pkg list | grep -E 'lidarslam|ndt_omp'
+   ```
 
 ---
 
-## 3. Preview the Generated Map
+### Step 2: Verify LiDAR Health & Static TF
+Before driving, ensure the sensor stream and mounting transform are active.
 
-Once the mapping tool finishes, it will produce a `.pcd` file. You should preview this map to ensure it is clean and not warped before using it in Autoware.
-
-The easiest way to view a `.pcd` file natively in Ubuntu is using `pcl_viewer`:
-```bash
-# Install PCL tools on your host machine
-sudo apt update && sudo apt install pcl-tools
-
-# Open the map in the 3D viewer
-pcl_viewer my_generated_map.pcd
-```
-*Use your mouse to rotate and inspect the map. Check corners and straightaways to ensure there is no "double vision" or drifting.*
+1. **Check sensor UDP stream (on Jetson host):**
+   ```bash
+   ./scripts/lidar_bringup.sh --check-only
+   ```
+2. **Verify mounting transform (inside container):**
+   ```bash
+   ros2 run tf2_ros tf2_echo base_link lidar_link
+   ```
+   *Expected translation:* $X = 0.575$, $Y = 0.000$, $Z = 1.7464\text{ m}$.
 
 ---
 
-## 4. Use the Map in Autoware
+### Step 3: Record Live Mapping Data on the Vehicle
 
-Once you are satisfied with the map, prepare it for Autoware:
-1. Create a dedicated folder for your map (e.g., `~/autoware_map/my-new-map`).
-2. Rename your generated `.pcd` file to **`pointcloud_map.pcd`** (Autoware looks for this exact filename by default).
-3. Place the file inside your map folder.
+1. **Terminal 1 (Visual Preview):**
+   Launch the standalone viewer to monitor live LiDAR returns without running the full localization stack:
+   ```bash
+   cd ~/av_project
+   ./scripts/lidar_standalone.sh
+   ```
+2. **Terminal 2 (Record Bag):**
+   ```bash
+   cd ~/av_project
+   ./docker/shell.sh
 
-**Launch Autoware with the Map:**
-Enter your container and launch the full Autoware stack, pointing it to your new map folder:
-```bash
-cd ~/av_project
-./docker/shell.sh
-ros2 launch autoware_launch autoware.launch.xml \
-  map_path:=/autoware_map/my-new-map \
-  vehicle_model:=etrike_vehicle \
-  sensor_model:=etrike_sensor_kit \
-  launch_sensing_driver:=true
-```
+   # Inside container
+   mkdir -p /workspace/data/bags
+   ros2 bag record -o /workspace/data/bags/etrike_loop_01 \
+     /sensing/lidar/top/pointcloud_raw_ex \
+     /sensing/lidar/top/pointcloud_before_sync \
+     /tf \
+     /tf_static
+   ```
+3. Drive the loop smoothly, return to the start point, wait 5 seconds, and press `Ctrl+C` in Terminal 2.
 
-**Final Steps in RViz2:**
-1. RViz2 will open and load the static pre-recorded map (`pointcloud_map.pcd`).
-2. You will see the live LiDAR scan overlaid on top of it.
-3. Click the **"2D Pose Estimate"** tool at the top of RViz2.
-4. Click on the map at the approximate location and orientation of the E-Trike.
-5. Autoware's NDT Localizer will immediately snap the live scan perfectly into the map, locking your position!
+---
+
+### Step 4: Run Offline SLAM & Export Map
+
+1. **Terminal 1 (Launch Mapper):**
+   ```bash
+   cd ~/av_project
+   ./docker/shell.sh
+   source /workspace/autoware/install/setup.bash
+
+   ros2 launch etrike_common_launch etrike_mapping.launch.xml \
+     input_cloud:=/sensing/lidar/top/pointcloud_before_sync \
+     save_dir:=/workspace/data
+   ```
+   *Note:* RViz2 opens displaying `/map` and vehicle `/path`.
+2. **Terminal 2 (Replay Bag at Half Speed):**
+   ```bash
+   cd ~/av_project
+   ./docker/shell.sh
+
+   ros2 bag play /workspace/data/bags/etrike_loop_01 \
+     --clock \
+     --rate 0.5
+   ```
+   *Playing back at `0.5` speed gives the Jetson CPU sufficient headroom for real-time NDT scan matching.*
+3. **Save Map:**
+   When the bag finishes playing and loop closure occurs, trigger the map export service:
+   ```bash
+   ros2 service call /map_save std_srvs/srv/Empty "{}"
+   ```
+   Then press `Ctrl+C` in Terminal 1. The resulting `map.pcd` and `pose_graph.g2o` are written to `~/av_project/data/`.
+
+---
+
+### Step 5: Map Inspection & Post-Processing
+
+1. **Inspect geometry for quality:**
+   ```bash
+   pcl_viewer ~/av_project/data/map.pcd
+   # Or view on Windows in CloudCompare
+   ```
+   - [ ] Verify vertical structures (walls, poles) are crisp without double-imaging.
+   - [ ] Verify the loop start and end points align cleanly.
+2. **Downsample (Optional):**
+   If the map file is large (>200 MB), downsample to a $0.1\text{--}0.2\text{ m}$ voxel grid using CloudCompare or PCL tools to optimize memory usage during Autoware localization.
+
+---
+
+### Step 6: Deploy into Autoware Universe
+
+1. **Set up map directory:**
+   ```bash
+   mkdir -p /autoware_map/bajaj_track
+   cp ~/av_project/data/map.pcd /autoware_map/bajaj_track/pointcloud_map.pcd
+   ```
+2. **Create local coordinate projector configuration:**
+   Create `/autoware_map/bajaj_track/map_projector_info.yaml`:
+   ```yaml
+   projector_type: Local
+   ```
+3. **Validate in Autoware Universe:**
+   ```bash
+   cd ~/av_project
+   ./docker/shell.sh
+
+   ros2 launch autoware_launch autoware.launch.xml \
+     map_path:=/autoware_map/bajaj_track \
+     vehicle_model:=etrike_vehicle \
+     sensor_model:=etrike_sensor_kit \
+     launch_sensing_driver:=true
+   ```
+4. **Initialize Pose in RViz2:**
+   - Click the **"2D Pose Estimate"** tool in RViz2.
+   - Click and drag on the map at the approximate location and orientation of the E-Trike.
+   - Confirm that the live LiDAR scan snaps into alignment with `pointcloud_map.pcd` and the NDT score locks.
