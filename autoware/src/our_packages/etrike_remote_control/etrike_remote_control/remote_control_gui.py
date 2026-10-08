@@ -14,6 +14,7 @@
 
 """PySide6 / PyQt5 Cockpit GUI for remote controlling the E-Trike through vehicle bridge."""
 
+import math
 import sys
 from typing import Any, Dict, Optional, Set
 
@@ -162,17 +163,17 @@ class RemoteControlMainWindow(QMainWindow):
         # 2. Balanced 2-Column Layout (50/50 Proportional Split)
         # Left: Powertrain & Safety Systems | Right: Motion & Driving Dynamics
         cols_layout = QHBoxLayout()
-        cols_layout.setSpacing(12)
+        cols_layout.setSpacing(10)
 
         left_col = QVBoxLayout()
-        left_col.setSpacing(10)
+        left_col.setSpacing(6)
         left_col.addWidget(self._create_safety_group())
         left_col.addWidget(self._create_gear_group())
         left_col.addWidget(self._create_signals_group())
         left_col.addStretch(1)
 
         right_col = QVBoxLayout()
-        right_col.setSpacing(10)
+        right_col.setSpacing(6)
         right_col.addWidget(self._create_dpad_group())
         right_col.addWidget(self._create_adjustments_group())
         right_col.addWidget(self._create_key_settings_group())
@@ -385,8 +386,8 @@ class RemoteControlMainWindow(QMainWindow):
         """Directional driving cockpit with dual mouse press-and-hold & keyboard driving."""
         box = QGroupBox("Directional Drive Cockpit (Mouse Press-and-Hold && Hotkeys)")
         layout = QGridLayout(box)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 14, 12, 12)
+        layout.setSpacing(5)
+        layout.setContentsMargins(10, 10, 10, 8)
 
         self.btn_drive_fwd = QPushButton("▲ Forward (Up / W)")
         self.btn_drive_rev = QPushButton("▼ Reverse (Down / S)")
@@ -396,13 +397,35 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_zero_speed = QPushButton("■ Stop (0 m/s)")
         self.btn_instant_brake = QPushButton("■ FULL INSTANT BRAKE (Space)")
 
-        self.btn_drive_fwd.setMinimumHeight(44)
-        self.btn_drive_rev.setMinimumHeight(44)
-        self.btn_steer_l.setMinimumHeight(44)
-        self.btn_steer_r.setMinimumHeight(44)
-        self.btn_center_steer.setMinimumHeight(44)
-        self.btn_zero_speed.setMinimumHeight(44)
-        self.btn_instant_brake.setMinimumHeight(46)
+        # Direct Steering Angle Setpoint & Hold Buttons
+        self.btn_preset_m10 = QPushButton("◄ -10° Hold")
+        self.btn_preset_p10 = QPushButton("+10° Hold ►")
+
+        self.spin_steer_angle = QDoubleSpinBox()
+        max_deg = math.degrees(self._target_steer_limit)
+        self.spin_steer_angle.setRange(-max_deg, max_deg)
+        self.spin_steer_angle.setSingleStep(1.0)
+        self.spin_steer_angle.setDecimals(1)
+        self.spin_steer_angle.setValue(0.0)
+        self.spin_steer_angle.setSuffix("°")
+        self.spin_steer_angle.setPrefix("Steer: ")
+        self.spin_steer_angle.setAlignment(Qt.AlignCenter)
+        self.spin_steer_angle.setFocusPolicy(Qt.ClickFocus)
+
+        self.btn_toggle_autocenter = QPushButton("✔ Auto-Center: ON (X)")
+        self.btn_toggle_autocenter.setStyleSheet("color: #98c379; font-weight: bold;")
+
+        self.btn_drive_fwd.setMinimumHeight(38)
+        self.btn_drive_rev.setMinimumHeight(36)
+        self.btn_steer_l.setMinimumHeight(36)
+        self.btn_steer_r.setMinimumHeight(36)
+        self.btn_center_steer.setMinimumHeight(36)
+        self.btn_zero_speed.setMinimumHeight(36)
+        self.btn_preset_m10.setMinimumHeight(32)
+        self.btn_preset_p10.setMinimumHeight(32)
+        self.spin_steer_angle.setMinimumHeight(32)
+        self.btn_toggle_autocenter.setMinimumHeight(36)
+        self.btn_instant_brake.setMinimumHeight(40)
 
         self.btn_instant_brake.setObjectName("btnBrake")
         self.btn_instant_brake.setFont(QFont("Segoe UI", 11, QFont.Bold))
@@ -414,17 +437,29 @@ class RemoteControlMainWindow(QMainWindow):
             self.btn_steer_r,
             self.btn_center_steer,
             self.btn_zero_speed,
+            self.btn_preset_m10,
+            self.btn_preset_p10,
+            self.btn_toggle_autocenter,
         ):
             btn.setFont(QFont("Segoe UI", 9, QFont.Bold))
 
-        # Grid placement
+        # Grid placement:
+        # Row 0: Forward
         layout.addWidget(self.btn_drive_fwd, 0, 1)
+        # Row 1: Left, Center, Right
         layout.addWidget(self.btn_steer_l, 1, 0)
         layout.addWidget(self.btn_center_steer, 1, 1)
         layout.addWidget(self.btn_steer_r, 1, 2)
-        layout.addWidget(self.btn_zero_speed, 2, 0)
-        layout.addWidget(self.btn_drive_rev, 2, 1)
-        layout.addWidget(self.btn_instant_brake, 3, 0, 1, 3)
+        # Row 2: -10° Hold, Steer Angle Spinbox, +10° Hold
+        layout.addWidget(self.btn_preset_m10, 2, 0)
+        layout.addWidget(self.spin_steer_angle, 2, 1)
+        layout.addWidget(self.btn_preset_p10, 2, 2)
+        # Row 3: Stop, Reverse, Auto-Center Toggle
+        layout.addWidget(self.btn_zero_speed, 3, 0)
+        layout.addWidget(self.btn_drive_rev, 3, 1)
+        layout.addWidget(self.btn_toggle_autocenter, 3, 2)
+        # Row 4: Full Instant Brake
+        layout.addWidget(self.btn_instant_brake, 4, 0, 1, 3)
 
         # Mouse press-and-hold connections for continuous smooth driving
         self.btn_drive_fwd.pressed.connect(lambda: self._set_mouse_motion("fwd", True))
@@ -442,6 +477,12 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_instant_brake.pressed.connect(lambda: self._set_mouse_motion("brake", True))
         self.btn_instant_brake.released.connect(lambda: self._set_mouse_motion("brake", False))
 
+        # Steering Hold Presets and Direct Adjustment
+        self.btn_preset_m10.clicked.connect(lambda: self._set_steer_degrees(-10.0))
+        self.btn_preset_p10.clicked.connect(lambda: self._set_steer_degrees(10.0))
+        self.spin_steer_angle.valueChanged.connect(self._on_spin_steer_angle_changed)
+        self.btn_toggle_autocenter.clicked.connect(self._toggle_auto_center)
+
         # Discrete click actions
         self.btn_center_steer.clicked.connect(self._center_steering)
         self.btn_zero_speed.clicked.connect(self._zero_speed)
@@ -453,8 +494,8 @@ class RemoteControlMainWindow(QMainWindow):
         """Dynamics authority sliders and spinboxes."""
         box = QGroupBox("Speed, Acceleration && Steering Authority")
         layout = QVBoxLayout(box)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 14, 12, 12)
+        layout.setSpacing(5)
+        layout.setContentsMargins(10, 10, 10, 8)
 
         # 1. Forward Speed
         row_fwd = QHBoxLayout()
@@ -603,9 +644,9 @@ class RemoteControlMainWindow(QMainWindow):
         self.chk_enable_keys.toggled.connect(self._on_toggle_keyboard)
         layout.addWidget(self.chk_enable_keys)
 
-        self.chk_auto_center = QCheckBox("Auto-Center Steering (Release ←/→)")
+        self.chk_auto_center = QCheckBox("Auto-Center Steering (Release ←/→) [X]")
         self.chk_auto_center.setChecked(True)
-        self.chk_auto_center.toggled.connect(lambda v: setattr(self, "_auto_center_steering", v))
+        self.chk_auto_center.toggled.connect(self._on_chk_auto_center_toggled)
         layout.addWidget(self.chk_auto_center)
 
         self.chk_auto_decel = QCheckBox("Auto-Decelerate / Coast (Release ↑/↓)")
@@ -675,6 +716,8 @@ class RemoteControlMainWindow(QMainWindow):
             self._toggle_turn(TurnIndicatorsConstants.ENABLE_RIGHT)
         elif key == Qt.Key_H:
             self._toggle_hazard()
+        elif key == Qt.Key_X:
+            self._toggle_auto_center()
         elif key in (Qt.Key_G, Qt.Key_Return, Qt.Key_Enter):
             cur_engage = self.node.get_state_snapshot().engage
             if cur_engage:
@@ -821,6 +864,14 @@ class RemoteControlMainWindow(QMainWindow):
         elif self._auto_center_steering and abs(self._cmd_steering) <= 0.005:
             self._cmd_steering = 0.0
 
+        # Synchronize angle spinbox with commanded steering angle
+        if hasattr(self, "spin_steer_angle"):
+            current_deg = round(math.degrees(self._cmd_steering), 1)
+            if abs(self.spin_steer_angle.value() - current_deg) >= 0.2:
+                self.spin_steer_angle.blockSignals(True)
+                self.spin_steer_angle.setValue(current_deg)
+                self.spin_steer_angle.blockSignals(False)
+
         # Transmit continuous command to node
         self.node.set_motion(
             speed=self._cmd_speed,
@@ -835,13 +886,63 @@ class RemoteControlMainWindow(QMainWindow):
             rclpy.spin_once(self.node, timeout_sec=0.0)
 
     # =========================================================================
-    # Direct Discrete Actions
+    # Direct Discrete Actions & Steering Angle Control
     # =========================================================================
 
     def _center_steering(self) -> None:
-        """Immediately center steering to 0 rad."""
+        """Immediately center steering to 0.0 rad."""
         self._cmd_steering = 0.0
+        if hasattr(self, "spin_steer_angle"):
+            self.spin_steer_angle.blockSignals(True)
+            self.spin_steer_angle.setValue(0.0)
+            self.spin_steer_angle.blockSignals(False)
         self.node.set_motion(self._cmd_speed, 0.0, 0.0, False)
+        self.statusBar().showMessage("Steering centered to 0.0°.")
+
+    def _set_steer_degrees(self, deg: float) -> None:
+        """Lock steering to an exact angle in degrees and disable auto-center to hold."""
+        # Disable auto-center so the angle holds indefinitely
+        if self._auto_center_steering:
+            self.chk_auto_center.setChecked(False)
+        max_deg = math.degrees(self._target_steer_limit)
+        clamped_deg = max(-max_deg, min(max_deg, deg))
+        self._cmd_steering = math.radians(clamped_deg)
+        if hasattr(self, "spin_steer_angle"):
+            self.spin_steer_angle.blockSignals(True)
+            self.spin_steer_angle.setValue(clamped_deg)
+            self.spin_steer_angle.blockSignals(False)
+        self.node.set_motion(self._cmd_speed, self._cmd_steering, 0.0, False)
+        self.statusBar().showMessage(
+            f"Steering angle locked to {clamped_deg:+.1f}° ({self._cmd_steering:+.3f} rad) [Auto-Center OFF - Angle Held]"
+        )
+
+    def _on_spin_steer_angle_changed(self, deg: float) -> None:
+        """Directly adjust steering angle from spinbox."""
+        if self._auto_center_steering and abs(deg) > 0.1:
+            self.chk_auto_center.setChecked(False)
+        self._cmd_steering = math.radians(deg)
+        self.node.set_motion(self._cmd_speed, self._cmd_steering, 0.0, False)
+
+    def _toggle_auto_center(self) -> None:
+        """Toggle auto-centering on / off."""
+        self.chk_auto_center.setChecked(not self._auto_center_steering)
+
+    def _on_chk_auto_center_toggled(self, checked: bool) -> None:
+        """Handle auto-center toggle and synchronize UI button."""
+        self._auto_center_steering = checked
+        if hasattr(self, "btn_toggle_autocenter"):
+            if checked:
+                self.btn_toggle_autocenter.setText("✔ Auto-Center: ON (X)")
+                self.btn_toggle_autocenter.setStyleSheet("color: #98c379; font-weight: bold;")
+                self.statusBar().showMessage(
+                    "Auto-Center Steering: ENABLED (Wheels return to center on release)"
+                )
+            else:
+                self.btn_toggle_autocenter.setText("✖ Auto-Center: OFF (X)")
+                self.btn_toggle_autocenter.setStyleSheet("color: #e5c07b; font-weight: bold;")
+                self.statusBar().showMessage(
+                    "Auto-Center Steering: DISABLED (Steering angle held)"
+                )
 
     def _zero_speed(self) -> None:
         """Immediately cut speed setpoint to 0.0 m/s."""
@@ -1021,12 +1122,18 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_steer_limit.setValue(lim)
         self.spin_steer_limit.blockSignals(False)
         self._target_steer_limit = lim
+        if hasattr(self, "spin_steer_angle"):
+            max_deg = math.degrees(lim)
+            self.spin_steer_angle.setRange(-max_deg, max_deg)
 
     def _on_spin_steer_limit_changed(self, lim: float) -> None:
         self.slider_steer_limit.blockSignals(True)
         self.slider_steer_limit.setValue(int(lim * 100))
         self.slider_steer_limit.blockSignals(False)
         self._target_steer_limit = lim
+        if hasattr(self, "spin_steer_angle"):
+            max_deg = math.degrees(lim)
+            self.spin_steer_angle.setRange(-max_deg, max_deg)
 
     def _on_toggle_keyboard(self, checked: bool) -> None:
         self._keyboard_enabled = checked

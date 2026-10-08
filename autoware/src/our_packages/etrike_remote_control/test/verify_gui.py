@@ -76,7 +76,28 @@ def test_gui() -> None:
     assert node.get_state_snapshot().is_braking is True
     print("  Instant brake OK!")
 
-    # 5. Grab screenshot
+    # 5. Test Steering Angle Preset & Hold at 10.0 deg (Auto-Center Off)
+    print("Testing 10° Steering Angle Hold...")
+    win._set_steer_degrees(10.0)
+    assert win._auto_center_steering is False, "Expected auto-center to be disabled when locking angle"
+    assert abs(win._cmd_steering - 0.1745) < 0.01, f"Expected ~0.175 rad (10°), got {win._cmd_steering}"
+    assert abs(win.spin_steer_angle.value() - 10.0) < 0.1
+    # Tick motion 30 times - angle MUST hold at 10° without decaying
+    for _ in range(30):
+        win._update_motion_tick()
+    assert abs(win._cmd_steering - 0.1745) < 0.01, f"Expected 10° angle to hold, got {win._cmd_steering}"
+    print(f"  10° steering hold verified: cmd_steering={win._cmd_steering:.3f} rad (held across 30 ticks)")
+
+    # 6. Test Re-enabling Auto-Center
+    print("Testing Auto-Center Toggle...")
+    win._toggle_auto_center()
+    assert win._auto_center_steering is True, "Expected auto-center enabled"
+    for _ in range(30):
+        win._update_motion_tick()
+    assert abs(win._cmd_steering) < 0.01, f"Expected returned to center, got {win._cmd_steering}"
+    print(f"  Auto-center return verified: cmd_steering={win._cmd_steering:.3f} rad")
+
+    # 7. Grab screenshot
     pix = win.grab()
     pix.save("/tmp/remote_cockpit_balanced.png")
     print("Screenshot saved to /tmp/remote_cockpit_balanced.png!")
