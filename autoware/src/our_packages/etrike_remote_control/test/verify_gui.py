@@ -1,6 +1,7 @@
 # Copyright 2026 E-Trike Dev. All rights reserved.
 """Automated verification script for RemoteControlMainWindow ergonomics and dual input."""
 
+import math
 import os
 import sys
 
@@ -87,6 +88,11 @@ def test_gui() -> None:
         win._update_motion_tick()
     assert abs(win._cmd_steering - 0.1745) < 0.01, f"Expected 10° angle to hold, got {win._cmd_steering}"
     print(f"  10° steering hold verified: cmd_steering={win._cmd_steering:.3f} rad (held across 30 ticks)")
+
+    # 5b. Test 5° Trim
+    win.btn_preset_m5.click()
+    assert abs(win._cmd_steering - math.radians(-5.0)) < 0.01
+    print("  -5° trim button verified!")
 
     # 6. Test Re-enabling Auto-Center
     print("Testing Auto-Center Toggle...")

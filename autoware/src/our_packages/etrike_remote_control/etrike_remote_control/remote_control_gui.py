@@ -403,6 +403,8 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_instant_brake = QPushButton("■ FULL INSTANT BRAKE (Space)")
 
         # Direct Steering Angle Setpoint & Hold Buttons
+        self.btn_preset_m5 = QPushButton("◄ -5° Trim")
+        self.btn_preset_p5 = QPushButton("+5° Trim ►")
         self.btn_preset_m10 = QPushButton("◄ -10° Hold")
         self.btn_preset_p10 = QPushButton("+10° Hold ►")
 
@@ -426,6 +428,8 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_center_steer.setMinimumHeight(32)
         self.btn_zero_speed.setMinimumHeight(32)
         self.btn_zero_speed.setObjectName("btnStop")
+        self.btn_preset_m5.setMinimumHeight(28)
+        self.btn_preset_p5.setMinimumHeight(28)
         self.btn_preset_m10.setMinimumHeight(28)
         self.btn_preset_p10.setMinimumHeight(28)
         self.spin_steer_angle.setMinimumHeight(28)
@@ -436,7 +440,9 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_instant_brake.setFont(QFont("Segoe UI", 10, QFont.Bold))
 
         for btn in (
+            self.btn_preset_m5,
             self.btn_drive_fwd,
+            self.btn_preset_p5,
             self.btn_drive_rev,
             self.btn_steer_l,
             self.btn_steer_r,
@@ -449,8 +455,10 @@ class RemoteControlMainWindow(QMainWindow):
             btn.setFont(QFont("Segoe UI", 9, QFont.Bold))
 
         # Grid placement:
-        # Row 0: Forward
+        # Row 0: -5° Trim, Forward, +5° Trim
+        layout.addWidget(self.btn_preset_m5, 0, 0)
         layout.addWidget(self.btn_drive_fwd, 0, 1)
+        layout.addWidget(self.btn_preset_p5, 0, 2)
         # Row 1: Left, Center, Right
         layout.addWidget(self.btn_steer_l, 1, 0)
         layout.addWidget(self.btn_center_steer, 1, 1)
@@ -483,6 +491,8 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_instant_brake.released.connect(lambda: self._set_mouse_motion("brake", False))
 
         # Steering Hold Presets and Direct Adjustment
+        self.btn_preset_m5.clicked.connect(lambda: self._set_steer_degrees(-5.0))
+        self.btn_preset_p5.clicked.connect(lambda: self._set_steer_degrees(5.0))
         self.btn_preset_m10.clicked.connect(lambda: self._set_steer_degrees(-10.0))
         self.btn_preset_p10.clicked.connect(lambda: self._set_steer_degrees(10.0))
         self.spin_steer_angle.valueChanged.connect(self._on_spin_steer_angle_changed)
@@ -569,7 +579,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_accel.setFixedWidth(90)
         self.spin_accel.setFocusPolicy(Qt.ClickFocus)
 
-        self.lbl_acc_unit = QLabel("")
+        self.lbl_acc_unit = QLabel(f"(~{self._target_accel / 9.81:.2f}g)")
         self.lbl_acc_unit.setFixedWidth(64)
 
         self.slider_accel.valueChanged.connect(self._on_slider_accel_changed)
@@ -595,7 +605,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_decel.setFixedWidth(90)
         self.spin_decel.setFocusPolicy(Qt.ClickFocus)
 
-        self.lbl_dec_unit = QLabel("")
+        self.lbl_dec_unit = QLabel(f"(~{self._target_decel / 9.81:.2f}g)")
         self.lbl_dec_unit.setFixedWidth(64)
 
         self.slider_decel.valueChanged.connect(self._on_slider_decel_changed)
@@ -660,6 +670,13 @@ class RemoteControlMainWindow(QMainWindow):
         self.chk_auto_center.toggled.connect(self._on_chk_auto_center_toggled)
         layout.addWidget(self.chk_auto_center, 1, 0, 1, 2)
 
+        lbl_guide = QLabel(
+            "Controls: W/↑ Fwd • S/↓ Rev • A/← Steer Left • D/→ Steer Right\n"
+            "Hotkeys:  Space Instant Brake • C Center • X Auto-Center • Esc E-Stop"
+        )
+        lbl_guide.setStyleSheet("color: #707886; font-size: 10px; padding-top: 2px;")
+        layout.addWidget(lbl_guide, 2, 0, 1, 2)
+
         return box
 
     def _create_telemetry_group(self) -> QGroupBox:
@@ -694,7 +711,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.bar_telemetry_speed.setTextVisible(False)
         self.bar_telemetry_speed.setFixedHeight(6)
         lay_spd.addWidget(self.bar_telemetry_speed)
-        layout.addWidget(card_spd)
+        layout.addWidget(card_spd, 1)
 
         # 2. Steering Deflection
         card_str, lay_str, self.lbl_telemetry_steer = _make_card("STEERING DEFLECTION")
@@ -705,7 +722,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.bar_telemetry_steer.setTextVisible(False)
         self.bar_telemetry_steer.setFixedHeight(6)
         lay_str.addWidget(self.bar_telemetry_steer)
-        layout.addWidget(card_str)
+        layout.addWidget(card_str, 1)
 
         # 3. Longitudinal Acceleration & Brake
         card_acc, lay_acc, self.lbl_telemetry_accel = _make_card("ACCEL / BRAKING")
@@ -713,7 +730,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.lbl_telemetry_acc_mode = QLabel("Standstill")
         self.lbl_telemetry_acc_mode.setObjectName("telemetrySubtext")
         lay_acc.addWidget(self.lbl_telemetry_acc_mode)
-        layout.addWidget(card_acc)
+        layout.addWidget(card_acc, 1)
 
         # 4. Commanded Gear & Signalling
         card_gear, lay_gear, self.lbl_telemetry_gear = _make_card("TRANSMISSION & LIGHTS")
@@ -721,7 +738,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.lbl_telemetry_signals = QLabel("Signals: Off | Haz: Off")
         self.lbl_telemetry_signals.setObjectName("telemetrySubtext")
         lay_gear.addWidget(self.lbl_telemetry_signals)
-        layout.addWidget(card_gear)
+        layout.addWidget(card_gear, 1)
 
         # 5. Stream Rate & Interlocks
         card_stream, lay_stream, self.lbl_telemetry_stream = _make_card("BRIDGE & INTERLOCKS")
@@ -729,7 +746,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.lbl_telemetry_interlock = QLabel("Disengaged | E-Stop Clear")
         self.lbl_telemetry_interlock.setObjectName("telemetrySubtext")
         lay_stream.addWidget(self.lbl_telemetry_interlock)
-        layout.addWidget(card_stream)
+        layout.addWidget(card_stream, 1)
 
         return box
 
@@ -1173,12 +1190,16 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_accel.setValue(acc)
         self.spin_accel.blockSignals(False)
         self._target_accel = acc
+        if hasattr(self, "lbl_acc_unit"):
+            self.lbl_acc_unit.setText(f"(~{acc / 9.81:.2f}g)")
 
     def _on_spin_accel_changed(self, acc: float) -> None:
         self.slider_accel.blockSignals(True)
         self.slider_accel.setValue(int(acc * 100))
         self.slider_accel.blockSignals(False)
         self._target_accel = acc
+        if hasattr(self, "lbl_acc_unit"):
+            self.lbl_acc_unit.setText(f"(~{acc / 9.81:.2f}g)")
 
     def _on_slider_decel_changed(self, val: int) -> None:
         dec = val / 100.0
@@ -1186,12 +1207,16 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_decel.setValue(dec)
         self.spin_decel.blockSignals(False)
         self._target_decel = dec
+        if hasattr(self, "lbl_dec_unit"):
+            self.lbl_dec_unit.setText(f"(~{dec / 9.81:.2f}g)")
 
     def _on_spin_decel_changed(self, dec: float) -> None:
         self.slider_decel.blockSignals(True)
         self.slider_decel.setValue(int(dec * 100))
         self.slider_decel.blockSignals(False)
         self._target_decel = dec
+        if hasattr(self, "lbl_dec_unit"):
+            self.lbl_dec_unit.setText(f"(~{dec / 9.81:.2f}g)")
 
     def _on_slider_steer_limit_changed(self, val: int) -> None:
         lim = val / 100.0
@@ -1499,9 +1524,10 @@ class RemoteControlMainWindow(QMainWindow):
             }
             QStatusBar {
                 background-color: #1e2227;
-                color: #abb2bf;
+                color: #dcdfe4;
                 border-top: 1px solid #282c34;
                 font-size: 11px;
+                font-weight: 500;
             }
             #telemetryCard {
                 background-color: #21252b;
