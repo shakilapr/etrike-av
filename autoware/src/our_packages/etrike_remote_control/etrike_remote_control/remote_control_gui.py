@@ -33,6 +33,8 @@ try:
         QMainWindow,
         QProgressBar,
         QPushButton,
+        QScrollArea,
+        QSizePolicy,
         QSlider,
         QStatusBar,
         QVBoxLayout,
@@ -53,6 +55,8 @@ except ImportError:
         QMainWindow,
         QProgressBar,
         QPushButton,
+        QScrollArea,
+        QSizePolicy,
         QSlider,
         QStatusBar,
         QVBoxLayout,
@@ -144,7 +148,17 @@ class RemoteControlMainWindow(QMainWindow):
         super().__init__()
         self.node = node
         self.setWindowTitle("E-Trike Remote Control Cockpit [Vehicle Bridge]")
-        self.resize(1100, 780)
+        # Responsive sizing: adapt to screen geometry (e.g., 1366x768 Jetson display)
+        self.setMinimumSize(880, 560)
+        app = QApplication.instance()
+        if app and app.primaryScreen():
+            avail = app.primaryScreen().availableGeometry()
+            # Fit within available screen bounds with margin for taskbar/panels
+            target_w = min(1180, max(880, avail.width() - 40))
+            target_h = min(720, max(560, avail.height() - 60))
+            self.resize(target_w, target_h)
+        else:
+            self.resize(1050, 680)
 
         # Active key tracker for smooth keyboard driving
         self._pressed_keys: Set[int] = set()
@@ -188,22 +202,31 @@ class RemoteControlMainWindow(QMainWindow):
             self._timer_ros.start()
 
     def _init_ui(self) -> None:
-        """Construct cockpit widgets and layouts."""
-        central_widget = QWidget(self)
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        """Construct cockpit widgets and layouts inside a dynamic scrollable area."""
+        # Scroll area container ensures content is never clipped regardless of screen size
+        scroll_area = QScrollArea(self)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setCentralWidget(scroll_area)
+
+        content_widget = QWidget()
+        scroll_area.setWidget(content_widget)
+
+        main_layout = QVBoxLayout(content_widget)
+        main_layout.setContentsMargins(10, 8, 10, 8)
+        main_layout.setSpacing(8)
 
         # 1. Top Status Banner
         main_layout.addWidget(self._create_top_banner())
 
         # 2. Main 2-column split (Left: Controls & Outputs, Right: Adjustment Bars & Telemetry)
         cols_layout = QHBoxLayout()
-        cols_layout.setSpacing(16)
+        cols_layout.setSpacing(10)
 
         left_col = QVBoxLayout()
-        left_col.setSpacing(12)
+        left_col.setSpacing(8)
         left_col.addWidget(self._create_safety_group())
         left_col.addWidget(self._create_gear_group())
         left_col.addWidget(self._create_signals_group())
@@ -211,7 +234,7 @@ class RemoteControlMainWindow(QMainWindow):
         left_col.addStretch()
 
         right_col = QVBoxLayout()
-        right_col.setSpacing(12)
+        right_col.setSpacing(8)
         right_col.addWidget(self._create_adjustments_group())
         right_col.addWidget(self._create_key_settings_group())
         right_col.addWidget(self._create_telemetry_group())
@@ -272,41 +295,44 @@ class RemoteControlMainWindow(QMainWindow):
         """Emergency Stop, Engage, and Mode request buttons."""
         box = QGroupBox("Vehicle State & Safety Outputs")
         layout = QGridLayout(box)
-        layout.setSpacing(10)
+        layout.setSpacing(6)
 
         # Big ESTOP Button
         self.btn_estop_trigger = QPushButton("🛑 EMERGENCY STOP (Esc)")
         self.btn_estop_trigger.setObjectName("btnEstop")
-        self.btn_estop_trigger.setMinimumHeight(44)
+        self.btn_estop_trigger.setMinimumHeight(38)
         self.btn_estop_trigger.clicked.connect(self._on_estop_trigger_clicked)
         layout.addWidget(self.btn_estop_trigger, 0, 0, 1, 2)
 
         self.btn_estop_clear = QPushButton("Reset / Clear E-Stop")
         self.btn_estop_clear.setObjectName("btnEstopClear")
+        self.btn_estop_clear.setMinimumHeight(30)
         self.btn_estop_clear.clicked.connect(self._on_estop_clear_clicked)
         layout.addWidget(self.btn_estop_clear, 1, 0, 1, 2)
 
         # Engage / Disengage Buttons
         self.btn_engage = QPushButton("✔ Engage Vehicle (G)")
         self.btn_engage.setObjectName("btnEngage")
-        self.btn_engage.setMinimumHeight(38)
+        self.btn_engage.setMinimumHeight(32)
         self.btn_engage.clicked.connect(self._on_engage_clicked)
         layout.addWidget(self.btn_engage, 2, 0)
 
         self.btn_disengage = QPushButton("✖ Disengage Vehicle")
         self.btn_disengage.setObjectName("btnDisengage")
-        self.btn_disengage.setMinimumHeight(38)
+        self.btn_disengage.setMinimumHeight(32)
         self.btn_disengage.clicked.connect(self._on_disengage_clicked)
         layout.addWidget(self.btn_disengage, 2, 1)
 
         # Mode Request Buttons
         self.btn_req_auto = QPushButton("Request Autonomous Mode")
         self.btn_req_auto.setObjectName("btnReqAuto")
+        self.btn_req_auto.setMinimumHeight(30)
         self.btn_req_auto.clicked.connect(lambda: self._on_mode_request(ControlModeConstants.AUTONOMOUS))
         layout.addWidget(self.btn_req_auto, 3, 0)
 
         self.btn_req_manual = QPushButton("Request Manual Mode")
         self.btn_req_manual.setObjectName("btnReqManual")
+        self.btn_req_manual.setMinimumHeight(30)
         self.btn_req_manual.clicked.connect(lambda: self._on_mode_request(ControlModeConstants.MANUAL))
         layout.addWidget(self.btn_req_manual, 3, 1)
 
@@ -316,7 +342,7 @@ class RemoteControlMainWindow(QMainWindow):
         """Gear selection buttons for every gear output."""
         box = QGroupBox("Transmission Gear Outputs")
         layout = QHBoxLayout(box)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         self.btn_gear_park = QPushButton("PARK (P)")
         self.btn_gear_rev = QPushButton("REV (R)")
@@ -332,8 +358,8 @@ class RemoteControlMainWindow(QMainWindow):
             self.btn_gear_low,
         ):
             btn.setCheckable(True)
-            btn.setMinimumHeight(38)
-            btn.setFont(QFont("Segoe UI", 10, QFont.Bold))
+            btn.setMinimumHeight(32)
+            btn.setFont(QFont("Segoe UI", 9, QFont.Bold))
             layout.addWidget(btn)
 
         self.btn_gear_park.setChecked(True)
@@ -350,7 +376,7 @@ class RemoteControlMainWindow(QMainWindow):
         """Turn signals and hazard lights output buttons."""
         box = QGroupBox("Lighting & Signalling Outputs")
         layout = QHBoxLayout(box)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         self.btn_turn_left = QPushButton("◄ Left (Q)")
         self.btn_turn_off = QPushButton("Off")
@@ -370,7 +396,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_hazard.clicked.connect(self._toggle_hazard)
 
         for btn in (self.btn_turn_left, self.btn_turn_off, self.btn_turn_right, self.btn_hazard):
-            btn.setMinimumHeight(36)
+            btn.setMinimumHeight(30)
             layout.addWidget(btn)
 
         return box
@@ -379,7 +405,7 @@ class RemoteControlMainWindow(QMainWindow):
         """Directional drive buttons and instant brake."""
         box = QGroupBox("Directional Drive & Instant Brake")
         layout = QGridLayout(box)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         self.btn_drive_fwd = QPushButton("▲ Forward (Up)")
         self.btn_drive_rev = QPushButton("▼ Reverse (Down)")
@@ -389,13 +415,13 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_zero_speed = QPushButton("⬛ Stop / 0 m/s")
         self.btn_instant_brake = QPushButton("🛑 BRAKE (Space)")
 
-        self.btn_drive_fwd.setMinimumHeight(38)
-        self.btn_drive_rev.setMinimumHeight(38)
-        self.btn_steer_l.setMinimumHeight(38)
-        self.btn_steer_r.setMinimumHeight(38)
-        self.btn_center_steer.setMinimumHeight(38)
-        self.btn_zero_speed.setMinimumHeight(38)
-        self.btn_instant_brake.setMinimumHeight(44)
+        self.btn_drive_fwd.setMinimumHeight(32)
+        self.btn_drive_rev.setMinimumHeight(32)
+        self.btn_steer_l.setMinimumHeight(32)
+        self.btn_steer_r.setMinimumHeight(32)
+        self.btn_center_steer.setMinimumHeight(32)
+        self.btn_zero_speed.setMinimumHeight(32)
+        self.btn_instant_brake.setMinimumHeight(36)
         self.btn_instant_brake.setObjectName("btnBrake")
 
         # Layout D-Pad
@@ -1065,13 +1091,13 @@ class RemoteControlMainWindow(QMainWindow):
                 background-color: #1a1c23;
                 color: #e0e0e0;
                 font-family: 'Segoe UI', sans-serif;
-                font-size: 13px;
+                font-size: 12px;
             }
             QGroupBox {
                 border: 1px solid #333842;
-                border-radius: 8px;
-                margin-top: 14px;
-                padding-top: 16px;
+                border-radius: 6px;
+                margin-top: 8px;
+                padding-top: 10px;
                 font-weight: bold;
                 color: #80cbc4;
             }
