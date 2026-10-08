@@ -146,7 +146,7 @@ class RemoteControlMainWindow(QMainWindow):
         scroll_area = QScrollArea(self)
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setCentralWidget(scroll_area)
 
@@ -160,8 +160,8 @@ class RemoteControlMainWindow(QMainWindow):
         # 1. Top Operational Status Bar
         main_layout.addWidget(self._create_top_banner())
 
-        # 2. Balanced 2-Column Layout (50/50 Proportional Split)
-        # Left: Powertrain & Safety Systems | Right: Motion & Driving Dynamics
+        # 2. Balanced 2-Column Layout (4:5 Proportional Split)
+        # Left: Powertrain, Safety & Driving Options | Right: Directional D-Pad & Dynamics Sliders
         cols_layout = QHBoxLayout()
         cols_layout.setSpacing(10)
 
@@ -170,17 +170,17 @@ class RemoteControlMainWindow(QMainWindow):
         left_col.addWidget(self._create_safety_group())
         left_col.addWidget(self._create_gear_group())
         left_col.addWidget(self._create_signals_group())
+        left_col.addWidget(self._create_key_settings_group())
         left_col.addStretch(1)
 
         right_col = QVBoxLayout()
         right_col.setSpacing(6)
         right_col.addWidget(self._create_dpad_group())
         right_col.addWidget(self._create_adjustments_group())
-        right_col.addWidget(self._create_key_settings_group())
         right_col.addStretch(1)
 
-        cols_layout.addLayout(left_col, 1)
-        cols_layout.addLayout(right_col, 1)
+        cols_layout.addLayout(left_col, 4)
+        cols_layout.addLayout(right_col, 5)
         main_layout.addLayout(cols_layout)
 
         # Bottom Status Bar
@@ -204,8 +204,8 @@ class RemoteControlMainWindow(QMainWindow):
         card.setObjectName("topBanner")
         card.setFrameShape(QFrame.StyledPanel)
         layout = QHBoxLayout(card)
-        layout.setContentsMargins(14, 8, 14, 8)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(8)
 
         title = QLabel("E-TRIKE REMOTE COCKPIT")
         title.setFont(QFont("Segoe UI", 12, QFont.Bold))
@@ -389,10 +389,10 @@ class RemoteControlMainWindow(QMainWindow):
         layout.setSpacing(5)
         layout.setContentsMargins(10, 10, 10, 8)
 
-        self.btn_drive_fwd = QPushButton("▲ Forward (Up / W)")
-        self.btn_drive_rev = QPushButton("▼ Reverse (Down / S)")
-        self.btn_steer_l = QPushButton("◄ Steer Left (Left / A)")
-        self.btn_steer_r = QPushButton("Steer Right ► (Right / D)")
+        self.btn_drive_fwd = QPushButton("▲ Forward (W / ↑)")
+        self.btn_drive_rev = QPushButton("▼ Reverse (S / ↓)")
+        self.btn_steer_l = QPushButton("◄ Steer Left (A / ←)")
+        self.btn_steer_r = QPushButton("Steer Right ► (D / →)")
         self.btn_center_steer = QPushButton("⨁ Center (C)")
         self.btn_zero_speed = QPushButton("■ Stop (0 m/s)")
         self.btn_instant_brake = QPushButton("■ FULL INSTANT BRAKE (Space)")
@@ -408,7 +408,6 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_steer_angle.setDecimals(1)
         self.spin_steer_angle.setValue(0.0)
         self.spin_steer_angle.setSuffix("°")
-        self.spin_steer_angle.setPrefix("Steer: ")
         self.spin_steer_angle.setAlignment(Qt.AlignCenter)
         self.spin_steer_angle.setFocusPolicy(Qt.ClickFocus)
 
@@ -421,6 +420,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_steer_r.setMinimumHeight(36)
         self.btn_center_steer.setMinimumHeight(36)
         self.btn_zero_speed.setMinimumHeight(36)
+        self.btn_zero_speed.setObjectName("btnStop")
         self.btn_preset_m10.setMinimumHeight(32)
         self.btn_preset_p10.setMinimumHeight(32)
         self.spin_steer_angle.setMinimumHeight(32)
@@ -491,18 +491,14 @@ class RemoteControlMainWindow(QMainWindow):
         return box
 
     def _create_adjustments_group(self) -> QGroupBox:
-        """Dynamics authority sliders and spinboxes."""
+        """Dynamics authority sliders and spinboxes aligned in a unified grid."""
         box = QGroupBox("Speed, Acceleration && Steering Authority")
-        layout = QVBoxLayout(box)
+        layout = QGridLayout(box)
         layout.setSpacing(5)
         layout.setContentsMargins(10, 10, 10, 8)
 
         # 1. Forward Speed
-        row_fwd = QHBoxLayout()
         lbl_fwd = QLabel("Max Forward Speed:")
-        lbl_fwd.setFixedWidth(135)
-        row_fwd.addWidget(lbl_fwd)
-
         self.slider_fwd_speed = QSlider(Qt.Horizontal)
         self.slider_fwd_speed.setRange(10, 300)
         self.slider_fwd_speed.setValue(int(self._target_forward_speed * 100))
@@ -513,25 +509,22 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_fwd_speed.setSingleStep(0.10)
         self.spin_fwd_speed.setValue(self._target_forward_speed)
         self.spin_fwd_speed.setSuffix(" m/s")
+        self.spin_fwd_speed.setFixedWidth(90)
         self.spin_fwd_speed.setFocusPolicy(Qt.ClickFocus)
 
         self.lbl_fwd_kmh = QLabel(f"({self._target_forward_speed * 3.6:.1f} km/h)")
-        self.lbl_fwd_kmh.setFixedWidth(70)
+        self.lbl_fwd_kmh.setFixedWidth(64)
 
         self.slider_fwd_speed.valueChanged.connect(self._on_slider_fwd_changed)
         self.spin_fwd_speed.valueChanged.connect(self._on_spin_fwd_changed)
 
-        row_fwd.addWidget(self.slider_fwd_speed, 1)
-        row_fwd.addWidget(self.spin_fwd_speed)
-        row_fwd.addWidget(self.lbl_fwd_kmh)
-        layout.addLayout(row_fwd)
+        layout.addWidget(lbl_fwd, 0, 0)
+        layout.addWidget(self.slider_fwd_speed, 0, 1)
+        layout.addWidget(self.spin_fwd_speed, 0, 2)
+        layout.addWidget(self.lbl_fwd_kmh, 0, 3)
 
         # 2. Reverse Speed
-        row_rev = QHBoxLayout()
         lbl_rev = QLabel("Max Reverse Speed:")
-        lbl_rev.setFixedWidth(135)
-        row_rev.addWidget(lbl_rev)
-
         self.slider_rev_speed = QSlider(Qt.Horizontal)
         self.slider_rev_speed.setRange(10, 100)
         self.slider_rev_speed.setValue(int(self._target_reverse_speed * 100))
@@ -542,25 +535,22 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_rev_speed.setSingleStep(0.05)
         self.spin_rev_speed.setValue(self._target_reverse_speed)
         self.spin_rev_speed.setSuffix(" m/s")
+        self.spin_rev_speed.setFixedWidth(90)
         self.spin_rev_speed.setFocusPolicy(Qt.ClickFocus)
 
         self.lbl_rev_kmh = QLabel(f"({self._target_reverse_speed * 3.6:.1f} km/h)")
-        self.lbl_rev_kmh.setFixedWidth(70)
+        self.lbl_rev_kmh.setFixedWidth(64)
 
         self.slider_rev_speed.valueChanged.connect(self._on_slider_rev_changed)
         self.spin_rev_speed.valueChanged.connect(self._on_spin_rev_changed)
 
-        row_rev.addWidget(self.slider_rev_speed, 1)
-        row_rev.addWidget(self.spin_rev_speed)
-        row_rev.addWidget(self.lbl_rev_kmh)
-        layout.addLayout(row_rev)
+        layout.addWidget(lbl_rev, 1, 0)
+        layout.addWidget(self.slider_rev_speed, 1, 1)
+        layout.addWidget(self.spin_rev_speed, 1, 2)
+        layout.addWidget(self.lbl_rev_kmh, 1, 3)
 
         # 3. Acceleration Rate
-        row_acc = QHBoxLayout()
         lbl_acc = QLabel("Acceleration Rate:")
-        lbl_acc.setFixedWidth(135)
-        row_acc.addWidget(lbl_acc)
-
         self.slider_accel = QSlider(Qt.Horizontal)
         self.slider_accel.setRange(10, 300)
         self.slider_accel.setValue(int(self._target_accel * 100))
@@ -571,21 +561,22 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_accel.setSingleStep(0.1)
         self.spin_accel.setValue(self._target_accel)
         self.spin_accel.setSuffix(" m/s²")
+        self.spin_accel.setFixedWidth(90)
         self.spin_accel.setFocusPolicy(Qt.ClickFocus)
+
+        self.lbl_acc_unit = QLabel("")
+        self.lbl_acc_unit.setFixedWidth(64)
 
         self.slider_accel.valueChanged.connect(self._on_slider_accel_changed)
         self.spin_accel.valueChanged.connect(self._on_spin_accel_changed)
 
-        row_acc.addWidget(self.slider_accel, 1)
-        row_acc.addWidget(self.spin_accel)
-        layout.addLayout(row_acc)
+        layout.addWidget(lbl_acc, 2, 0)
+        layout.addWidget(self.slider_accel, 2, 1)
+        layout.addWidget(self.spin_accel, 2, 2)
+        layout.addWidget(self.lbl_acc_unit, 2, 3)
 
         # 4. Deceleration / Brake Force
-        row_dec = QHBoxLayout()
         lbl_dec = QLabel("Braking Deceleration:")
-        lbl_dec.setFixedWidth(135)
-        row_dec.addWidget(lbl_dec)
-
         self.slider_decel = QSlider(Qt.Horizontal)
         self.slider_decel.setRange(50, 500)
         self.slider_decel.setValue(int(self._target_decel * 100))
@@ -596,21 +587,22 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_decel.setSingleStep(0.2)
         self.spin_decel.setValue(self._target_decel)
         self.spin_decel.setSuffix(" m/s²")
+        self.spin_decel.setFixedWidth(90)
         self.spin_decel.setFocusPolicy(Qt.ClickFocus)
+
+        self.lbl_dec_unit = QLabel("")
+        self.lbl_dec_unit.setFixedWidth(64)
 
         self.slider_decel.valueChanged.connect(self._on_slider_decel_changed)
         self.spin_decel.valueChanged.connect(self._on_spin_decel_changed)
 
-        row_dec.addWidget(self.slider_decel, 1)
-        row_dec.addWidget(self.spin_decel)
-        layout.addLayout(row_dec)
+        layout.addWidget(lbl_dec, 3, 0)
+        layout.addWidget(self.slider_decel, 3, 1)
+        layout.addWidget(self.spin_decel, 3, 2)
+        layout.addWidget(self.lbl_dec_unit, 3, 3)
 
         # 5. Steering Angle Limit
-        row_steer = QHBoxLayout()
         lbl_steer = QLabel("Max Steering Angle:")
-        lbl_steer.setFixedWidth(135)
-        row_steer.addWidget(lbl_steer)
-
         self.slider_steer_limit = QSlider(Qt.Horizontal)
         self.slider_steer_limit.setRange(5, 35)
         self.slider_steer_limit.setValue(int(self._target_steer_limit * 100))
@@ -621,38 +613,47 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_steer_limit.setSingleStep(0.02)
         self.spin_steer_limit.setValue(self._target_steer_limit)
         self.spin_steer_limit.setSuffix(" rad")
+        self.spin_steer_limit.setFixedWidth(90)
         self.spin_steer_limit.setFocusPolicy(Qt.ClickFocus)
+
+        self.lbl_steer_deg = QLabel(f"(±{math.degrees(self._target_steer_limit):.1f}°)")
+        self.lbl_steer_deg.setFixedWidth(64)
 
         self.slider_steer_limit.valueChanged.connect(self._on_slider_steer_limit_changed)
         self.spin_steer_limit.valueChanged.connect(self._on_spin_steer_limit_changed)
 
-        row_steer.addWidget(self.slider_steer_limit, 1)
-        row_steer.addWidget(self.spin_steer_limit)
-        layout.addLayout(row_steer)
+        layout.addWidget(lbl_steer, 4, 0)
+        layout.addWidget(self.slider_steer_limit, 4, 1)
+        layout.addWidget(self.spin_steer_limit, 4, 2)
+        layout.addWidget(self.lbl_steer_deg, 4, 3)
 
+        layout.setColumnStretch(0, 0)
+        layout.setColumnStretch(1, 1)
+        layout.setColumnStretch(2, 0)
+        layout.setColumnStretch(3, 0)
         return box
 
     def _create_key_settings_group(self) -> QGroupBox:
         """Teleoperation control mode options."""
         box = QGroupBox("Teleoperation Driving Options")
-        layout = QHBoxLayout(box)
-        layout.setSpacing(12)
+        layout = QGridLayout(box)
+        layout.setSpacing(6)
         layout.setContentsMargins(12, 10, 12, 10)
 
         self.chk_enable_keys = QCheckBox("Enable Keyboard Driving")
         self.chk_enable_keys.setChecked(True)
         self.chk_enable_keys.toggled.connect(self._on_toggle_keyboard)
-        layout.addWidget(self.chk_enable_keys)
-
-        self.chk_auto_center = QCheckBox("Auto-Center Steering (Release ←/→) [X]")
-        self.chk_auto_center.setChecked(True)
-        self.chk_auto_center.toggled.connect(self._on_chk_auto_center_toggled)
-        layout.addWidget(self.chk_auto_center)
+        layout.addWidget(self.chk_enable_keys, 0, 0)
 
         self.chk_auto_decel = QCheckBox("Auto-Decelerate / Coast (Release ↑/↓)")
         self.chk_auto_decel.setChecked(True)
         self.chk_auto_decel.toggled.connect(lambda v: setattr(self, "_auto_decelerate", v))
-        layout.addWidget(self.chk_auto_decel)
+        layout.addWidget(self.chk_auto_decel, 0, 1)
+
+        self.chk_auto_center = QCheckBox("Auto-Center Steering (Release ←/→) [X]")
+        self.chk_auto_center.setChecked(True)
+        self.chk_auto_center.toggled.connect(self._on_chk_auto_center_toggled)
+        layout.addWidget(self.chk_auto_center, 1, 0, 1, 2)
 
         return box
 
@@ -1122,18 +1123,22 @@ class RemoteControlMainWindow(QMainWindow):
         self.spin_steer_limit.setValue(lim)
         self.spin_steer_limit.blockSignals(False)
         self._target_steer_limit = lim
+        max_deg = math.degrees(lim)
         if hasattr(self, "spin_steer_angle"):
-            max_deg = math.degrees(lim)
             self.spin_steer_angle.setRange(-max_deg, max_deg)
+        if hasattr(self, "lbl_steer_deg"):
+            self.lbl_steer_deg.setText(f"(±{max_deg:.1f}°)")
 
     def _on_spin_steer_limit_changed(self, lim: float) -> None:
         self.slider_steer_limit.blockSignals(True)
         self.slider_steer_limit.setValue(int(lim * 100))
         self.slider_steer_limit.blockSignals(False)
         self._target_steer_limit = lim
+        max_deg = math.degrees(lim)
         if hasattr(self, "spin_steer_angle"):
-            max_deg = math.degrees(lim)
             self.spin_steer_angle.setRange(-max_deg, max_deg)
+        if hasattr(self, "lbl_steer_deg"):
+            self.lbl_steer_deg.setText(f"(±{max_deg:.1f}°)")
 
     def _on_toggle_keyboard(self, checked: bool) -> None:
         self._keyboard_enabled = checked
@@ -1202,7 +1207,7 @@ class RemoteControlMainWindow(QMainWindow):
             #badgeMode, #badgeGear, #badgeBackend {
                 background-color: #2d3139;
                 color: #61afef;
-                padding: 5px 12px;
+                padding: 4px 8px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 11px;
@@ -1210,7 +1215,7 @@ class RemoteControlMainWindow(QMainWindow):
             #badgeEngaged {
                 background-color: #2e7d32;
                 color: #ffffff;
-                padding: 5px 12px;
+                padding: 4px 8px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 11px;
@@ -1218,7 +1223,7 @@ class RemoteControlMainWindow(QMainWindow):
             #badgeDisengaged {
                 background-color: #37474f;
                 color: #b0bec5;
-                padding: 5px 12px;
+                padding: 4px 8px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 11px;
@@ -1226,7 +1231,7 @@ class RemoteControlMainWindow(QMainWindow):
             #badgeClear {
                 background-color: #1b5e20;
                 color: #a5d6a7;
-                padding: 5px 12px;
+                padding: 4px 8px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 11px;
@@ -1234,7 +1239,7 @@ class RemoteControlMainWindow(QMainWindow):
             #badgeEstopActive {
                 background-color: #d32f2f;
                 color: #ffffff;
-                padding: 5px 12px;
+                padding: 4px 8px;
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 11px;
@@ -1303,6 +1308,17 @@ class RemoteControlMainWindow(QMainWindow):
             }
             #btnBrake:pressed {
                 background-color: #880e4f;
+            }
+            #btnStop {
+                background-color: #2d2f34;
+                border: 1px solid #d19a66;
+                color: #e5c07b;
+            }
+            #btnStop:hover {
+                background-color: #3e3b32;
+            }
+            #btnStop:pressed {
+                background-color: #5c4d32;
             }
             QSlider::groove:horizontal {
                 height: 6px;
