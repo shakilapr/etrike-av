@@ -95,9 +95,16 @@ def test_gui() -> None:
     for _ in range(30):
         win._update_motion_tick()
     assert abs(win._cmd_steering) < 0.01, f"Expected returned to center, got {win._cmd_steering}"
-    print(f"  Auto-center return verified: cmd_steering={win._cmd_steering:.3f} rad")
+    # 7. Verify Live Telemetry strip updates
+    node._publish_current_state()
+    assert hasattr(win, "lbl_telemetry_speed")
+    assert "m/s" in win.lbl_telemetry_speed.text()
+    assert hasattr(win, "lbl_telemetry_steer")
+    assert "0.0°" in win.lbl_telemetry_steer.text()
+    assert win.bar_telemetry_steer.value() == 50
+    print("  Live telemetry inspector OK!")
 
-    # 7. Grab screenshot
+    # 8. Grab screenshot
     pix = win.grab()
     pix.save("/tmp/remote_cockpit_balanced.png")
     print("Screenshot saved to /tmp/remote_cockpit_balanced.png!")

@@ -32,6 +32,7 @@ try:
         QHBoxLayout,
         QLabel,
         QMainWindow,
+        QProgressBar,
         QPushButton,
         QScrollArea,
         QSizePolicy,
@@ -54,6 +55,7 @@ except ImportError:
         QHBoxLayout,
         QLabel,
         QMainWindow,
+        QProgressBar,
         QPushButton,
         QScrollArea,
         QSizePolicy,
@@ -154,8 +156,8 @@ class RemoteControlMainWindow(QMainWindow):
         scroll_area.setWidget(content_widget)
 
         main_layout = QVBoxLayout(content_widget)
-        main_layout.setContentsMargins(12, 10, 12, 10)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(10, 6, 10, 6)
+        main_layout.setSpacing(6)
 
         # 1. Top Operational Status Bar
         main_layout.addWidget(self._create_top_banner())
@@ -182,6 +184,9 @@ class RemoteControlMainWindow(QMainWindow):
         cols_layout.addLayout(left_col, 4)
         cols_layout.addLayout(right_col, 5)
         main_layout.addLayout(cols_layout)
+
+        # 3. Live Transmitted Actuation Stream (CAN & Bridge Telemetry)
+        main_layout.addWidget(self._create_telemetry_group())
 
         # Bottom Status Bar
         self.statusBar().showMessage(
@@ -240,39 +245,39 @@ class RemoteControlMainWindow(QMainWindow):
         """Safety interlocks, Engage / Disengage, and Autonomous / Manual mode requests."""
         box = QGroupBox("Vehicle Safety && Operation Authority")
         layout = QVBoxLayout(box)
-        layout.setSpacing(8)
-        layout.setContentsMargins(12, 14, 12, 12)
+        layout.setSpacing(6)
+        layout.setContentsMargins(10, 8, 10, 8)
 
         # Primary Emergency Stop Button (prominent tactile target)
         self.btn_estop_trigger = QPushButton("■ EMERGENCY STOP (Esc)")
         self.btn_estop_trigger.setObjectName("btnEstop")
-        self.btn_estop_trigger.setMinimumHeight(44)
-        self.btn_estop_trigger.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.btn_estop_trigger.setMinimumHeight(38)
+        self.btn_estop_trigger.setFont(QFont("Segoe UI", 10, QFont.Bold))
         self.btn_estop_trigger.clicked.connect(self._on_estop_trigger_clicked)
         layout.addWidget(self.btn_estop_trigger)
 
         # Clear E-Stop Button
         self.btn_estop_clear = QPushButton("Reset / Clear Emergency Stop")
         self.btn_estop_clear.setObjectName("btnEstopClear")
-        self.btn_estop_clear.setMinimumHeight(32)
+        self.btn_estop_clear.setMinimumHeight(28)
         self.btn_estop_clear.clicked.connect(self._on_estop_clear_clicked)
         layout.addWidget(self.btn_estop_clear)
 
         # Engage / Disengage Row
         row_engage = QHBoxLayout()
-        row_engage.setSpacing(8)
+        row_engage.setSpacing(6)
 
         self.btn_engage = QPushButton("✔ Engage Vehicle (G)")
         self.btn_engage.setObjectName("btnEngage")
-        self.btn_engage.setMinimumHeight(36)
-        self.btn_engage.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self.btn_engage.setMinimumHeight(32)
+        self.btn_engage.setFont(QFont("Segoe UI", 9, QFont.Bold))
         self.btn_engage.clicked.connect(self._on_engage_clicked)
         row_engage.addWidget(self.btn_engage)
 
         self.btn_disengage = QPushButton("✖ Disengage Vehicle")
         self.btn_disengage.setObjectName("btnDisengage")
-        self.btn_disengage.setMinimumHeight(36)
-        self.btn_disengage.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        self.btn_disengage.setMinimumHeight(32)
+        self.btn_disengage.setFont(QFont("Segoe UI", 9, QFont.Bold))
         self.btn_disengage.clicked.connect(self._on_disengage_clicked)
         row_engage.addWidget(self.btn_disengage)
 
@@ -280,11 +285,11 @@ class RemoteControlMainWindow(QMainWindow):
 
         # Control Mode Row
         row_mode = QHBoxLayout()
-        row_mode.setSpacing(8)
+        row_mode.setSpacing(6)
 
         self.btn_req_auto = QPushButton("Autonomous Mode")
         self.btn_req_auto.setObjectName("btnReqAuto")
-        self.btn_req_auto.setMinimumHeight(32)
+        self.btn_req_auto.setMinimumHeight(28)
         self.btn_req_auto.clicked.connect(
             lambda: self._on_mode_request(ControlModeConstants.AUTONOMOUS)
         )
@@ -292,7 +297,7 @@ class RemoteControlMainWindow(QMainWindow):
 
         self.btn_req_manual = QPushButton("Manual Mode")
         self.btn_req_manual.setObjectName("btnReqManual")
-        self.btn_req_manual.setMinimumHeight(32)
+        self.btn_req_manual.setMinimumHeight(28)
         self.btn_req_manual.clicked.connect(
             lambda: self._on_mode_request(ControlModeConstants.MANUAL)
         )
@@ -306,7 +311,7 @@ class RemoteControlMainWindow(QMainWindow):
         box = QGroupBox("Transmission Gear Selection")
         layout = QHBoxLayout(box)
         layout.setSpacing(6)
-        layout.setContentsMargins(12, 14, 12, 12)
+        layout.setContentsMargins(10, 8, 10, 8)
 
         self.btn_gear_park = QPushButton("PARK (P)")
         self.btn_gear_rev = QPushButton("REV (R)")
@@ -325,7 +330,7 @@ class RemoteControlMainWindow(QMainWindow):
             self.btn_gear_low,
         ):
             btn.setCheckable(True)
-            btn.setMinimumHeight(36)
+            btn.setMinimumHeight(32)
             btn.setFont(QFont("Segoe UI", 9, QFont.Bold))
             self._gear_group.addButton(btn)
             layout.addWidget(btn)
@@ -345,7 +350,7 @@ class RemoteControlMainWindow(QMainWindow):
         box = QGroupBox("Lighting && Signalling Controls")
         layout = QHBoxLayout(box)
         layout.setSpacing(6)
-        layout.setContentsMargins(12, 14, 12, 12)
+        layout.setContentsMargins(10, 8, 10, 8)
 
         self.btn_turn_left = QPushButton("◄ Left (Q)")
         self.btn_turn_off = QPushButton("Off")
@@ -359,7 +364,7 @@ class RemoteControlMainWindow(QMainWindow):
             self.btn_hazard,
         ):
             btn.setCheckable(True)
-            btn.setMinimumHeight(34)
+            btn.setMinimumHeight(30)
             btn.setFont(QFont("Segoe UI", 9, QFont.Bold))
             layout.addWidget(btn)
 
@@ -386,8 +391,8 @@ class RemoteControlMainWindow(QMainWindow):
         """Directional driving cockpit with dual mouse press-and-hold & keyboard driving."""
         box = QGroupBox("Directional Drive Cockpit (Mouse Press-and-Hold && Hotkeys)")
         layout = QGridLayout(box)
-        layout.setSpacing(5)
-        layout.setContentsMargins(10, 10, 10, 8)
+        layout.setSpacing(4)
+        layout.setContentsMargins(8, 8, 8, 6)
 
         self.btn_drive_fwd = QPushButton("▲ Forward (W / ↑)")
         self.btn_drive_rev = QPushButton("▼ Reverse (S / ↓)")
@@ -414,21 +419,21 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_toggle_autocenter = QPushButton("✔ Auto-Center: ON (X)")
         self.btn_toggle_autocenter.setStyleSheet("color: #98c379; font-weight: bold;")
 
-        self.btn_drive_fwd.setMinimumHeight(38)
-        self.btn_drive_rev.setMinimumHeight(36)
-        self.btn_steer_l.setMinimumHeight(36)
-        self.btn_steer_r.setMinimumHeight(36)
-        self.btn_center_steer.setMinimumHeight(36)
-        self.btn_zero_speed.setMinimumHeight(36)
+        self.btn_drive_fwd.setMinimumHeight(34)
+        self.btn_drive_rev.setMinimumHeight(32)
+        self.btn_steer_l.setMinimumHeight(32)
+        self.btn_steer_r.setMinimumHeight(32)
+        self.btn_center_steer.setMinimumHeight(32)
+        self.btn_zero_speed.setMinimumHeight(32)
         self.btn_zero_speed.setObjectName("btnStop")
-        self.btn_preset_m10.setMinimumHeight(32)
-        self.btn_preset_p10.setMinimumHeight(32)
-        self.spin_steer_angle.setMinimumHeight(32)
-        self.btn_toggle_autocenter.setMinimumHeight(36)
-        self.btn_instant_brake.setMinimumHeight(40)
+        self.btn_preset_m10.setMinimumHeight(28)
+        self.btn_preset_p10.setMinimumHeight(28)
+        self.spin_steer_angle.setMinimumHeight(28)
+        self.btn_toggle_autocenter.setMinimumHeight(32)
+        self.btn_instant_brake.setMinimumHeight(36)
 
         self.btn_instant_brake.setObjectName("btnBrake")
-        self.btn_instant_brake.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        self.btn_instant_brake.setFont(QFont("Segoe UI", 10, QFont.Bold))
 
         for btn in (
             self.btn_drive_fwd,
@@ -494,8 +499,8 @@ class RemoteControlMainWindow(QMainWindow):
         """Dynamics authority sliders and spinboxes aligned in a unified grid."""
         box = QGroupBox("Speed, Acceleration && Steering Authority")
         layout = QGridLayout(box)
-        layout.setSpacing(5)
-        layout.setContentsMargins(10, 10, 10, 8)
+        layout.setSpacing(3)
+        layout.setContentsMargins(8, 6, 8, 6)
 
         # 1. Forward Speed
         lbl_fwd = QLabel("Max Forward Speed:")
@@ -654,6 +659,77 @@ class RemoteControlMainWindow(QMainWindow):
         self.chk_auto_center.setChecked(True)
         self.chk_auto_center.toggled.connect(self._on_chk_auto_center_toggled)
         layout.addWidget(self.chk_auto_center, 1, 0, 1, 2)
+
+        return box
+
+    def _create_telemetry_group(self) -> QGroupBox:
+        """Compact live actuation stream inspector with visual deflection bars."""
+        box = QGroupBox("Live Transmitted Actuation Stream (CAN && Bridge Telemetry)")
+        layout = QHBoxLayout(box)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(6)
+
+        def _make_card(title: str) -> tuple[QFrame, QVBoxLayout, QLabel]:
+            card = QFrame()
+            card.setObjectName("telemetryCard")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(6, 3, 6, 3)
+            card_layout.setSpacing(1)
+
+            lbl_title = QLabel(title)
+            lbl_title.setObjectName("telemetryTitle")
+            card_layout.addWidget(lbl_title)
+
+            lbl_val = QLabel("--")
+            lbl_val.setObjectName("telemetryValue")
+            card_layout.addWidget(lbl_val)
+            return card, card_layout, lbl_val
+
+        # 1. Commanded Velocity
+        card_spd, lay_spd, self.lbl_telemetry_speed = _make_card("CMD VELOCITY")
+        self.lbl_telemetry_speed.setText("0.00 m/s (0.0 km/h)")
+        self.bar_telemetry_speed = QProgressBar()
+        self.bar_telemetry_speed.setRange(0, 100)
+        self.bar_telemetry_speed.setValue(0)
+        self.bar_telemetry_speed.setTextVisible(False)
+        self.bar_telemetry_speed.setFixedHeight(6)
+        lay_spd.addWidget(self.bar_telemetry_speed)
+        layout.addWidget(card_spd)
+
+        # 2. Steering Deflection
+        card_str, lay_str, self.lbl_telemetry_steer = _make_card("STEERING DEFLECTION")
+        self.lbl_telemetry_steer.setText("0.0° (0.000 rad)")
+        self.bar_telemetry_steer = QProgressBar()
+        self.bar_telemetry_steer.setRange(0, 100)
+        self.bar_telemetry_steer.setValue(50)  # 50% is center
+        self.bar_telemetry_steer.setTextVisible(False)
+        self.bar_telemetry_steer.setFixedHeight(6)
+        lay_str.addWidget(self.bar_telemetry_steer)
+        layout.addWidget(card_str)
+
+        # 3. Longitudinal Acceleration & Brake
+        card_acc, lay_acc, self.lbl_telemetry_accel = _make_card("ACCEL / BRAKING")
+        self.lbl_telemetry_accel.setText("0.00 m/s²")
+        self.lbl_telemetry_acc_mode = QLabel("Standstill")
+        self.lbl_telemetry_acc_mode.setObjectName("telemetrySubtext")
+        lay_acc.addWidget(self.lbl_telemetry_acc_mode)
+        layout.addWidget(card_acc)
+
+        # 4. Commanded Gear & Signalling
+        card_gear, lay_gear, self.lbl_telemetry_gear = _make_card("TRANSMISSION & LIGHTS")
+        self.lbl_telemetry_gear.setText("PARK (22)")
+        self.lbl_telemetry_signals = QLabel("Signals: Off | Haz: Off")
+        self.lbl_telemetry_signals.setObjectName("telemetrySubtext")
+        lay_gear.addWidget(self.lbl_telemetry_signals)
+        layout.addWidget(card_gear)
+
+        # 5. Stream Rate & Interlocks
+        card_stream, lay_stream, self.lbl_telemetry_stream = _make_card("BRIDGE & INTERLOCKS")
+        self.lbl_telemetry_stream.setText(f"{self.node.publish_rate_hz:.0f} Hz Active")
+        self.lbl_telemetry_interlock = QLabel("Disengaged | E-Stop Clear")
+        self.lbl_telemetry_interlock.setObjectName("telemetrySubtext")
+        lay_stream.addWidget(self.lbl_telemetry_interlock)
+        layout.addWidget(card_stream)
 
         return box
 
@@ -1148,8 +1224,76 @@ class RemoteControlMainWindow(QMainWindow):
         )
 
     def _on_node_telemetry(self, data: Dict[str, Any]) -> None:
-        """Hook for node telemetry (maintains compatibility)."""
-        pass
+        """Hook for live node telemetry updating visual indicators."""
+        if not hasattr(self, "lbl_telemetry_speed"):
+            return
+
+        speed = float(data.get("speed", 0.0))
+        accel = float(data.get("acceleration", 0.0))
+        steer = float(data.get("steering_angle", 0.0))
+        gear = int(data.get("gear", 0))
+        turn = int(data.get("turn_indicators", 0))
+        hazard = int(data.get("hazard_lights", 0))
+        engage = bool(data.get("engage", False))
+        emerg = bool(data.get("emergency", False))
+        is_braking = bool(data.get("is_braking", False))
+
+        steer_deg = math.degrees(steer)
+        kmh = speed * 3.6
+
+        # 1. Velocity & progress bar
+        self.lbl_telemetry_speed.setText(f"{speed:+.2f} m/s ({kmh:+.1f} km/h)")
+        max_speed = max(0.1, self._target_forward_speed)
+        speed_pct = int(min(1.0, max(0.0, abs(speed) / max_speed)) * 100)
+        self.bar_telemetry_speed.setValue(speed_pct)
+
+        # 2. Steering deflection bar (50% is center)
+        self.lbl_telemetry_steer.setText(f"{steer_deg:+.1f}° ({steer:+.3f} rad)")
+        max_steer_deg = max(1.0, math.degrees(self._target_steer_limit))
+        ratio = max(-1.0, min(1.0, steer_deg / max_steer_deg))
+        steer_pos = int(50 + (ratio * 50))
+        self.bar_telemetry_steer.setValue(steer_pos)
+
+        # 3. Accel / Braking
+        if emerg:
+            self.lbl_telemetry_accel.setText("E-STOP ACTIVE")
+            self.lbl_telemetry_accel.setStyleSheet("color: #e06c75; font-weight: bold;")
+            self.lbl_telemetry_acc_mode.setText("Brakes Clamped")
+        elif is_braking or accel < -0.1:
+            self.lbl_telemetry_accel.setText(f"{accel:+.2f} m/s²")
+            self.lbl_telemetry_accel.setStyleSheet("color: #e5c07b; font-weight: bold;")
+            self.lbl_telemetry_acc_mode.setText("Active Braking")
+        elif abs(speed) > 0.05:
+            self.lbl_telemetry_accel.setText(f"{accel:+.2f} m/s²")
+            self.lbl_telemetry_accel.setStyleSheet("color: #98c379; font-weight: bold;")
+            self.lbl_telemetry_acc_mode.setText("Propulsion Active")
+        else:
+            self.lbl_telemetry_accel.setText(f"{accel:+.2f} m/s²")
+            self.lbl_telemetry_accel.setStyleSheet("color: #61afef; font-weight: bold;")
+            self.lbl_telemetry_acc_mode.setText("Standstill")
+
+        # 4. Transmission & Signals
+        gear_names = {
+            GearConstants.PARK: "PARK",
+            GearConstants.REVERSE: "REV",
+            GearConstants.NEUTRAL: "NEU",
+            GearConstants.DRIVE: "DRIVE",
+            GearConstants.LOW: "LOW",
+        }
+        g_name = gear_names.get(gear, f"{gear}")
+        turn_str = (
+            "LEFT"
+            if turn == TurnIndicatorsConstants.ENABLE_LEFT
+            else ("RIGHT" if turn == TurnIndicatorsConstants.ENABLE_RIGHT else "OFF")
+        )
+        haz_str = "ON" if hazard == HazardLightsConstants.ENABLE else "OFF"
+        self.lbl_telemetry_gear.setText(f"{g_name} ({gear})")
+        self.lbl_telemetry_signals.setText(f"Turn: {turn_str} | Haz: {haz_str}")
+
+        # 5. Authority & Interlocks
+        eng_str = "ENGAGED" if engage else "DISENGAGED"
+        est_str = "E-STOP ACTIVE" if emerg else "CLEAR"
+        self.lbl_telemetry_interlock.setText(f"{eng_str} | {est_str}")
 
     # =========================================================================
     # Fail-Closed Cleanup on Window Close
@@ -1187,8 +1331,8 @@ class RemoteControlMainWindow(QMainWindow):
             QGroupBox {
                 border: 1px solid #333842;
                 border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 12px;
+                margin-top: 6px;
+                padding-top: 8px;
                 font-weight: bold;
                 color: #80cbc4;
                 background-color: #21252b;
@@ -1358,6 +1502,37 @@ class RemoteControlMainWindow(QMainWindow):
                 color: #abb2bf;
                 border-top: 1px solid #282c34;
                 font-size: 11px;
+            }
+            #telemetryCard {
+                background-color: #21252b;
+                border: 1px solid #333842;
+                border-radius: 6px;
+            }
+            #telemetryTitle {
+                color: #828997;
+                font-size: 9px;
+                font-weight: bold;
+                letter-spacing: 0.5px;
+            }
+            #telemetryValue {
+                color: #61afef;
+                font-size: 13px;
+                font-weight: bold;
+                font-family: 'Consolas', 'Segoe UI', monospace;
+            }
+            #telemetrySubtext {
+                color: #abb2bf;
+                font-size: 10px;
+                font-weight: 500;
+            }
+            QProgressBar {
+                border: 1px solid #333842;
+                border-radius: 3px;
+                background-color: #1a1d23;
+            }
+            QProgressBar::chunk {
+                background-color: #61afef;
+                border-radius: 2px;
             }
             """
         )
