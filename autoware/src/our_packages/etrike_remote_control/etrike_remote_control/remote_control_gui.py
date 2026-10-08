@@ -18,25 +18,46 @@ import math
 import sys
 from typing import Any, Dict, Optional, Set
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QKeyEvent, QPainter, QPaintEvent, QPen
-from PySide6.QtWidgets import (
-    QApplication,
-    QCheckBox,
-    QDoubleSpinBox,
-    QFrame,
-    QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QProgressBar,
-    QPushButton,
-    QSlider,
-    QStatusBar,
-    QVBoxLayout,
-    QWidget,
-)
+try:
+    from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer
+    from PySide6.QtGui import QColor, QFont, QKeyEvent, QPainter, QPaintEvent, QPen
+    from PySide6.QtWidgets import (
+        QApplication,
+        QCheckBox,
+        QDoubleSpinBox,
+        QFrame,
+        QGridLayout,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QMainWindow,
+        QProgressBar,
+        QPushButton,
+        QSlider,
+        QStatusBar,
+        QVBoxLayout,
+        QWidget,
+    )
+except ImportError:
+    from PyQt5.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer
+    from PyQt5.QtGui import QColor, QFont, QKeyEvent, QPainter, QPaintEvent, QPen
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QCheckBox,
+        QDoubleSpinBox,
+        QFrame,
+        QGridLayout,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QMainWindow,
+        QProgressBar,
+        QPushButton,
+        QSlider,
+        QStatusBar,
+        QVBoxLayout,
+        QWidget,
+    )
 
 from etrike_remote_control.remote_control_node import (
     ControlModeConstants,
