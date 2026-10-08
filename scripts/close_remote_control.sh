@@ -25,15 +25,23 @@ echo "======================================================================"
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     echo "--> Stopping Remote Control GUI and Vehicle Bridge inside $CONTAINER..."
     docker exec "$CONTAINER" bash -c "
-        # 1. Terminate remote control GUI first
+        # 1. Terminate remote control GUI and launcher first
         pkill -INT -f 'etrike_remote_control' 2>/dev/null || true
+        pkill -INT -f 'bench_remote_control' 2>/dev/null || true
+        pkill -INT -f 'remote_control_gui' 2>/dev/null || true
         sleep 0.5
         pkill -9 -f 'etrike_remote_control' 2>/dev/null || true
+        pkill -9 -f 'bench_remote_control' 2>/dev/null || true
+        pkill -9 -f 'remote_control_gui' 2>/dev/null || true
 
         # 2. Terminate vehicle bridge gracefully
         pkill -INT -f 'vehicle_bridge' 2>/dev/null || true
+        pkill -INT -f 'vehicle_bridge_node' 2>/dev/null || true
+        pkill -INT -f 'autoware_vehicle_bridge' 2>/dev/null || true
         sleep 1
         pkill -9 -f 'vehicle_bridge' 2>/dev/null || true
+        pkill -9 -f 'vehicle_bridge_node' 2>/dev/null || true
+        pkill -9 -f 'autoware_vehicle_bridge' 2>/dev/null || true
     " || true
     echo "  [OK] Nodes terminated inside container."
 fi
