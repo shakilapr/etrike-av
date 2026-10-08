@@ -28,10 +28,26 @@ import pytest
 from etrike_remote_control.remote_control_node import (
     ControlModeConstants,
     GearConstants,
+    HAS_ROS2,
     HazardLightsConstants,
     RemoteControlNode,
     TurnIndicatorsConstants,
 )
+
+if HAS_ROS2:
+    import rclpy
+
+
+@pytest.fixture(autouse=True)
+def manage_rclpy():
+    """Ensure rclpy is initialized if testing in a live ROS 2 environment."""
+    if HAS_ROS2:
+        if not rclpy.ok():
+            rclpy.init()
+    yield
+    if HAS_ROS2:
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 def test_node_initialization() -> None:
@@ -215,13 +231,18 @@ def test_control_mode_service_request() -> None:
         last_response.append((mode_str, success))
 
     node.set_service_response_hook(_srv_hook)
-    node.request_control_mode(ControlModeConstants.AUTONOMOUS)
-    assert len(last_response) == 1
-    assert last_response[0][0] == "AUTONOMOUS"
-    assert last_response[0][1] is True
+    saved_cli = node._cli_control_mode
+    node._cli_control_mode = None
+    try:
+        node.request_control_mode(ControlModeConstants.AUTONOMOUS)
+        assert len(last_response) == 1
+        assert last_response[0][0] == "AUTONOMOUS"
+        assert last_response[0][1] is True
 
-    node.request_control_mode(ControlModeConstants.MANUAL)
-    assert len(last_response) == 2
-    assert last_response[1][0] == "MANUAL"
-    assert last_response[1][1] is True
+        node.request_control_mode(ControlModeConstants.MANUAL)
+        assert len(last_response) == 2
+        assert last_response[1][0] == "MANUAL"
+        assert last_response[1][1] is True
+    finally:
+        node._cli_control_mode = saved_cli
 
