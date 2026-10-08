@@ -14,6 +14,9 @@ pkill -9 -f "robot_state_publisher" 2>/dev/null || true
 pkill -9 -f "planning_simulator" 2>/dev/null || true
 pkill -f "tools.can_watcher.backend.server" 2>/dev/null || true
 pkill -f "tools.av_dashboard.backend.server" 2>/dev/null || true
+pkill -f "autoware_teleop" 2>/dev/null || true
+pkill -f "etrike_remote_control" 2>/dev/null || true
+pkill -f "vehicle_bridge" 2>/dev/null || true
 pkill -f "localhost:8000" 2>/dev/null || true
 pkill -f "localhost:8080" 2>/dev/null || true
 
