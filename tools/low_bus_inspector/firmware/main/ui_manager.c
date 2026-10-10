@@ -1738,21 +1738,45 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             }
         }
 
-        // Active Gear Highlight
+        // Active Gear Highlight (Low Bus: 0x204 cmd_gear, 0x206 act_gear)
         // Buttons: 0: R (gear==3), 1: N (gear==0), 2: D (gear==1), 3: S (gear==2)
-        int active_btn_idx = -1;
+        int act_btn_idx = -1;
         switch (t->drive_act_gear) {
-            case VEHICLE_GEAR_REVERSE: active_btn_idx = 0; break;
-            case VEHICLE_GEAR_NEUTRAL: active_btn_idx = 1; break;
-            case VEHICLE_GEAR_DRIVE:   active_btn_idx = 2; break;
-            case VEHICLE_GEAR_SPORT:   active_btn_idx = 3; break;
+            case VEHICLE_GEAR_REVERSE: act_btn_idx = 0; break;
+            case VEHICLE_GEAR_NEUTRAL: act_btn_idx = 1; break;
+            case VEHICLE_GEAR_DRIVE:   act_btn_idx = 2; break;
+            case VEHICLE_GEAR_SPORT:   act_btn_idx = 3; break;
             default: break;
         }
+
+        int cmd_btn_idx = -1;
+        switch (t->drive_cmd_gear) {
+            case VEHICLE_GEAR_REVERSE: cmd_btn_idx = 0; break;
+            case VEHICLE_GEAR_NEUTRAL: cmd_btn_idx = 1; break;
+            case VEHICLE_GEAR_DRIVE:   cmd_btn_idx = 2; break;
+            case VEHICLE_GEAR_SPORT:   cmd_btn_idx = 3; break;
+            default: break;
+        }
+
+        // If actual feedback is present, highlight active. If cmd differs, show cmd target.
         for (int i = 0; i < 4; i++) {
             if (s_btn_dash_gears[i] && s_lbl_dash_gears[i]) {
-                bool is_active = (i == active_btn_idx);
-                lv_obj_set_style_bg_color(s_btn_dash_gears[i], lv_color_hex(is_active ? UI_COLOR_ACCENT_CMD : 0x121212), 0);
-                lv_obj_set_style_text_color(s_lbl_dash_gears[i], lv_color_hex(is_active ? 0x000000 : UI_COLOR_TEXT_SECONDARY), 0);
+                if (i == act_btn_idx) {
+                    // Solid emerald fill for actual engaged gear
+                    lv_obj_set_style_bg_color(s_btn_dash_gears[i], lv_color_hex(UI_COLOR_STATE_OK), 0);
+                    lv_obj_set_style_border_color(s_btn_dash_gears[i], lv_color_hex(UI_COLOR_STATE_OK), 0);
+                    lv_obj_set_style_text_color(s_lbl_dash_gears[i], lv_color_hex(0x000000), 0);
+                } else if (i == cmd_btn_idx && cmd_btn_idx != act_btn_idx) {
+                    // Cyan outline / target fill for commanded gear in transition
+                    lv_obj_set_style_bg_color(s_btn_dash_gears[i], lv_color_hex(0x0E2A38), 0);
+                    lv_obj_set_style_border_color(s_btn_dash_gears[i], lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+                    lv_obj_set_style_text_color(s_lbl_dash_gears[i], lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+                } else {
+                    // Inactive gear
+                    lv_obj_set_style_bg_color(s_btn_dash_gears[i], lv_color_hex(0x121212), 0);
+                    lv_obj_set_style_border_color(s_btn_dash_gears[i], lv_color_hex(UI_COLOR_BORDER), 0);
+                    lv_obj_set_style_text_color(s_lbl_dash_gears[i], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+                }
             }
         }
 
@@ -1810,7 +1834,13 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         }
         if (s_lbl_dash_speed_aux) {
             float delta = fabsf(t->drive_act_kmh - t->drive_cmd_kmh);
-            snprintf(buf, sizeof(buf), "GEAR: [ %c ]  •  DIFF: %0.1f km/h", g, delta);
+            char g_act = vehicle_gear_to_char(t->drive_act_gear);
+            char g_cmd = vehicle_gear_to_char(t->drive_cmd_gear);
+            if (g_act != g_cmd && t->drive_cmd_gear != 0) {
+                snprintf(buf, sizeof(buf), "GEAR: [ %c ] (CMD %c) • DIFF: %0.1f", g_act, g_cmd, delta);
+            } else {
+                snprintf(buf, sizeof(buf), "GEAR: [ %c ]  •  DIFF: %0.1f km/h", g_act, delta);
+            }
             lv_label_set_text(s_lbl_dash_speed_aux, buf);
         }
 

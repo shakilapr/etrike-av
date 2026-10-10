@@ -134,22 +134,19 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             s_telemetry.estop_source_node = 1;
             break;
 
-        case 0x011: // SYS_SAFETY_STS
+        case 0x011: // SYS_SAFETY_STS (SYS E-Stop & Presence, 200ms)
             mark_node_seen(NODE_SYS);
             if (dlc >= 1) {
+                // Byte 0: estop_source (0: None, non-zero: Active)
                 s_telemetry.estop_pin_active = (d[0] != 0);
                 if (d[0] != 0) {
                     s_telemetry.estop_active = true;
-                    s_telemetry.estop_source_node = 1;
+                    s_telemetry.estop_source_node = 1; // SYS
                 }
             }
             if (dlc >= 3) {
-                uint8_t b = d[2];
-                s_telemetry.turn_left_active   = (b & 0x01) != 0;
-                s_telemetry.turn_right_active  = (b & 0x02) != 0;
-                s_telemetry.hazard_active      = ((b & 0x03) == 0x03);
-                s_telemetry.brake_light_active = (b & 0x04) != 0;
-                s_telemetry.high_beam_active   = (b & 0x08) != 0;
+                // Byte 2: estop_reason
+                s_telemetry.estop_reason_code = d[2];
             }
             break;
 
@@ -291,6 +288,17 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
         // ==============================================================
         // 3. SYNTREE SEB BRAKE DOMAIN (CAN_SEB_CU_V3.0)
         // ==============================================================
+        case 0x205: // RT_BRAKE_CMD (Command from RT to SYS, 20ms)
+            mark_node_seen(NODE_RT);
+            if (dlc >= 4) {
+                int32_t p_kpa = (int32_t)((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]);
+                if (p_kpa >= 0) {
+                    s_telemetry.brake_cmd_kpa = (float)p_kpa;
+                    s_telemetry.brake_cmd_mpa = (float)p_kpa * 0.001f;
+                }
+            }
+            break;
+
         case 0x7B9: // VCU_SEB_Req (VCU Command to SEB, 20ms)
             mark_node_seen(NODE_RT);
             mark_node_seen(NODE_SYS);
@@ -316,8 +324,9 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
                 // Byte 6: Rolling counter
                 s_telemetry.seb_cmd_roll_cnt = (d[6] >> 4) & 0x0F;
 
-                // Byte 7: Checksum validation
-                s_telemetry.seb_cmd_chk_valid = (calc_seb_checksum(d) == d[7]);
+                // Byte 7: Checksum validation (accepts both strict additive-sum XOR and zero-security bypass)
+                bool zero_sec = ((d[6] & 0x03) == 0x00 && d[7] == 0x00);
+                s_telemetry.seb_cmd_chk_valid = zero_sec || (calc_seb_checksum(d) == d[7]);
             }
             break;
 
@@ -460,16 +469,22 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             }
             break;
 
-        case 0x120: // SYS_THROTTLE_STS
-        case 0x206: // MTR_MOTOR_FBK
+        case 0x120: // SYS_THROTTLE_STS (MTR speed feedback, 10ms)
             mark_node_seen(NODE_MTR);
-            if (id == 0x120 && dlc >= 2) {
+            if (dlc >= 2) {
                 int16_t spd_mmps = (int16_t)((d[0] << 8) | d[1]);
                 s_telemetry.drive_act_kmh = (float)spd_mmps * 0.0036f;
-                s_telemetry.drive_motor_rpm = 0; // Not available on low bus
                 s_telemetry.drive_delta_kmh = fabsf(s_telemetry.drive_cmd_kmh - s_telemetry.drive_act_kmh);
             }
-            if (id == 0x206 && dlc >= 3) {
+            break;
+
+        case 0x206: // MTR_MOTOR_FBK (MTR commanded speed & gear state, 20ms)
+            mark_node_seen(NODE_MTR);
+            if (dlc >= 2) {
+                // Bytes 0..1: motor_command_speed_mmps
+            }
+            if (dlc >= 3) {
+                // Byte 2: gear_state (0: N, 1: D, 2: S, 3: R)
                 s_telemetry.drive_act_gear = d[2];
             }
             break;
@@ -492,7 +507,20 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             }
             break;
 
-        case 0x500: // SYS_NODE_STATUS
+        case 0x500: // SYS_NODE_STATUS (SYS Bulbs, Hardware Switches & State, 200ms)
+            mark_node_seen(NODE_SYS);
+            if (dlc >= 6) {
+                // Byte 4: Hardware switch inputs
+                // Byte 5: Bulb outputs (b4: left, b5: right, b6: brake, b7: head)
+                uint8_t bulbs = d[5];
+                s_telemetry.turn_left_active   = (bulbs & 0x10) != 0;
+                s_telemetry.turn_right_active  = (bulbs & 0x20) != 0;
+                s_telemetry.hazard_active      = ((bulbs & 0x30) == 0x30);
+                s_telemetry.brake_light_active = (bulbs & 0x40) != 0;
+                s_telemetry.high_beam_active   = (bulbs & 0x80) != 0;
+            }
+            break;
+
         case 0x7FE: // SYS_HEARTBEAT
             mark_node_seen(NODE_SYS);
             break;
