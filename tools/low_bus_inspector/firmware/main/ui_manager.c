@@ -2562,7 +2562,13 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         // 1. BRAKE (SEB 0x731) Fault Analysis
         if (s_lbl_logs_seb_title && s_lbl_logs_seb_detail) {
             uint32_t b_raw = t->seb_errors.raw_bitmap;
-            snprintf(buf, sizeof(buf), "BRAKE SYSTEM (SEB 0x731) • RAW BITMAP: 0x%06lX", (unsigned long)b_raw);
+            const char *seb_lvl_str = "HEALTHY";
+            if (t->seb_err_level == 1) seb_lvl_str = "LEVEL 1 (MINOR)";
+            else if (t->seb_err_level == 2) seb_lvl_str = "LEVEL 2 (COMMON)";
+            else if (t->seb_err_level == 3) seb_lvl_str = "LEVEL 3 (CRITICAL)";
+
+            snprintf(buf, sizeof(buf), "BRAKE SYSTEM (SEB 0x731) • STATUS: %s • RAW: 0x%06lX",
+                     seb_lvl_str, (unsigned long)b_raw);
             lv_label_set_text(s_lbl_logs_seb_title, buf);
 
             if (b_raw == 0) {
@@ -2579,120 +2585,126 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                 int offset = 0;
                 seb_buf[0] = '\0';
 
-                // Check each of the 22 SEB diagnostic bits
+                // Check each of the 22 SEB diagnostic bits (Byte 0)
                 if (t->seb_errors.ecu_undervolt) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_ECUUnderVolt (Bit 0): Controller supply rail < 9.0V\n");
+                                       "[L2] SEB_ECUUnderVolt_Err (Bit 0): 12V supply < 9.0V (brownout risk)\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.ecu_overvolt) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_ECUOverVolt (Bit 1): Controller supply rail > 16.0V\n");
+                                       "[L2] SEB_ECUOverVolt_Err (Bit 1): 12V supply > 16.0V (MOSFET clamping active)\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.can_com_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_CanComErr (Bit 2): CAN communication timeout (>100ms)\n");
+                                       "[L1] SEB_CanCom_Err (Bit 2): CAN frame dropouts / parity disturbance\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.ecu_temp_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_ECUTempErr (Bit 3): Controller PCB / power stage overtemp\n");
+                                       "[L3] SEB_ECUTemp_Err (Bit 3): Controller PCB / power stage temp > 105°C\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.bridge_sc_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_DomainSC (Bit 4): Bridge driver shoot-through / short circuit\n");
+                                       "[L3] SEB_Domain drive_SC_Err (Bit 4): Bridge short-circuited to GND/DC bus\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.driver_volt_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_DomainV (Bit 5): Gate driver supply rail out of bounds\n");
+                                       "[L3] SEB_Domain drive_V_Err (Bit 5): Gate driver intermediate bootstrap supply fault\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.driver_temp_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_DomainT (Bit 6): Gate driver bridge temperature fault\n");
+                                       "[L3] SEB_Domain drive_T_Err (Bit 6): Gate driver IC junction temperature fault\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.angle_p_cut_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleP_OC (Bit 7): Primary angle sensor open circuit / disconnected\n");
+                                       "[L3] SEB_AngleSensor_P O/C_Err (Bit 7): Primary angle sensor open-circuit\n");
                     total_dtc_count++;
                 }
+
+                // Byte 1
                 if (t->seb_errors.angle_p_freq_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleP_AF (Bit 8): Primary angle sensor abnormal frequency\n");
+                                       "[L3] SEB_AngleSensor_P AF_Err (Bit 8): Primary angle sensor frequency abnormal\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.angle_s_cut_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleS_OC (Bit 9): Secondary angle sensor open circuit\n");
+                                       "[L3] SEB_AngleSensor_S O/C_Err (Bit 9): Secondary angle sensor open-circuit\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.angle_s_freq_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleS_AF (Bit 10): Secondary angle sensor abnormal frequency\n");
+                                       "[L3] SEB_AngleSensor_S AF_Err (Bit 10): Secondary angle sensor frequency abnormal\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.no_pres_sensor_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_NoPreSensor (Bit 11): Oil pressure sensor disconnected / open\n");
+                                       "[L3] SEB_NOPreSensor_Err (Bit 11): Hydraulic pressure sensor disconnected (CRITICAL)\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.sensor_plaus_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_SensorUCL (Bit 13): Angle sensor plausibility discrepancy\n");
+                                       "[L3] SEB_Sensors'CL_Err (Bit 13): Discrepancy between redundant sensors (plausibility)\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.alignment_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_AlignmentErr (Bit 14): Zero-point alignment uncalibrated / failed\n");
+                                       "[L2] SEB_Alignment_Err (Bit 14): Zero-point alignment procedure failed\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.angle_over_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_AngleOver (Bit 15): Motor rotor angular displacement out of bounds\n");
+                                       "[L2] SEB_AngleOver_Err (Bit 15): Motor rotor angular software travel limit exceeded\n");
                     total_dtc_count++;
                 }
+
+                // Byte 2
                 if (t->seb_errors.mtr_stall_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_MtrStall (Bit 17): Actuator motor locked-rotor / stall fault\n");
+                                       "[L3] SEB_Mtr_Stall_Err (Bit 17): Motor locked-rotor / jammed against stops\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.mtr_phase_dc_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_MtrDC (Bit 18): Actuator motor phase disconnected\n");
+                                       "[L3] SEB_MtrD/C_Err (Bit 18): Motor phase winding disconnected / open-circuit\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.oil_track_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_OilErr (Bit 19): Hydraulic pressure tracking discrepancy\n");
+                                       "[L2] SEB_Oil_Err (Bit 19): Hydraulic pressure does not follow stroke command\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.init_oil_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_InitOil (Bit 20): Residual hydraulic oil pressure on power-up\n");
+                                       "[L3] SEB_InitOil_Err (Bit 20): Residual hydraulic line pressure detected on boot\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.sent_value_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_SentValue (Bit 21): VCU commanded value out of valid bounds\n");
+                                       "[L1] SEB_SentValue_Err (Bit 21): VCU commanded stroke/pressure exceeds bounds\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.mtr_no_load_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_MtrNoLoad (Bit 22): Actuator motor idling / lead screw disengaged\n");
+                                       "[L3] SEB_Mtr_No-load_Err (Bit 22): Motor spinning with no load (lead screw detached)\n");
                     total_dtc_count++;
                 }
+
+                // Byte 3
                 if (t->seb_errors.pres_sensor_over) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_PreSensorOver (Bit 24): Oil pressure sensor overvoltage / overpressure\n");
+                                       "[L2] SEB_PreSensorOver_Err (Bit 24): Hydraulic pressure exceeded sensor range (>25MPa)\n");
                     total_dtc_count++;
                 }
                 if (t->seb_errors.low_volt_charge_err) {
                     offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_LowVoltCharging (Bit 25): Low-voltage charging circuit fault\n");
+                                       "[L2] SEB_Low-Volt Charging_Err (Bit 25): Auxiliary backup charging circuit fault\n");
                     total_dtc_count++;
                 }
 
@@ -2731,127 +2743,127 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
 
                 if (t->ses_errors.ecu_undervolt) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_ECUUnderVolt (Bit 0): Controller supply rail < 9.0V\n");
+                                       "[L2] SES_ECUUnderVolt_Err (Bit 0): Steering supply < 9.0V\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.ecu_overvolt) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_ECUOverVolt (Bit 1): Controller supply rail > 16.0V\n");
+                                       "[L2] SES_ECUOverVolt_Err (Bit 1): Steering supply > 16.0V\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.can_com_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SES_CanComErr (Bit 2): CAN communication timeout (>100ms)\n");
+                                       "[L1] SES_CanCom_Err (Bit 2): Steering CAN dropout / timeout\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.ecu_temp_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SES_ECUTempErr (Bit 3): Controller temperature > 105°C\n");
+                                       "[L3] SES_ECUTemp_Err (Bit 3): Steering ECU temperature > 105°C\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.domain_drive_sc_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_DomainSC (Bit 4): Domain drive bridge short circuit\n");
+                                       "[L3] SES_Domain drive_SC_Err (Bit 4): Steering motor bridge short circuit\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.domain_drive_v_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_DomainV (Bit 5): Domain drive gate voltage fault\n");
+                                       "[L3] SES_Domain drive_V_Err (Bit 5): Steering gate driver supply rail fault\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.domain_drive_t_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_DomainT (Bit 6): Domain drive bridge overtemp > 110°C\n");
+                                       "[L3] SES_Domain drive_T_Err (Bit 6): Steering gate driver overtemp > 110°C\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.temp_sensor_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_TempSensor (Bit 7): Temperature sensor open / short circuit\n");
+                                       "[L2] SES_TempSensor_Err (Bit 7): PCB temperature sensor open / short circuit\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.angle_p_oc_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleP_OC (Bit 8): Primary steering angle sensor open circuit\n");
+                                       "[L3] SES_AngleSensor_P O/C_Err (Bit 8): Primary steering angle sensor open-circuit\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.angle_p_af_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleP_AF (Bit 9): Primary angle sensor abnormal frequency\n");
+                                       "[L3] SES_AngleSensor_P AF_Err (Bit 9): Primary angle sensor frequency abnormal\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.angle_s_oc_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleS_OC (Bit 10): Secondary angle sensor open circuit\n");
+                                       "[L3] SES_AngleSensor_S O/C_Err (Bit 10): Secondary angle sensor open-circuit\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.angle_s_af_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleS_AF (Bit 11): Secondary angle sensor abnormal frequency\n");
+                                       "[L3] SES_AngleSensor_S AF_Err (Bit 11): Secondary angle sensor frequency abnormal\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.sensor_pow_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_SensorPow (Bit 12): Internal 5V/3.3V sensor regulator fault\n");
+                                       "[L3] SES_SensorPow_Err (Bit 12): Internal 5V regulated sensor power rail failure\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.alignment_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SES_Alignment (Bit 13): Zero-point alignment uncalibrated / failed\n");
+                                       "[L1] SES_Alignment_Err (Bit 13): Steering center zero-point calibration failed\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.over_angle_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_OverAngle (Bit 14): Steering angle exceeded ±700° physical bounds\n");
+                                       "[L2] SES_OverAngle_Err (Bit 14): Commanded angle exceeded ±700° limit\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.str_mtr_stall_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SES_StrMtrStall (Bit 15): Steering motor stall / locked-rotor\n");
+                                       "[L3] SES_StrMtr_Stall_Err (Bit 15): Steering column motor stall / mechanical jam\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.mtr_curt_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_MtrCurtFault (Bit 16): Motor phase current exceeded limit (>52A)\n");
+                                       "[L3] SES_MtrCurt_Err (Bit 16): Motor phase overcurrent trip (>52A)\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.sensors_cl_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_SensorCL (Bit 17): Angle sensor 5V power discrepancy / mismatch\n");
+                                       "[L3] SES_Sensors'CL_Err (Bit 17): Dual torque/angle sensor plausibility discrepancy\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.torq_t1_oc_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqT1_OC (Bit 18): Torque sensor channel T1 open circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.torq_t1_af_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqT1_AF (Bit 19): Torque sensor channel T1 abnormal frequency\n");
+                                       "[L3] SES_TorqSensor_T1 O/C_Err (Bit 18): Driver torque sensor Main channel (T1) open-circuit\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.torq_t2_oc_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqT2_OC (Bit 20): Torque sensor channel T2 open circuit\n");
+                                       "[L3] SES_TorqSensor_T2 O/C_Err (Bit 19): Driver torque sensor Sub channel (T2) open-circuit\n");
+                    total_dtc_count++;
+                }
+                if (t->ses_errors.torq_t1_af_err) {
+                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
+                                       "[L3] SES_TorqSensor_T1 AF_Err (Bit 20): Torque sensor T1 signal frequency abnormal\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.torq_t2_af_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqT2_AF (Bit 21): Torque sensor channel T2 abnormal frequency\n");
+                                       "[L3] SES_TorqSensor_T2 AF_Err (Bit 21): Torque sensor T2 signal frequency abnormal\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.sent_angle_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SES_SentAngle (Bit 22): Target commanded steering angle out of bounds\n");
+                                       "[L1] SentAngle_Err (Bit 22): Target angle commanded outside allowable rate/range\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.str_mtr_idling_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_StrMtrIdling (Bit 23): Motor idling / steering rack decoupled\n");
+                                       "[L3] SES_StrMtr_idling_Err (Bit 23): Motor spinning with no torque (gear disengagement)\n");
                     total_dtc_count++;
                 }
                 if (t->ses_errors.eeprom_err) {
                     offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_EPROM (Bit 24): EEPROM parameter checksum error\n");
+                                       "[L2] SES_EPPROM_Err (Bit 24): EEPROM memory read/write corruption\n");
                     total_dtc_count++;
                 }
 

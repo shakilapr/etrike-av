@@ -291,18 +291,28 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
                     s_telemetry.ses_primary_fault_str = "LEVEL 3: MOTOR STALL";
                 } else if (s_telemetry.ses_errors.mtr_curt_err) {
                     s_telemetry.ses_primary_fault_str = "LEVEL 3: OVERCURRENT (>52A)";
+                } else if (s_telemetry.ses_errors.sensors_cl_err) {
+                    s_telemetry.ses_primary_fault_str = "LEVEL 3: SENSOR PLAUS ERROR";
                 } else if (s_telemetry.ses_errors.angle_p_oc_err || s_telemetry.ses_errors.angle_s_oc_err) {
                     s_telemetry.ses_primary_fault_str = "LEVEL 3: ANGLE SENSOR CUT";
                 } else if (s_telemetry.ses_errors.torq_t1_oc_err || s_telemetry.ses_errors.torq_t2_oc_err) {
                     s_telemetry.ses_primary_fault_str = "LEVEL 3: TORQUE SENSOR CUT";
+                } else if (s_telemetry.ses_errors.sensor_pow_err) {
+                    s_telemetry.ses_primary_fault_str = "LEVEL 3: SENSOR 5V REG FAULT";
                 } else if (s_telemetry.ses_errors.ecu_temp_err || s_telemetry.ses_errors.domain_drive_t_err) {
                     s_telemetry.ses_primary_fault_str = "LEVEL 3: OVERTEMP (>105C)";
                 } else if (s_telemetry.ses_control_mode_status == 3) {
                     s_telemetry.ses_primary_fault_str = "OVERRIDE: DRIVER TAKEOVER";
+                } else if (s_telemetry.ses_errors.over_angle_err) {
+                    s_telemetry.ses_primary_fault_str = "LEVEL 2: ANGLE EXCEEDED 700D";
                 } else if (s_telemetry.ses_errors.ecu_undervolt) {
                     s_telemetry.ses_primary_fault_str = "LEVEL 2: SUPPLY < 9.0V";
+                } else if (s_telemetry.ses_errors.ecu_overvolt) {
+                    s_telemetry.ses_primary_fault_str = "LEVEL 2: SUPPLY > 16.0V";
                 } else if (s_telemetry.ses_errors.can_com_err) {
                     s_telemetry.ses_primary_fault_str = "LEVEL 1: CAN TIMEOUT >100ms";
+                } else if (s_telemetry.ses_errors.sent_angle_err) {
+                    s_telemetry.ses_primary_fault_str = "LEVEL 1: CMD ANGLE OUT RANGE";
                 } else if (s_telemetry.ses_errors.raw_bitmap != 0) {
                     s_telemetry.ses_primary_fault_str = "FAULT PRESENT (SEE BITMAP)";
                 } else {
@@ -442,15 +452,43 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
 
                 // Priority human-readable fault triage string
                 if (s_telemetry.seb_errors.no_pres_sensor_err) {
-                    s_telemetry.seb_primary_fault_str = "CRITICAL: NO PRES SENSOR";
+                    s_telemetry.seb_primary_fault_str = "CRITICAL: NO PRES SENSOR (L3)";
+                } else if (s_telemetry.seb_errors.mtr_no_load_err) {
+                    s_telemetry.seb_primary_fault_str = "CRITICAL: SCREW DETACHED (L3)";
+                } else if (s_telemetry.seb_errors.bridge_sc_err) {
+                    s_telemetry.seb_primary_fault_str = "CRITICAL: BRIDGE SHORT (L3)";
+                } else if (s_telemetry.seb_errors.init_oil_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 3: RESIDUAL OIL BOOT";
                 } else if (s_telemetry.seb_errors.mtr_stall_err) {
                     s_telemetry.seb_primary_fault_str = "LEVEL 3: MOTOR STALL";
-                } else if (s_telemetry.seb_errors.bridge_sc_err) {
-                    s_telemetry.seb_primary_fault_str = "LEVEL 3: BRIDGE SHORT-CIRCUIT";
+                } else if (s_telemetry.seb_errors.mtr_phase_dc_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 3: MOTOR PHASE OPEN";
+                } else if (s_telemetry.seb_errors.ecu_temp_err || s_telemetry.seb_errors.driver_temp_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 3: OVERTEMP (>105C)";
+                } else if (s_telemetry.seb_errors.driver_volt_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 3: GATE VOLT FAULT";
+                } else if (s_telemetry.seb_errors.angle_p_cut_err || s_telemetry.seb_errors.angle_s_cut_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 3: ANGLE SENSOR CUT";
+                } else if (s_telemetry.seb_errors.sensor_plaus_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 3: SENSOR PLAUS ERROR";
                 } else if (s_telemetry.seb_errors.oil_track_err) {
                     s_telemetry.seb_primary_fault_str = "LEVEL 2: OIL TRACKING LAG";
+                } else if (s_telemetry.seb_errors.pres_sensor_over) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 2: OVER-PRESSURE >25MPa";
                 } else if (s_telemetry.seb_errors.ecu_undervolt) {
                     s_telemetry.seb_primary_fault_str = "LEVEL 2: SUPPLY < 9.0V";
+                } else if (s_telemetry.seb_errors.ecu_overvolt) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 2: SUPPLY > 16.0V";
+                } else if (s_telemetry.seb_errors.alignment_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 2: ALIGNMENT FAILED";
+                } else if (s_telemetry.seb_errors.angle_over_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 2: ANGLE OVER-TRAVEL";
+                } else if (s_telemetry.seb_errors.low_volt_charge_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 2: AUX CHARGE FAULT";
+                } else if (s_telemetry.seb_errors.can_com_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 1: CAN DROPOUT";
+                } else if (s_telemetry.seb_errors.sent_value_err) {
+                    s_telemetry.seb_primary_fault_str = "LEVEL 1: COMMAND OUT OF RANGE";
                 } else if (s_telemetry.seb_errors.raw_bitmap != 0) {
                     s_telemetry.seb_primary_fault_str = "FAULT PRESENT (SEE BITMAP)";
                 } else {
