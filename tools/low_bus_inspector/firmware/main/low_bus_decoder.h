@@ -21,12 +21,13 @@ extern "C" {
 #define PLOT_POINTS_15S         150  // 15 seconds @ 10 Hz (100ms sample interval)
 
 typedef enum {
-    NODE_SYS = 0,
-    NODE_RT  = 1,
-    NODE_MTR = 2,
-    NODE_SES = 3,
-    NODE_SEB = 4,
-    NODE_COUNT = 5,
+    NODE_SYS  = 0,
+    NODE_RT   = 1,
+    NODE_HOST = 2,
+    NODE_SEB  = 3,
+    NODE_SES  = 4,
+    NODE_MTR  = 5,
+    NODE_COUNT = 6,
 } low_bus_node_t;
 
 /**
@@ -148,6 +149,13 @@ typedef struct {
     uint8_t estop_source_node; // 0: None, 1: SYS 0x011, 2: RT 0x210, 3: MTR 0x502
     uint8_t estop_reason_code;
     bool estop_pin_active;
+
+    // ISO 2575 Lighting & Telltales Feedback (SYS 0x011 / HOST 0x302)
+    bool turn_left_active;
+    bool turn_right_active;
+    bool hazard_active;
+    bool brake_light_active;
+    bool high_beam_active;
 
     // 2. Syntree SES Steering Actuator (CAN_EPS_CU_V2.23: 0x169 CMD, 0x201 ACT, 0x202 ERR, 0x6FA TEST)
     // Commands (0x169 VCU_SES_Req, 20ms)

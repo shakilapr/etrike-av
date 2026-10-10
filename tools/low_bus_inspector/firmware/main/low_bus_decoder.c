@@ -86,7 +86,9 @@ void low_bus_decoder_init(void) {
     for (int i = 0; i < NODE_COUNT; i++) {
         s_telemetry.nodes[i].last_seen_us = now;
         s_telemetry.nodes[i].rate_hz = 0.0f;
-        s_telemetry.nodes[i].timeout = false;
+        s_telemetry.nodes[i].timeout = true;
+        s_telemetry.nodes[i].rx_count = 0;
+        s_telemetry.nodes[i].silent_ms = 9999;
     }
 }
 
@@ -141,6 +143,14 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
                     s_telemetry.estop_source_node = 1;
                 }
             }
+            if (dlc >= 3) {
+                uint8_t b = d[2];
+                s_telemetry.turn_left_active   = (b & 0x01) != 0;
+                s_telemetry.turn_right_active  = (b & 0x02) != 0;
+                s_telemetry.hazard_active      = ((b & 0x03) == 0x03);
+                s_telemetry.brake_light_active = (b & 0x04) != 0;
+                s_telemetry.high_beam_active   = (b & 0x08) != 0;
+            }
             break;
 
         // ==============================================================
@@ -153,6 +163,9 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
                 // Byte 0: Control & Alignment Enable
                 s_telemetry.ses_cmd_align_enable   = (d[0] & 0x01) != 0;
                 s_telemetry.ses_cmd_control_enable = (d[0] & 0x02) != 0;
+                if (s_telemetry.ses_cmd_control_enable) {
+                    mark_node_seen(NODE_HOST);
+                }
 
                 // Bytes 1 & 2: Target Steering Angle (Motorola Big-Endian)
                 uint16_t raw_ang = (uint16_t)((d[1] << 8) | d[2]);
@@ -279,12 +292,16 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
         // 3. SYNTREE SEB BRAKE DOMAIN (CAN_SEB_CU_V3.0)
         // ==============================================================
         case 0x7B9: // VCU_SEB_Req (VCU Command to SEB, 20ms)
+            mark_node_seen(NODE_RT);
             mark_node_seen(NODE_SYS);
             if (dlc >= 8) {
                 s_telemetry.seb_cmd_byte0 = d[0];
                 // Byte 0: Control bits
                 s_telemetry.seb_cmd_align_enable     = (d[0] & 0x01) != 0;
                 s_telemetry.seb_cmd_control_enable   = (d[0] & 0x02) != 0;
+                if (s_telemetry.seb_cmd_control_enable) {
+                    mark_node_seen(NODE_HOST);
+                }
                 s_telemetry.seb_cmd_control_mode     = (d[0] & 0x04) ? 1 : 0; // 0=Stroke, 1=Pressure
                 s_telemetry.seb_cmd_autobrake_enable = (d[0] & 0x08) != 0;
 
@@ -467,8 +484,47 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
 
         case 0x210: // RT_STATE_RPT
             mark_node_seen(NODE_RT);
+            if (dlc >= 1 && d[0] == 1) { // Mode 1 = Autonomous (actively driven by Host)
+                mark_node_seen(NODE_HOST);
+            }
             if (dlc >= 2) {
                 s_telemetry.estop_reason_code = (d[1] >> 4) & 0x0F;
+            }
+            break;
+
+        case 0x500: // SYS_NODE_STATUS
+        case 0x7FE: // SYS_HEARTBEAT
+            mark_node_seen(NODE_SYS);
+            break;
+
+        case 0x501: // RT_NODE_STATUS
+            mark_node_seen(NODE_RT);
+            if (dlc >= 4 && (d[3] & 0x04)) { // command_received bit from Host
+                mark_node_seen(NODE_HOST);
+            }
+            break;
+
+        case 0x7FD: // RT_HEARTBEAT
+            mark_node_seen(NODE_RT);
+            break;
+
+        case 0x7FC: // HOST_HEARTBEAT (Autoware 10 Hz)
+        case 0x114: // HOST_ESTOP_RESET_REQ
+        case 0x300: // HOST_DRIVE_CMD
+        case 0x301: // HOST_BRAKE_REQ
+        case 0x303: // HOST_STEER_CMD
+            mark_node_seen(NODE_HOST);
+            break;
+
+        case 0x302: // HOST_LIGHT_CMD (forwarded High->Low)
+            mark_node_seen(NODE_HOST);
+            if (dlc >= 1) {
+                uint8_t b = d[0];
+                s_telemetry.turn_left_active   = (b & 0x01) != 0;
+                s_telemetry.turn_right_active  = (b & 0x02) != 0;
+                s_telemetry.hazard_active      = ((b & 0x03) == 0x03);
+                s_telemetry.brake_light_active = (b & 0x04) != 0;
+                s_telemetry.high_beam_active   = (b & 0x08) != 0;
             }
             break;
 
@@ -494,10 +550,15 @@ void low_bus_decoder_tick_100ms(void) {
 
     // 1. Check node liveness watchdogs
     for (int i = 0; i < NODE_COUNT; i++) {
-        int64_t elapsed_us = now - s_telemetry.nodes[i].last_seen_us;
-        s_telemetry.nodes[i].silent_ms = (uint32_t)(elapsed_us / 1000);
-        if (s_telemetry.nodes[i].silent_ms > 250) {
+        if (s_telemetry.nodes[i].rx_count == 0) {
             s_telemetry.nodes[i].timeout = true;
+            s_telemetry.nodes[i].silent_ms = 9999;
+        } else {
+            int64_t elapsed_us = now - s_telemetry.nodes[i].last_seen_us;
+            s_telemetry.nodes[i].silent_ms = (uint32_t)(elapsed_us / 1000);
+            if (s_telemetry.nodes[i].silent_ms > 350) {
+                s_telemetry.nodes[i].timeout = true;
+            }
         }
     }
 

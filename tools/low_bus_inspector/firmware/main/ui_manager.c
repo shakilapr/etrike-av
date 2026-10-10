@@ -38,11 +38,14 @@ static lv_obj_t *s_card_dash_mode = NULL;
 static lv_obj_t *s_btn_dash_gears[4] = {NULL};
 static lv_obj_t *s_lbl_dash_gears[4] = {NULL};
 
-// ISO 2575 Telltale cards & labels
+// Row 3: ISO 2575 Telltale cards & labels
 static lv_obj_t *s_card_dash_telltales[5] = {NULL};
 static lv_obj_t *s_lbl_dash_telltale_sym[5] = {NULL};
 static lv_obj_t *s_lbl_dash_telltale_lbl[5] = {NULL};
-static lv_obj_t *s_lbl_dash_telltale_st[5] = {NULL};
+
+// Row 3: Subsystem Connectivity Buttons (SYS, RT, HOST, SEB, SES, MTR)
+static lv_obj_t *s_btn_dash_nodes[6] = {NULL};
+static lv_obj_t *s_lbl_dash_nodes[6] = {NULL};
 
 // 3 Instruments
 static lv_obj_t *s_lbl_dash_speed_val = NULL;
@@ -146,10 +149,10 @@ static lv_obj_t *s_lbl_bus_estop_origin = NULL;
 static lv_obj_t *s_lbl_bus_rail_volts = NULL;
 static lv_obj_t *s_lbl_bus_rate = NULL;
 static lv_obj_t *s_lbl_bus_tec_rec = NULL;
-static lv_obj_t *s_card_bus_nodes[5] = {NULL};
-static lv_obj_t *s_lbl_bus_node_rates[5] = {NULL};
-static lv_obj_t *s_lbl_bus_node_states[5] = {NULL};
-static lv_obj_t *s_lbl_bus_node_silent[5] = {NULL};
+static lv_obj_t *s_card_bus_nodes[6] = {NULL};
+static lv_obj_t *s_lbl_bus_node_rates[6] = {NULL};
+static lv_obj_t *s_lbl_bus_node_states[6] = {NULL};
+static lv_obj_t *s_lbl_bus_node_silent[6] = {NULL};
 
 /* =========================================================================
  * Screens 5, 6, 7: Expanded 15-Second Scope Plots
@@ -370,7 +373,8 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(lbl_lbm, lv_color_hex(UI_COLOR_STATE_OFFLINE), 0);
     lv_obj_align(lbl_lbm, LV_ALIGN_RIGHT_MID, -8, 0);
 
-    // 2. ISO 2575 Telltales Deck (Y=98, H=46)
+    // 2. Subsystem Connectivity & Telltales Deck (Y=98, H=46)
+    // Left: 5 Compact ISO 2575 Telltales | Right: 6 Node Buttons (SYS, RT, HOST, SEB, SES, MTR)
     lv_obj_t *c_dtell = lv_obj_create(s_screens[WIN_DASHBOARD]);
     lv_obj_set_size(c_dtell, 784, 46);
     lv_obj_align(c_dtell, LV_ALIGN_TOP_MID, 0, 98);
@@ -379,36 +383,57 @@ void ui_manager_init(void) {
     lv_obj_set_style_radius(c_dtell, 6, 0);
     lv_obj_set_style_pad_all(c_dtell, 4, 0);
 
-    const char *t_syms[5] = {"<", ">", "!", "*", "STOP"};
-    const char *t_lbls[5] = {"LEFT", "RGHT", "HAZD", "BEAM", "BRK"};
-    const int tt_w = 146;
+    // Left: 5 Compact Telltale indicators (W=66, H=32, X=4 + t*70)
+    const char *tt_syms[5] = {"<", ">", "!", "*", "P"};
+    const char *tt_names[5] = {"LEFT", "RGHT", "HAZD", "BEAM", "BRK"};
     for (int t = 0; t < 5; t++) {
         s_card_dash_telltales[t] = lv_obj_create(c_dtell);
-        lv_obj_set_size(s_card_dash_telltales[t], tt_w, 34);
-        lv_obj_align(s_card_dash_telltales[t], LV_ALIGN_LEFT_MID, 8 + t * (tt_w + 8), 0);
-        bool act_on = (t >= 3); // beam & brake on by default in mock
-        lv_obj_set_style_bg_color(s_card_dash_telltales[t], lv_color_hex(act_on ? 0x0C2218 : 0x121212), 0);
-        lv_obj_set_style_border_color(s_card_dash_telltales[t], lv_color_hex(act_on ? UI_COLOR_STATE_OK : UI_COLOR_BORDER), 0);
-        lv_obj_set_style_radius(s_card_dash_telltales[t], 6, 0);
+        lv_obj_set_size(s_card_dash_telltales[t], 66, 32);
+        lv_obj_align(s_card_dash_telltales[t], LV_ALIGN_LEFT_MID, 4 + t * 70, 0);
+        lv_obj_set_style_bg_color(s_card_dash_telltales[t], lv_color_hex(0x121212), 0);
+        lv_obj_set_style_border_color(s_card_dash_telltales[t], lv_color_hex(UI_COLOR_BORDER), 0);
+        lv_obj_set_style_radius(s_card_dash_telltales[t], 4, 0);
         lv_obj_set_style_pad_all(s_card_dash_telltales[t], 0, 0);
 
         s_lbl_dash_telltale_sym[t] = lv_label_create(s_card_dash_telltales[t]);
-        lv_label_set_text(s_lbl_dash_telltale_sym[t], t_syms[t]);
-        lv_obj_set_style_text_font(s_lbl_dash_telltale_sym[t], &lv_font_montserrat_14, 0);
-        lv_obj_set_style_text_color(s_lbl_dash_telltale_sym[t], lv_color_hex(act_on ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
-        lv_obj_align(s_lbl_dash_telltale_sym[t], LV_ALIGN_LEFT_MID, 12, 0);
+        lv_label_set_text(s_lbl_dash_telltale_sym[t], tt_syms[t]);
+        lv_obj_set_style_text_font(s_lbl_dash_telltale_sym[t], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(s_lbl_dash_telltale_sym[t], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_align(s_lbl_dash_telltale_sym[t], LV_ALIGN_LEFT_MID, 6, 0);
 
         s_lbl_dash_telltale_lbl[t] = lv_label_create(s_card_dash_telltales[t]);
-        lv_label_set_text(s_lbl_dash_telltale_lbl[t], t_lbls[t]);
+        lv_label_set_text(s_lbl_dash_telltale_lbl[t], tt_names[t]);
         lv_obj_set_style_text_font(s_lbl_dash_telltale_lbl[t], &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(s_lbl_dash_telltale_lbl[t], lv_color_hex(act_on ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
-        lv_obj_align(s_lbl_dash_telltale_lbl[t], LV_ALIGN_CENTER, 4, 0);
+        lv_obj_set_style_text_color(s_lbl_dash_telltale_lbl[t], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_align(s_lbl_dash_telltale_lbl[t], LV_ALIGN_RIGHT_MID, -6, 0);
+    }
 
-        s_lbl_dash_telltale_st[t] = lv_label_create(s_card_dash_telltales[t]);
-        lv_label_set_text(s_lbl_dash_telltale_st[t], act_on ? "ACT" : "OFF");
-        lv_obj_set_style_text_font(s_lbl_dash_telltale_st[t], &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(s_lbl_dash_telltale_st[t], lv_color_hex(act_on ? UI_COLOR_STATE_OK : UI_COLOR_TEXT_SECONDARY), 0);
-        lv_obj_align(s_lbl_dash_telltale_st[t], LV_ALIGN_RIGHT_MID, -8, 0);
+    // Right: 6 Node Connectivity buttons (SYS, RT, HOST, SEB, SES, MTR) styled just like gears
+    const char *dash_node_names[6] = {"SYS", "RT", "HOST", "SEB", "SES", "MTR"};
+    const inspector_window_t dash_node_dest[6] = {
+        WIN_BUS_SAFETY, WIN_BUS_SAFETY, WIN_BUS_SAFETY,
+        WIN_BRAKE, WIN_STEER, WIN_DRIVE
+    };
+    const int node_w[6] = {58, 52, 66, 58, 58, 58};
+    int node_x = 410;
+    for (int i = 0; i < 6; i++) {
+        s_btn_dash_nodes[i] = lv_btn_create(c_dtell);
+        lv_obj_set_size(s_btn_dash_nodes[i], node_w[i], 32);
+        lv_obj_align(s_btn_dash_nodes[i], LV_ALIGN_LEFT_MID, node_x, 0);
+        lv_obj_set_style_bg_color(s_btn_dash_nodes[i], lv_color_hex(0x121212), 0);
+        lv_obj_set_style_border_color(s_btn_dash_nodes[i], lv_color_hex(UI_COLOR_BORDER), 0);
+        lv_obj_set_style_border_width(s_btn_dash_nodes[i], 1, 0);
+        lv_obj_set_style_radius(s_btn_dash_nodes[i], 4, 0);
+        lv_obj_set_style_pad_all(s_btn_dash_nodes[i], 0, 0);
+        lv_obj_add_event_cb(s_btn_dash_nodes[i], btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)dash_node_dest[i]);
+
+        s_lbl_dash_nodes[i] = lv_label_create(s_btn_dash_nodes[i]);
+        lv_label_set_text(s_lbl_dash_nodes[i], dash_node_names[i]);
+        lv_obj_set_style_text_font(s_lbl_dash_nodes[i], &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(s_lbl_dash_nodes[i], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_align(s_lbl_dash_nodes[i], LV_ALIGN_CENTER, 0, 0);
+
+        node_x += node_w[i] + 4;
     }
 
     // 3. Cockpit 3-Instrument Deck (Y=148, H=266)
@@ -1242,20 +1267,22 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(lbl_rc_sub, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
     lv_obj_align(lbl_rc_sub, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
-    // Watchdog Deck: 5 Node cards (Height 200px)
-    const char *node_names[5] = {"SYS (0x011)", "RT (0x210)", "MTR (0x206)", "SES (0x201)", "SEB (0x721)"};
-    const int w5_w = 152;
-    for (int i = 0; i < 5; i++) {
+    // Watchdog Deck: 6 Node cards (Height 200px)
+    const char *node_names[6] = {
+        "SYS (0x011)", "RT (0x210)", "HOST (0x7FC)", "SEB (0x721)", "SES (0x201)", "MTR (0x206)"
+    };
+    const int w6_w = 124;
+    for (int i = 0; i < 6; i++) {
         s_card_bus_nodes[i] = lv_obj_create(s_screens[WIN_BUS_SAFETY]);
-        lv_obj_set_size(s_card_bus_nodes[i], w5_w, 200);
-        lv_obj_align(s_card_bus_nodes[i], LV_ALIGN_TOP_LEFT, 8 + i * (w5_w + 6), 268);
+        lv_obj_set_size(s_card_bus_nodes[i], w6_w, 200);
+        lv_obj_align(s_card_bus_nodes[i], LV_ALIGN_TOP_LEFT, 8 + i * (w6_w + 6), 268);
         lv_obj_set_style_bg_color(s_card_bus_nodes[i], lv_color_hex(UI_COLOR_SURFACE), 0);
         lv_obj_set_style_border_color(s_card_bus_nodes[i], lv_color_hex(UI_COLOR_BORDER), 0);
         lv_obj_set_style_radius(s_card_bus_nodes[i], 8, 0);
 
         lv_obj_t *lbl_n = lv_label_create(s_card_bus_nodes[i]);
         lv_label_set_text(lbl_n, node_names[i]);
-        lv_obj_set_style_text_font(lbl_n, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_font(lbl_n, &lv_font_montserrat_12, 0);
         lv_obj_align(lbl_n, LV_ALIGN_TOP_MID, 0, 4);
         lv_obj_set_style_text_color(lbl_n, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
 
@@ -1272,10 +1299,10 @@ void ui_manager_init(void) {
         lv_obj_set_style_text_color(s_lbl_bus_node_silent[i], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
 
         s_lbl_bus_node_states[i] = lv_label_create(s_card_bus_nodes[i]);
-        lv_label_set_text(s_lbl_bus_node_states[i], "[ OK ] ACTIVE");
+        lv_label_set_text(s_lbl_bus_node_states[i], "[ TIMEOUT ]");
         lv_obj_set_style_text_font(s_lbl_bus_node_states[i], &lv_font_montserrat_14, 0);
         lv_obj_align(s_lbl_bus_node_states[i], LV_ALIGN_BOTTOM_MID, 0, -8);
-        lv_obj_set_style_text_color(s_lbl_bus_node_states[i], lv_color_hex(UI_COLOR_STATE_OK), 0);
+        lv_obj_set_style_text_color(s_lbl_bus_node_states[i], lv_color_hex(UI_COLOR_STATE_FAULT), 0);
     }
 
     // =========================================================================
@@ -1729,29 +1756,45 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             }
         }
 
-        // Update 5 ISO Telltales
-        bool tt_active[5];
-        tt_active[0] = (t->steer_act_deg < -5.0f); // LEFT
-        tt_active[1] = (t->steer_act_deg > 5.0f);  // RGHT
-        tt_active[2] = (t->estop_active || t->ses_errors.raw_bitmap != 0 || t->seb_errors.raw_bitmap != 0 || t->drive_block_mask != 0); // HAZD / DTC
-        tt_active[3] = (t->bus_rate_hz > 5.0f && !t->bus_off); // BEAM / COMMS OK
-        tt_active[4] = (t->brake_act_kpa > 50.0f); // BRK
-
+        // Update Compact ISO 2575 Telltales
+        bool tt_active[5] = {
+            t->turn_left_active,
+            t->turn_right_active,
+            t->hazard_active,
+            t->high_beam_active,
+            t->brake_light_active || t->brake_act_kpa > 100.0f || t->brake_act_stroke_mm > 1.0f
+        };
+        const uint32_t tt_active_bg[5] = {
+            UI_COLOR_STATE_OK,    // Left Turn: Green
+            UI_COLOR_STATE_OK,    // Right Turn: Green
+            UI_COLOR_STATE_FAULT, // Hazard: Red
+            0x2563EB,             // High Beam: Blue
+            UI_COLOR_STATE_WARN   // Brake / Park: Amber
+        };
         for (int i = 0; i < 5; i++) {
-            if (s_card_dash_telltales[i] && s_lbl_dash_telltale_sym[i] && s_lbl_dash_telltale_st[i]) {
-                bool on = tt_active[i];
-                uint32_t bg = on ? (i == 2 ? 0x38080F : 0x0C2218) : 0x121212;
-                uint32_t fg = on ? (i == 2 ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK) : UI_COLOR_TEXT_SECONDARY;
-                uint32_t bdr = on ? (i == 2 ? UI_COLOR_STATE_FAULT : UI_COLOR_STATE_OK) : UI_COLOR_BORDER;
-
-                lv_obj_set_style_bg_color(s_card_dash_telltales[i], lv_color_hex(bg), 0);
-                lv_obj_set_style_border_color(s_card_dash_telltales[i], lv_color_hex(bdr), 0);
-                lv_obj_set_style_text_color(s_lbl_dash_telltale_sym[i], lv_color_hex(fg), 0);
-                if (s_lbl_dash_telltale_lbl[i]) {
-                    lv_obj_set_style_text_color(s_lbl_dash_telltale_lbl[i], lv_color_hex(fg), 0);
+            if (s_card_dash_telltales[i] && s_lbl_dash_telltale_sym[i] && s_lbl_dash_telltale_lbl[i]) {
+                if (tt_active[i]) {
+                    lv_obj_set_style_bg_color(s_card_dash_telltales[i], lv_color_hex(tt_active_bg[i]), 0);
+                    lv_obj_set_style_border_color(s_card_dash_telltales[i], lv_color_hex(tt_active_bg[i]), 0);
+                    lv_obj_set_style_text_color(s_lbl_dash_telltale_sym[i], lv_color_hex(0x000000), 0);
+                    lv_obj_set_style_text_color(s_lbl_dash_telltale_lbl[i], lv_color_hex(0x000000), 0);
+                } else {
+                    lv_obj_set_style_bg_color(s_card_dash_telltales[i], lv_color_hex(0x121212), 0);
+                    lv_obj_set_style_border_color(s_card_dash_telltales[i], lv_color_hex(UI_COLOR_BORDER), 0);
+                    lv_obj_set_style_text_color(s_lbl_dash_telltale_sym[i], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+                    lv_obj_set_style_text_color(s_lbl_dash_telltale_lbl[i], lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
                 }
-                lv_label_set_text(s_lbl_dash_telltale_st[i], on ? (i == 2 ? "FLT" : "ACT") : "OFF");
-                lv_obj_set_style_text_color(s_lbl_dash_telltale_st[i], lv_color_hex(fg), 0);
+            }
+        }
+
+        // Update Subsystem Connectivity Buttons (SYS, RT, HOST, SEB, SES, MTR)
+        // Styled like gear buttons: active = UI_COLOR_STATE_OK (green fill + black text), inactive = dark + grey
+        for (int i = 0; i < 6; i++) {
+            if (s_btn_dash_nodes[i] && s_lbl_dash_nodes[i]) {
+                bool is_conn = (!t->nodes[i].timeout && t->nodes[i].rx_count > 0);
+                lv_obj_set_style_bg_color(s_btn_dash_nodes[i], lv_color_hex(is_conn ? UI_COLOR_STATE_OK : 0x121212), 0);
+                lv_obj_set_style_border_color(s_btn_dash_nodes[i], lv_color_hex(is_conn ? UI_COLOR_STATE_OK : UI_COLOR_BORDER), 0);
+                lv_obj_set_style_text_color(s_lbl_dash_nodes[i], lv_color_hex(is_conn ? 0x000000 : UI_COLOR_TEXT_SECONDARY), 0);
             }
         }
 
@@ -2224,7 +2267,7 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
                      t->twai_tec, t->twai_rec, t->twai_tec > 96 || t->twai_rec > 96 ? "WARN" : "NORMAL");
             lv_label_set_text(s_lbl_bus_tec_rec, buf);
         }
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 6; i++) {
             if (s_lbl_bus_node_rates[i]) {
                 snprintf(buf, sizeof(buf), "%.0f Hz", t->nodes[i].rate_hz);
                 lv_label_set_text(s_lbl_bus_node_rates[i], buf);
