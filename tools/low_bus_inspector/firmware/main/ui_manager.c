@@ -125,15 +125,57 @@ static lv_obj_t *s_lbl_bus_node_states[5] = {NULL};
 static lv_obj_t *s_lbl_bus_node_silent[5] = {NULL};
 
 /* =========================================================================
- * Screen 4: Active DTC & Fault Logs Widgets
+ * Screen 4: Industrial Active DTC & Chronological Event Journal Widgets
  * ========================================================================= */
-static lv_obj_t *s_lbl_logs_summary = NULL;
-static lv_obj_t *s_lbl_logs_seb_title = NULL;
-static lv_obj_t *s_lbl_logs_seb_detail = NULL;
-static lv_obj_t *s_lbl_logs_ses_title = NULL;
-static lv_obj_t *s_lbl_logs_ses_detail = NULL;
-static lv_obj_t *s_lbl_logs_bus_title = NULL;
-static lv_obj_t *s_lbl_logs_bus_detail = NULL;
+#define DTC_TABLE_MAX_ROWS 8
+
+typedef struct {
+    lv_obj_t *row_obj;
+    lv_obj_t *badge_box;
+    lv_obj_t *lbl_badge;
+    lv_obj_t *lbl_code;
+    lv_obj_t *lbl_origin;
+    lv_obj_t *lbl_desc;
+    lv_obj_t *lbl_status;
+} dtc_row_widget_t;
+
+static uint8_t s_logs_view_mode = 0; // 0 = DTC MATRIX, 1 = EVENT JOURNAL
+static lv_obj_t *s_btn_view_dtc = NULL;
+static lv_obj_t *s_btn_view_journal = NULL;
+static lv_obj_t *s_lbl_logs_l3_cnt = NULL;
+static lv_obj_t *s_lbl_logs_l2_cnt = NULL;
+static lv_obj_t *s_lbl_logs_l1_cnt = NULL;
+static lv_obj_t *s_lbl_logs_total_cnt = NULL;
+
+static lv_obj_t *s_cont_dtc_view = NULL;
+static lv_obj_t *s_card_dtc_healthy = NULL;
+static lv_obj_t *s_lbl_dtc_healthy_sub = NULL;
+static lv_obj_t *s_cont_dtc_table = NULL;
+static dtc_row_widget_t s_dtc_rows[DTC_TABLE_MAX_ROWS];
+
+static lv_obj_t *s_cont_journal_view = NULL;
+static lv_obj_t *s_lbl_journal_text = NULL;
+static lv_obj_t *s_lbl_journal_stats = NULL;
+
+static void logs_mode_btn_cb(lv_event_t *e) {
+    intptr_t mode = (intptr_t)lv_event_get_user_data(e);
+    s_logs_view_mode = (uint8_t)mode;
+    if (s_logs_view_mode == 0) {
+        lv_obj_clear_flag(s_cont_dtc_view, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_cont_journal_view, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(s_btn_view_dtc, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
+        lv_obj_set_style_border_color(s_btn_view_dtc, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+        lv_obj_set_style_bg_color(s_btn_view_journal, lv_color_hex(UI_COLOR_SURFACE), 0);
+        lv_obj_set_style_border_color(s_btn_view_journal, lv_color_hex(UI_COLOR_BORDER), 0);
+    } else {
+        lv_obj_add_flag(s_cont_dtc_view, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_cont_journal_view, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_bg_color(s_btn_view_journal, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
+        lv_obj_set_style_border_color(s_btn_view_journal, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+        lv_obj_set_style_bg_color(s_btn_view_dtc, lv_color_hex(UI_COLOR_SURFACE), 0);
+        lv_obj_set_style_border_color(s_btn_view_dtc, lv_color_hex(UI_COLOR_BORDER), 0);
+    }
+}
 
 /* =========================================================================
  * Screens 5, 6: Expanded 15-Second Scope Plots
@@ -1061,115 +1103,258 @@ void ui_manager_init(void) {
     }
 
     // =========================================================================
-    // Window 5: 5. LOGS - Active DTC Diagnostic Trouble Codes & System Logs
+    // Window 5: 5. LOGS - Active DTC Diagnostic Trouble Codes & Chronological Event Journal
     // =========================================================================
     s_screens[WIN_LOGS] = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screens[WIN_LOGS], lv_color_hex(UI_COLOR_BG), 0);
     create_top_nav_bar(s_screens[WIN_LOGS], WIN_LOGS);
 
-    // Header Status Bar (Y=52, H=36, W=784)
+    // 1. Diagnostic Console Sub-Header & Selector Bar (Y=52, H=38, W=784)
     lv_obj_t *hdr_logs = lv_obj_create(s_screens[WIN_LOGS]);
-    lv_obj_set_size(hdr_logs, 784, 36);
+    lv_obj_set_size(hdr_logs, 784, 38);
     lv_obj_align(hdr_logs, LV_ALIGN_TOP_MID, 0, 52);
     lv_obj_set_style_bg_color(hdr_logs, lv_color_hex(UI_COLOR_SURFACE), 0);
     lv_obj_set_style_border_color(hdr_logs, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_border_width(hdr_logs, 1, 0);
     lv_obj_set_style_radius(hdr_logs, 6, 0);
     lv_obj_set_style_pad_all(hdr_logs, 0, 0);
 
-    lv_obj_t *lbl_logs_hdr_t = lv_label_create(hdr_logs);
-    lv_label_set_text(lbl_logs_hdr_t, "DIAGNOSTIC TROUBLE CODES (DTC) & SYSTEM FAULT LOGS");
-    lv_obj_set_style_text_font(lbl_logs_hdr_t, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(lbl_logs_hdr_t, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(lbl_logs_hdr_t, LV_ALIGN_LEFT_MID, 12, 0);
+    // Toggle Button 1: DTC Matrix
+    s_btn_view_dtc = lv_button_create(hdr_logs);
+    lv_obj_set_size(s_btn_view_dtc, 150, 30);
+    lv_obj_align(s_btn_view_dtc, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_set_style_bg_color(s_btn_view_dtc, lv_color_hex(UI_COLOR_SURFACE_ALT), 0);
+    lv_obj_set_style_border_color(s_btn_view_dtc, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_set_style_border_width(s_btn_view_dtc, 1, 0);
+    lv_obj_set_style_radius(s_btn_view_dtc, 4, 0);
+    lv_obj_t *lbl_btn_dtc = lv_label_create(s_btn_view_dtc);
+    lv_label_set_text(lbl_btn_dtc, "1. DTC MATRIX");
+    lv_obj_set_style_text_font(lbl_btn_dtc, &lv_font_montserrat_12, 0);
+    lv_obj_align(lbl_btn_dtc, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_event_cb(s_btn_view_dtc, logs_mode_btn_cb, LV_EVENT_CLICKED, (void *)(intptr_t)0);
 
-    s_lbl_logs_summary = lv_label_create(hdr_logs);
-    lv_label_set_text(s_lbl_logs_summary, "[ ALL SYSTEMS NORMAL (0 ACTIVE DTC) ]");
-    lv_obj_set_style_text_font(s_lbl_logs_summary, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(s_lbl_logs_summary, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_logs_summary, LV_ALIGN_RIGHT_MID, -12, 0);
+    // Toggle Button 2: Event Journal
+    s_btn_view_journal = lv_button_create(hdr_logs);
+    lv_obj_set_size(s_btn_view_journal, 165, 30);
+    lv_obj_align(s_btn_view_journal, LV_ALIGN_LEFT_MID, 158, 0);
+    lv_obj_set_style_bg_color(s_btn_view_journal, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(s_btn_view_journal, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_border_width(s_btn_view_journal, 1, 0);
+    lv_obj_set_style_radius(s_btn_view_journal, 4, 0);
+    lv_obj_t *lbl_btn_j = lv_label_create(s_btn_view_journal);
+    lv_label_set_text(lbl_btn_j, "2. EVENT JOURNAL");
+    lv_obj_set_style_text_font(lbl_btn_j, &lv_font_montserrat_12, 0);
+    lv_obj_align(lbl_btn_j, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_event_cb(s_btn_view_journal, logs_mode_btn_cb, LV_EVENT_CLICKED, (void *)(intptr_t)1);
 
-    // Scrollable Card Container (Y=92, H=382, W=784)
-    lv_obj_t *log_scroll = lv_obj_create(s_screens[WIN_LOGS]);
-    lv_obj_set_size(log_scroll, 784, 382);
-    lv_obj_align(log_scroll, LV_ALIGN_TOP_MID, 0, 92);
-    lv_obj_set_style_bg_color(log_scroll, lv_color_hex(UI_COLOR_BG), 0);
-    lv_obj_set_style_border_width(log_scroll, 0, 0);
-    lv_obj_set_style_pad_all(log_scroll, 0, 0);
-    lv_obj_set_style_pad_row(log_scroll, 8, 0);
-    lv_obj_set_flex_flow(log_scroll, LV_FLEX_FLOW_COLUMN);
-    lv_obj_add_flag(log_scroll, LV_OBJ_FLAG_SCROLLABLE);
+    // Severity Counters on the right of Sub-Header: L3, L2, L1, Total
+    s_lbl_logs_l3_cnt = lv_label_create(hdr_logs);
+    lv_label_set_text(s_lbl_logs_l3_cnt, "● L3: 0");
+    lv_obj_set_style_text_font(s_lbl_logs_l3_cnt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_logs_l3_cnt, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_logs_l3_cnt, LV_ALIGN_RIGHT_MID, -210, 0);
 
-    // 1. BRAKE (SEB) Card
-    lv_obj_t *card_seb = lv_obj_create(log_scroll);
-    lv_obj_set_width(card_seb, lv_pct(100));
-    lv_obj_set_height(card_seb, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_color(card_seb, lv_color_hex(UI_COLOR_SURFACE), 0);
-    lv_obj_set_style_border_color(card_seb, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_border_width(card_seb, 1, 0);
-    lv_obj_set_style_radius(card_seb, 8, 0);
-    lv_obj_set_style_pad_all(card_seb, 10, 0);
+    s_lbl_logs_l2_cnt = lv_label_create(hdr_logs);
+    lv_label_set_text(s_lbl_logs_l2_cnt, "▲ L2: 0");
+    lv_obj_set_style_text_font(s_lbl_logs_l2_cnt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_logs_l2_cnt, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_logs_l2_cnt, LV_ALIGN_RIGHT_MID, -145, 0);
 
-    s_lbl_logs_seb_title = lv_label_create(card_seb);
-    lv_label_set_text(s_lbl_logs_seb_title, "BRAKE SYSTEM (SEB 0x731) • RAW BITMAP: 0x000000");
-    lv_obj_set_style_text_font(s_lbl_logs_seb_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(s_lbl_logs_seb_title, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
-    lv_obj_align(s_lbl_logs_seb_title, LV_ALIGN_TOP_LEFT, 0, 0);
+    s_lbl_logs_l1_cnt = lv_label_create(hdr_logs);
+    lv_label_set_text(s_lbl_logs_l1_cnt, "ℹ L1: 0");
+    lv_obj_set_style_text_font(s_lbl_logs_l1_cnt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_logs_l1_cnt, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(s_lbl_logs_l1_cnt, LV_ALIGN_RIGHT_MID, -80, 0);
 
-    s_lbl_logs_seb_detail = lv_label_create(card_seb);
-    lv_label_set_long_mode(s_lbl_logs_seb_detail, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(s_lbl_logs_seb_detail, 744);
-    lv_label_set_text(s_lbl_logs_seb_detail, "[ OK ] No faults active. Electro-hydraulic actuator status clear.");
-    lv_obj_set_style_text_font(s_lbl_logs_seb_detail, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(s_lbl_logs_seb_detail, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_logs_seb_detail, LV_ALIGN_TOP_LEFT, 0, 24);
+    s_lbl_logs_total_cnt = lv_label_create(hdr_logs);
+    lv_label_set_text(s_lbl_logs_total_cnt, "[ 0 DTC ]");
+    lv_obj_set_style_text_font(s_lbl_logs_total_cnt, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_logs_total_cnt, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_logs_total_cnt, LV_ALIGN_RIGHT_MID, -8, 0);
 
-    // 2. STEERING (SES) Card
-    lv_obj_t *card_ses = lv_obj_create(log_scroll);
-    lv_obj_set_width(card_ses, lv_pct(100));
-    lv_obj_set_height(card_ses, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_color(card_ses, lv_color_hex(UI_COLOR_SURFACE), 0);
-    lv_obj_set_style_border_color(card_ses, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_border_width(card_ses, 1, 0);
-    lv_obj_set_style_radius(card_ses, 8, 0);
-    lv_obj_set_style_pad_all(card_ses, 10, 0);
+    // =========================================================================
+    // View 1: DTC Matrix Container (Y=94, H=380, W=784)
+    // =========================================================================
+    s_cont_dtc_view = lv_obj_create(s_screens[WIN_LOGS]);
+    lv_obj_set_size(s_cont_dtc_view, 784, 380);
+    lv_obj_align(s_cont_dtc_view, LV_ALIGN_TOP_MID, 0, 94);
+    lv_obj_set_style_bg_opa(s_cont_dtc_view, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_cont_dtc_view, 0, 0);
+    lv_obj_set_style_pad_all(s_cont_dtc_view, 0, 0);
 
-    s_lbl_logs_ses_title = lv_label_create(card_ses);
-    lv_label_set_text(s_lbl_logs_ses_title, "STEERING SYSTEM (SES 0x202) • RAW BITMAP: 0x000000");
-    lv_obj_set_style_text_font(s_lbl_logs_ses_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(s_lbl_logs_ses_title, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
-    lv_obj_align(s_lbl_logs_ses_title, LV_ALIGN_TOP_LEFT, 0, 0);
+    // State A: Healthy Card (shown when DTC count == 0)
+    s_card_dtc_healthy = lv_obj_create(s_cont_dtc_view);
+    lv_obj_set_size(s_card_dtc_healthy, 784, 376);
+    lv_obj_align(s_card_dtc_healthy, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(s_card_dtc_healthy, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(s_card_dtc_healthy, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_border_width(s_card_dtc_healthy, 1, 0);
+    lv_obj_set_style_radius(s_card_dtc_healthy, 8, 0);
 
-    s_lbl_logs_ses_detail = lv_label_create(card_ses);
-    lv_label_set_long_mode(s_lbl_logs_ses_detail, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(s_lbl_logs_ses_detail, 744);
-    lv_label_set_text(s_lbl_logs_ses_detail, "[ OK ] No faults active. Steer-by-wire controller status clear.");
-    lv_obj_set_style_text_font(s_lbl_logs_ses_detail, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(s_lbl_logs_ses_detail, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_logs_ses_detail, LV_ALIGN_TOP_LEFT, 0, 24);
+    lv_obj_t *lbl_h_title = lv_label_create(s_card_dtc_healthy);
+    lv_label_set_text(lbl_h_title, "✓ ALL SYSTEMS NORMAL - 0 ACTIVE DTCs");
+    lv_obj_set_style_text_font(lbl_h_title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(lbl_h_title, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(lbl_h_title, LV_ALIGN_CENTER, 0, -40);
 
-    // 3. LOW-BUS & SAFETY WATCHDOG Card
-    lv_obj_t *card_bus = lv_obj_create(log_scroll);
-    lv_obj_set_width(card_bus, lv_pct(100));
-    lv_obj_set_height(card_bus, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_color(card_bus, lv_color_hex(UI_COLOR_SURFACE), 0);
-    lv_obj_set_style_border_color(card_bus, lv_color_hex(UI_COLOR_BORDER), 0);
-    lv_obj_set_style_border_width(card_bus, 1, 0);
-    lv_obj_set_style_radius(card_bus, 8, 0);
-    lv_obj_set_style_pad_all(card_bus, 10, 0);
+    s_lbl_dtc_healthy_sub = lv_label_create(s_card_dtc_healthy);
+    lv_label_set_text(s_lbl_dtc_healthy_sub, "All low-bus ECUs (SYS, RT, HOST, SEB, SES) operating within nominal envelope.\nZero active diagnostic trouble codes across steering, braking, and safety interlocks.\nLow-Bus Rate: 280 msg/s  •  TEC: 0 | REC: 0  •  12V Supply: 12.1 V  •  Core: 48°C");
+    lv_obj_set_style_text_font(s_lbl_dtc_healthy_sub, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_lbl_dtc_healthy_sub, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_set_style_text_align(s_lbl_dtc_healthy_sub, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_lbl_dtc_healthy_sub, LV_ALIGN_CENTER, 0, 30);
 
-    s_lbl_logs_bus_title = lv_label_create(card_bus);
-    lv_label_set_text(s_lbl_logs_bus_title, "CAN BUS & SAFETY WATCHDOG (0x011 / 0x500)");
-    lv_obj_set_style_text_font(s_lbl_logs_bus_title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(s_lbl_logs_bus_title, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
-    lv_obj_align(s_lbl_logs_bus_title, LV_ALIGN_TOP_LEFT, 0, 0);
+    // State B: Active DTC Table Container (shown when DTC count > 0)
+    s_cont_dtc_table = lv_obj_create(s_cont_dtc_view);
+    lv_obj_set_size(s_cont_dtc_table, 784, 376);
+    lv_obj_align(s_cont_dtc_table, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_opa(s_cont_dtc_table, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_cont_dtc_table, 0, 0);
+    lv_obj_set_style_pad_all(s_cont_dtc_table, 0, 0);
+    lv_obj_set_style_pad_row(s_cont_dtc_table, 3, 0);
+    lv_obj_set_flex_flow(s_cont_dtc_table, LV_FLEX_FLOW_COLUMN);
+    lv_obj_add_flag(s_cont_dtc_table, LV_OBJ_FLAG_HIDDEN); // Hidden by default until fault triggers
 
-    s_lbl_logs_bus_detail = lv_label_create(card_bus);
-    lv_label_set_long_mode(s_lbl_logs_bus_detail, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(s_lbl_logs_bus_detail, 744);
-    lv_label_set_text(s_lbl_logs_bus_detail, "[ OK ] E-Stop disengaged. All nodes communicating within watchdog thresholds.");
-    lv_obj_set_style_text_font(s_lbl_logs_bus_detail, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(s_lbl_logs_bus_detail, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(s_lbl_logs_bus_detail, LV_ALIGN_TOP_LEFT, 0, 24);
+    // Table Header Row (H=26, W=784)
+    lv_obj_t *tbl_hdr = lv_obj_create(s_cont_dtc_table);
+    lv_obj_set_size(tbl_hdr, 784, 26);
+    lv_obj_set_style_bg_color(tbl_hdr, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(tbl_hdr, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_border_width(tbl_hdr, 1, 0);
+    lv_obj_set_style_radius(tbl_hdr, 4, 0);
+    lv_obj_set_style_pad_all(tbl_hdr, 0, 0);
+
+    lv_obj_t *th_sev = lv_label_create(tbl_hdr);
+    lv_label_set_text(th_sev, "SEV");
+    lv_obj_set_style_text_font(th_sev, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(th_sev, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(th_sev, LV_ALIGN_LEFT_MID, 12, 0);
+
+    lv_obj_t *th_code = lv_label_create(tbl_hdr);
+    lv_label_set_text(th_code, "DTC / ID");
+    lv_obj_set_style_text_font(th_code, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(th_code, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(th_code, LV_ALIGN_LEFT_MID, 76, 0);
+
+    lv_obj_t *th_orig = lv_label_create(tbl_hdr);
+    lv_label_set_text(th_orig, "SUBSYSTEM");
+    lv_obj_set_style_text_font(th_orig, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(th_orig, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(th_orig, LV_ALIGN_LEFT_MID, 172, 0);
+
+    lv_obj_t *th_desc = lv_label_create(tbl_hdr);
+    lv_label_set_text(th_desc, "DIAGNOSTIC NAME & ROOT CAUSE");
+    lv_obj_set_style_text_font(th_desc, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(th_desc, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(th_desc, LV_ALIGN_LEFT_MID, 280, 0);
+
+    lv_obj_t *th_stat = lv_label_create(tbl_hdr);
+    lv_label_set_text(th_stat, "STATE");
+    lv_obj_set_style_text_font(th_stat, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(th_stat, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+    lv_obj_align(th_stat, LV_ALIGN_RIGHT_MID, -16, 0);
+
+    // Pre-allocate 8 DTC Row Widgets
+    for (int i = 0; i < DTC_TABLE_MAX_ROWS; i++) {
+        s_dtc_rows[i].row_obj = lv_obj_create(s_cont_dtc_table);
+        lv_obj_set_size(s_dtc_rows[i].row_obj, 784, 38);
+        lv_obj_set_style_bg_color(s_dtc_rows[i].row_obj, lv_color_hex(UI_COLOR_SURFACE), 0);
+        lv_obj_set_style_border_color(s_dtc_rows[i].row_obj, lv_color_hex(UI_COLOR_BORDER), 0);
+        lv_obj_set_style_border_width(s_dtc_rows[i].row_obj, 1, 0);
+        lv_obj_set_style_radius(s_dtc_rows[i].row_obj, 4, 0);
+        lv_obj_set_style_pad_all(s_dtc_rows[i].row_obj, 0, 0);
+
+        // Badge Box (W=54, H=22)
+        s_dtc_rows[i].badge_box = lv_obj_create(s_dtc_rows[i].row_obj);
+        lv_obj_set_size(s_dtc_rows[i].badge_box, 54, 22);
+        lv_obj_align(s_dtc_rows[i].badge_box, LV_ALIGN_LEFT_MID, 6, 0);
+        lv_obj_set_style_bg_color(s_dtc_rows[i].badge_box, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+        lv_obj_set_style_border_width(s_dtc_rows[i].badge_box, 0, 0);
+        lv_obj_set_style_radius(s_dtc_rows[i].badge_box, 3, 0);
+        lv_obj_set_style_pad_all(s_dtc_rows[i].badge_box, 0, 0);
+
+        s_dtc_rows[i].lbl_badge = lv_label_create(s_dtc_rows[i].badge_box);
+        lv_label_set_text(s_dtc_rows[i].lbl_badge, "L3");
+        lv_obj_set_style_text_font(s_dtc_rows[i].lbl_badge, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(s_dtc_rows[i].lbl_badge, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        lv_obj_align(s_dtc_rows[i].lbl_badge, LV_ALIGN_CENTER, 0, 0);
+
+        // Code
+        s_dtc_rows[i].lbl_code = lv_label_create(s_dtc_rows[i].row_obj);
+        lv_label_set_text(s_dtc_rows[i].lbl_code, "SEB:B1.3");
+        lv_obj_set_style_text_font(s_dtc_rows[i].lbl_code, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(s_dtc_rows[i].lbl_code, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
+        lv_obj_align(s_dtc_rows[i].lbl_code, LV_ALIGN_LEFT_MID, 74, 0);
+
+        // Origin / Subsystem
+        s_dtc_rows[i].lbl_origin = lv_label_create(s_dtc_rows[i].row_obj);
+        lv_label_set_text(s_dtc_rows[i].lbl_origin, "BRAKE (0x731)");
+        lv_obj_set_style_text_font(s_dtc_rows[i].lbl_origin, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(s_dtc_rows[i].lbl_origin, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+        lv_obj_align(s_dtc_rows[i].lbl_origin, LV_ALIGN_LEFT_MID, 172, 0);
+
+        // Description / Name
+        s_dtc_rows[i].lbl_desc = lv_label_create(s_dtc_rows[i].row_obj);
+        lv_label_set_text(s_dtc_rows[i].lbl_desc, "Hydraulic pressure sensor open-circuit / unplugged");
+        lv_obj_set_style_text_font(s_dtc_rows[i].lbl_desc, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(s_dtc_rows[i].lbl_desc, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+        lv_obj_align(s_dtc_rows[i].lbl_desc, LV_ALIGN_LEFT_MID, 280, 0);
+
+        // State Badge
+        s_dtc_rows[i].lbl_status = lv_label_create(s_dtc_rows[i].row_obj);
+        lv_label_set_text(s_dtc_rows[i].lbl_status, "ACTIVE");
+        lv_obj_set_style_text_font(s_dtc_rows[i].lbl_status, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(s_dtc_rows[i].lbl_status, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+        lv_obj_align(s_dtc_rows[i].lbl_status, LV_ALIGN_RIGHT_MID, -12, 0);
+
+        lv_obj_add_flag(s_dtc_rows[i].row_obj, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // =========================================================================
+    // View 2: Chronological Event Journal Container (Y=94, H=380, W=784)
+    // =========================================================================
+    s_cont_journal_view = lv_obj_create(s_screens[WIN_LOGS]);
+    lv_obj_set_size(s_cont_journal_view, 784, 380);
+    lv_obj_align(s_cont_journal_view, LV_ALIGN_TOP_MID, 0, 94);
+    lv_obj_set_style_bg_opa(s_cont_journal_view, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_cont_journal_view, 0, 0);
+    lv_obj_set_style_pad_all(s_cont_journal_view, 0, 0);
+    lv_obj_add_flag(s_cont_journal_view, LV_OBJ_FLAG_HIDDEN); // Hidden initially until user clicks View 2
+
+    // Journal Status Strip
+    lv_obj_t *c_j_hdr = lv_obj_create(s_cont_journal_view);
+    lv_obj_set_size(c_j_hdr, 784, 28);
+    lv_obj_align(c_j_hdr, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_bg_color(c_j_hdr, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(c_j_hdr, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_border_width(c_j_hdr, 1, 0);
+    lv_obj_set_style_radius(c_j_hdr, 4, 0);
+    lv_obj_set_style_pad_all(c_j_hdr, 0, 0);
+
+    s_lbl_journal_stats = lv_label_create(c_j_hdr);
+    lv_label_set_text(s_lbl_journal_stats, "RING BUFFER CAPACITY: 32 EVENTS  •  0 EVENTS LOGGED  •  AUTOSAR/DLT TIME-SERIES");
+    lv_obj_set_style_text_font(s_lbl_journal_stats, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_journal_stats, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_align(s_lbl_journal_stats, LV_ALIGN_CENTER, 0, 0);
+
+    // Scrollable Log Output Card
+    lv_obj_t *card_j_scroll = lv_obj_create(s_cont_journal_view);
+    lv_obj_set_size(card_j_scroll, 784, 346);
+    lv_obj_align(card_j_scroll, LV_ALIGN_TOP_MID, 0, 32);
+    lv_obj_set_style_bg_color(card_j_scroll, lv_color_hex(UI_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_color(card_j_scroll, lv_color_hex(UI_COLOR_BORDER), 0);
+    lv_obj_set_style_border_width(card_j_scroll, 1, 0);
+    lv_obj_set_style_radius(card_j_scroll, 6, 0);
+    lv_obj_set_style_pad_all(card_j_scroll, 8, 0);
+    lv_obj_add_flag(card_j_scroll, LV_OBJ_FLAG_SCROLLABLE);
+
+    s_lbl_journal_text = lv_label_create(card_j_scroll);
+    lv_label_set_long_mode(s_lbl_journal_text, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_lbl_journal_text, 750);
+    lv_label_set_text(s_lbl_journal_text, "[+00:00.000] [INFO] SYS:BOOT    [SET] Low-Bus Inspector HMI initialized");
+    lv_obj_set_style_text_font(s_lbl_journal_text, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_journal_text, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(s_lbl_journal_text, LV_ALIGN_TOP_LEFT, 0, 0);
 
     // =========================================================================
     // Window 6: 15-Second High-Resolution Steer Scope (Maximized 426px Height)
@@ -1907,390 +2092,195 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
     // Update Screen 5: Active DTC Fault Logs & Diagnostics
     // -------------------------------------------------------------------------
     else if (s_current_win == WIN_LOGS) {
-        int total_dtc_count = 0;
+        typedef struct {
+            event_severity_t sev;
+            const char *code;
+            const char *origin;
+            const char *desc;
+        } active_dtc_item_t;
 
-        // 1. BRAKE (SEB 0x731) Fault Analysis
-        if (s_lbl_logs_seb_title && s_lbl_logs_seb_detail) {
-            uint32_t b_raw = t->seb_errors.raw_bitmap;
-            const char *seb_lvl_str = "HEALTHY";
-            if (t->seb_err_level == 1) seb_lvl_str = "LEVEL 1 (MINOR)";
-            else if (t->seb_err_level == 2) seb_lvl_str = "LEVEL 2 (COMMON)";
-            else if (t->seb_err_level == 3) seb_lvl_str = "LEVEL 3 (CRITICAL)";
+        #define MAX_ACTIVE_DTCS 48
+        active_dtc_item_t active_dtcs[MAX_ACTIVE_DTCS];
+        int dtc_count = 0;
+        int l3_count = 0;
+        int l2_count = 0;
+        int l1_count = 0;
 
-            snprintf(buf, sizeof(buf), "BRAKE SYSTEM (SEB 0x731) • STATUS: %s • RAW: 0x%06lX",
-                     seb_lvl_str, (unsigned long)b_raw);
-            lv_label_set_text(s_lbl_logs_seb_title, buf);
+        // 1. E-Stop Active Fault
+        if (t->estop_active && dtc_count < MAX_ACTIVE_DTCS) {
+            active_dtcs[dtc_count++] = (active_dtc_item_t){
+                EVENT_SEV_CRIT, "SYS:ESTOP", "SYS (0x011)", "Emergency Stop circuit active / tripped"
+            };
+            l3_count++;
+        }
 
-            if (b_raw == 0) {
-                if (t->nodes[NODE_SEB].timeout) {
-                    lv_label_set_text(s_lbl_logs_seb_detail, "[ TIMEOUT ] SEB node offline (>250ms silence). No CAN frames received.");
-                    lv_obj_set_style_text_color(s_lbl_logs_seb_detail, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
-                    total_dtc_count++;
-                } else {
-                    lv_label_set_text(s_lbl_logs_seb_detail, "[ OK ] No faults active. Electro-hydraulic actuator status clear.");
-                    lv_obj_set_style_text_color(s_lbl_logs_seb_detail, lv_color_hex(UI_COLOR_STATE_OK), 0);
-                }
-            } else {
-                char seb_buf[1024];
-                int offset = 0;
-                seb_buf[0] = '\0';
-
-                // Check each of the 22 SEB diagnostic bits (Byte 0)
-                if (t->seb_errors.ecu_undervolt) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_ECUUnderVolt_Err (Bit 0): 12V supply < 9.0V (brownout risk)\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.ecu_overvolt) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_ECUOverVolt_Err (Bit 1): 12V supply > 16.0V (MOSFET clamping active)\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.can_com_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L1] SEB_CanCom_Err (Bit 2): CAN frame dropouts / parity disturbance\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.ecu_temp_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_ECUTemp_Err (Bit 3): Controller PCB / power stage temp > 105°C\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.bridge_sc_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_Domain drive_SC_Err (Bit 4): Bridge short-circuited to GND/DC bus\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.driver_volt_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_Domain drive_V_Err (Bit 5): Gate driver intermediate bootstrap supply fault\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.driver_temp_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_Domain drive_T_Err (Bit 6): Gate driver IC junction temperature fault\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.angle_p_cut_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleSensor_P O/C_Err (Bit 7): Primary angle sensor open-circuit\n");
-                    total_dtc_count++;
-                }
-
-                // Byte 1
-                if (t->seb_errors.angle_p_freq_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleSensor_P AF_Err (Bit 8): Primary angle sensor frequency abnormal\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.angle_s_cut_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleSensor_S O/C_Err (Bit 9): Secondary angle sensor open-circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.angle_s_freq_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_AngleSensor_S AF_Err (Bit 10): Secondary angle sensor frequency abnormal\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.no_pres_sensor_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_NOPreSensor_Err (Bit 11): Hydraulic pressure sensor disconnected (CRITICAL)\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.sensor_plaus_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_Sensors'CL_Err (Bit 13): Discrepancy between redundant sensors (plausibility)\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.alignment_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_Alignment_Err (Bit 14): Zero-point alignment procedure failed\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.angle_over_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_AngleOver_Err (Bit 15): Motor rotor angular software travel limit exceeded\n");
-                    total_dtc_count++;
-                }
-
-                // Byte 2
-                if (t->seb_errors.mtr_stall_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_Mtr_Stall_Err (Bit 17): Motor locked-rotor / jammed against stops\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.mtr_phase_dc_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_MtrD/C_Err (Bit 18): Motor phase winding disconnected / open-circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.oil_track_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_Oil_Err (Bit 19): Hydraulic pressure does not follow stroke command\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.init_oil_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_InitOil_Err (Bit 20): Residual hydraulic line pressure detected on boot\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.sent_value_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L1] SEB_SentValue_Err (Bit 21): VCU commanded stroke/pressure exceeds bounds\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.mtr_no_load_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L3] SEB_Mtr_No-load_Err (Bit 22): Motor spinning with no load (lead screw detached)\n");
-                    total_dtc_count++;
-                }
-
-                // Byte 3
-                if (t->seb_errors.pres_sensor_over) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_PreSensorOver_Err (Bit 24): Hydraulic pressure exceeded sensor range (>25MPa)\n");
-                    total_dtc_count++;
-                }
-                if (t->seb_errors.low_volt_charge_err) {
-                    offset += snprintf(seb_buf + offset, sizeof(seb_buf) - offset,
-                                       "[L2] SEB_Low-Volt Charging_Err (Bit 25): Auxiliary backup charging circuit fault\n");
-                    total_dtc_count++;
-                }
-
-                if (offset == 0) {
-                    snprintf(seb_buf, sizeof(seb_buf), "[ FAULT ] Unknown bits active in raw bitmap 0x%06lX",
-                             (unsigned long)b_raw);
-                    total_dtc_count++;
-                } else if (seb_buf[offset - 1] == '\n') {
-                    seb_buf[offset - 1] = '\0';
-                }
-
-                lv_label_set_text(s_lbl_logs_seb_detail, seb_buf);
-                lv_obj_set_style_text_color(s_lbl_logs_seb_detail, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+        // 2. Node Watchdog Timeouts
+        for (int i = 0; i < NODE_COUNT; i++) {
+            if (t->nodes[i].timeout && dtc_count < MAX_ACTIVE_DTCS) {
+                const char *n_name = (i == NODE_SYS) ? "SYS (0x011)" :
+                                     (i == NODE_RT) ? "RT (0x210)" :
+                                     (i == NODE_HOST) ? "HOST (0x7FC)" :
+                                     (i == NODE_SEB) ? "SEB (0x721)" : "SES (0x201)";
+                const char *n_code = (i == NODE_SYS) ? "WDT:SYS" :
+                                     (i == NODE_RT) ? "WDT:RT" :
+                                     (i == NODE_HOST) ? "WDT:HOST" :
+                                     (i == NODE_SEB) ? "WDT:SEB" : "WDT:SES";
+                bool is_crit = (i == NODE_SEB || i == NODE_SES || i == NODE_SYS);
+                active_dtcs[dtc_count++] = (active_dtc_item_t){
+                    is_crit ? EVENT_SEV_CRIT : EVENT_SEV_WARN,
+                    n_code, n_name, "Node silent (>350ms communication timeout)"
+                };
+                if (is_crit) l3_count++; else l2_count++;
             }
         }
 
-        // 2. STEERING (SES 0x202) Fault Analysis
-        if (s_lbl_logs_ses_title && s_lbl_logs_ses_detail) {
-            uint32_t s_raw = t->ses_errors.raw_bitmap;
-            snprintf(buf, sizeof(buf), "STEERING SYSTEM (SES 0x202) • RAW BITMAP: 0x%06lX", (unsigned long)s_raw);
-            lv_label_set_text(s_lbl_logs_ses_title, buf);
-
-            if (s_raw == 0) {
-                if (t->nodes[NODE_SES].timeout) {
-                    lv_label_set_text(s_lbl_logs_ses_detail, "[ TIMEOUT ] SES node offline (>250ms silence). No CAN frames received.");
-                    lv_obj_set_style_text_color(s_lbl_logs_ses_detail, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
-                    total_dtc_count++;
-                } else {
-                    lv_label_set_text(s_lbl_logs_ses_detail, "[ OK ] No faults active. Steer-by-wire controller status clear.");
-                    lv_obj_set_style_text_color(s_lbl_logs_ses_detail, lv_color_hex(UI_COLOR_STATE_OK), 0);
-                }
-            } else {
-                char ses_buf[1024];
-                int offset = 0;
-                ses_buf[0] = '\0';
-
-                if (t->ses_errors.ecu_undervolt) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_ECUUnderVolt_Err (Bit 0): Steering supply < 9.0V\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.ecu_overvolt) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_ECUOverVolt_Err (Bit 1): Steering supply > 16.0V\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.can_com_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SES_CanCom_Err (Bit 2): Steering CAN dropout / timeout\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.ecu_temp_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_ECUTemp_Err (Bit 3): Steering ECU temperature > 105°C\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.domain_drive_sc_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_Domain drive_SC_Err (Bit 4): Steering motor bridge short circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.domain_drive_v_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_Domain drive_V_Err (Bit 5): Steering gate driver supply rail fault\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.domain_drive_t_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_Domain drive_T_Err (Bit 6): Steering gate driver overtemp > 110°C\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.temp_sensor_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_TempSensor_Err (Bit 7): PCB temperature sensor open / short circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.angle_p_oc_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleSensor_P O/C_Err (Bit 8): Primary steering angle sensor open-circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.angle_p_af_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleSensor_P AF_Err (Bit 9): Primary angle sensor frequency abnormal\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.angle_s_oc_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleSensor_S O/C_Err (Bit 10): Secondary angle sensor open-circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.angle_s_af_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_AngleSensor_S AF_Err (Bit 11): Secondary angle sensor frequency abnormal\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.sensor_pow_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_SensorPow_Err (Bit 12): Internal 5V regulated sensor power rail failure\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.alignment_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SES_Alignment_Err (Bit 13): Steering center zero-point calibration failed\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.over_angle_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_OverAngle_Err (Bit 14): Commanded angle exceeded ±700° limit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.str_mtr_stall_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_StrMtr_Stall_Err (Bit 15): Steering column motor stall / mechanical jam\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.mtr_curt_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_MtrCurt_Err (Bit 16): Motor phase overcurrent trip (>52A)\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.sensors_cl_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_Sensors'CL_Err (Bit 17): Dual torque/angle sensor plausibility discrepancy\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.torq_t1_oc_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqSensor_T1 O/C_Err (Bit 18): Driver torque sensor Main channel (T1) open-circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.torq_t2_oc_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqSensor_T2 O/C_Err (Bit 19): Driver torque sensor Sub channel (T2) open-circuit\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.torq_t1_af_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqSensor_T1 AF_Err (Bit 20): Torque sensor T1 signal frequency abnormal\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.torq_t2_af_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_TorqSensor_T2 AF_Err (Bit 21): Torque sensor T2 signal frequency abnormal\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.sent_angle_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L1] SentAngle_Err (Bit 22): Target angle commanded outside allowable rate/range\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.str_mtr_idling_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L3] SES_StrMtr_idling_Err (Bit 23): Motor spinning with no torque (gear disengagement)\n");
-                    total_dtc_count++;
-                }
-                if (t->ses_errors.eeprom_err) {
-                    offset += snprintf(ses_buf + offset, sizeof(ses_buf) - offset,
-                                       "[L2] SES_EPPROM_Err (Bit 24): EEPROM memory read/write corruption\n");
-                    total_dtc_count++;
-                }
-
-                if (offset == 0) {
-                    snprintf(ses_buf, sizeof(ses_buf), "[ FAULT ] Unknown bits active in raw bitmap 0x%06lX",
-                             (unsigned long)s_raw);
-                    total_dtc_count++;
-                } else if (ses_buf[offset - 1] == '\n') {
-                    ses_buf[offset - 1] = '\0';
-                }
-
-                lv_label_set_text(s_lbl_logs_ses_detail, ses_buf);
-                lv_obj_set_style_text_color(s_lbl_logs_ses_detail, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+        // 3. SEB Braking Actuator Faults (0x731)
+        uint32_t seb_raw = t->seb_errors.raw_bitmap;
+        for (size_t i = 0; i < SEB_DTC_COUNT; i++) {
+            if ((seb_raw & (1UL << SEB_DTC_TABLE[i].bit_index)) && dtc_count < MAX_ACTIVE_DTCS) {
+                active_dtcs[dtc_count++] = (active_dtc_item_t){
+                    SEB_DTC_TABLE[i].sev,
+                    SEB_DTC_TABLE[i].code,
+                    "BRAKE (0x731)",
+                    SEB_DTC_TABLE[i].desc
+                };
+                if (SEB_DTC_TABLE[i].sev == EVENT_SEV_CRIT) l3_count++;
+                else if (SEB_DTC_TABLE[i].sev == EVENT_SEV_WARN) l2_count++;
+                else l1_count++;
             }
         }
 
-        // 3. LOW-BUS & SAFETY WATCHDOG Analysis
-        if (s_lbl_logs_bus_title && s_lbl_logs_bus_detail) {
-            char bus_buf[512];
-            int b_offset = 0;
-            bus_buf[0] = '\0';
-
-            if (t->estop_active) {
-                b_offset += snprintf(bus_buf + b_offset, sizeof(bus_buf) - b_offset,
-                                     "[ E-STOP ACTIVE ] Tripped by Node %d (Reason Code: 0x%02X)\n",
-                                     t->estop_source_node, t->estop_reason_code);
-                total_dtc_count++;
-            }
-            if (t->bus_off) {
-                b_offset += snprintf(bus_buf + b_offset, sizeof(bus_buf) - b_offset,
-                                     "[ BUS-OFF ] CAN transceiver in bus-off state!\n");
-                total_dtc_count++;
-            } else if (t->twai_tec > 96 || t->twai_rec > 96) {
-                b_offset += snprintf(bus_buf + b_offset, sizeof(bus_buf) - b_offset,
-                                     "[ BUS ERROR ] High error counters: TEC=%d, REC=%d\n",
-                                     t->twai_tec, t->twai_rec);
-                total_dtc_count++;
-            }
-
-            for (int i = 0; i < NODE_COUNT; i++) {
-                if (t->nodes[i].timeout) {
-                    const char *n_name = (i == NODE_SYS) ? "SYS (0x011)" :
-                                         (i == NODE_RT) ? "RT (0x210)" :
-                                         (i == NODE_HOST) ? "HOST (0x7FC)" :
-                                         (i == NODE_SEB) ? "SEB (0x721)" : "SES (0x201)";
-                    b_offset += snprintf(bus_buf + b_offset, sizeof(bus_buf) - b_offset,
-                                         "[ TIMEOUT ] %s silent for %lu ms\n",
-                                         n_name, (unsigned long)t->nodes[i].silent_ms);
-                    total_dtc_count++;
-                }
-            }
-
-            if (b_offset == 0) {
-                snprintf(bus_buf, sizeof(bus_buf),
-                         "[ OK ] E-Stop clear. Low-Bus rate: %.0f msg/s. All 5 nodes communicating.",
-                         t->bus_rate_hz);
-                lv_label_set_text(s_lbl_logs_bus_detail, bus_buf);
-                lv_obj_set_style_text_color(s_lbl_logs_bus_detail, lv_color_hex(UI_COLOR_STATE_OK), 0);
-            } else {
-                if (bus_buf[b_offset - 1] == '\n') {
-                    bus_buf[b_offset - 1] = '\0';
-                }
-                lv_label_set_text(s_lbl_logs_bus_detail, bus_buf);
-                lv_obj_set_style_text_color(s_lbl_logs_bus_detail, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+        // 4. SES Steering Actuator Faults (0x202)
+        uint32_t ses_raw = t->ses_errors.raw_bitmap;
+        for (size_t i = 0; i < SES_DTC_COUNT; i++) {
+            if ((ses_raw & (1UL << SES_DTC_TABLE[i].bit_index)) && dtc_count < MAX_ACTIVE_DTCS) {
+                active_dtcs[dtc_count++] = (active_dtc_item_t){
+                    SES_DTC_TABLE[i].sev,
+                    SES_DTC_TABLE[i].code,
+                    "STEER (0x202)",
+                    SES_DTC_TABLE[i].desc
+                };
+                if (SES_DTC_TABLE[i].sev == EVENT_SEV_CRIT) l3_count++;
+                else if (SES_DTC_TABLE[i].sev == EVENT_SEV_WARN) l2_count++;
+                else l1_count++;
             }
         }
 
-        // Summary Badge in Header
-        if (s_lbl_logs_summary) {
-            if (total_dtc_count == 0) {
-                lv_label_set_text(s_lbl_logs_summary, "[ ALL SYSTEMS NORMAL (0 ACTIVE DTC) ]");
-                lv_obj_set_style_text_color(s_lbl_logs_summary, lv_color_hex(UI_COLOR_STATE_OK), 0);
+        // 5. Update Sub-Header Counters
+        if (s_lbl_logs_l3_cnt) {
+            snprintf(buf, sizeof(buf), "● L3: %d", l3_count);
+            lv_label_set_text(s_lbl_logs_l3_cnt, buf);
+            lv_obj_set_style_text_color(s_lbl_logs_l3_cnt, lv_color_hex(l3_count > 0 ? UI_COLOR_STATE_FAULT : UI_COLOR_TEXT_SECONDARY), 0);
+        }
+        if (s_lbl_logs_l2_cnt) {
+            snprintf(buf, sizeof(buf), "▲ L2: %d", l2_count);
+            lv_label_set_text(s_lbl_logs_l2_cnt, buf);
+            lv_obj_set_style_text_color(s_lbl_logs_l2_cnt, lv_color_hex(l2_count > 0 ? UI_COLOR_STATE_WARN : UI_COLOR_TEXT_SECONDARY), 0);
+        }
+        if (s_lbl_logs_l1_cnt) {
+            snprintf(buf, sizeof(buf), "ℹ L1: %d", l1_count);
+            lv_label_set_text(s_lbl_logs_l1_cnt, buf);
+            lv_obj_set_style_text_color(s_lbl_logs_l1_cnt, lv_color_hex(l1_count > 0 ? UI_COLOR_ACCENT_CMD : UI_COLOR_TEXT_SECONDARY), 0);
+        }
+        if (s_lbl_logs_total_cnt) {
+            if (dtc_count == 0) {
+                lv_label_set_text(s_lbl_logs_total_cnt, "[ 0 DTC ]");
+                lv_obj_set_style_text_color(s_lbl_logs_total_cnt, lv_color_hex(UI_COLOR_STATE_OK), 0);
             } else {
-                snprintf(buf, sizeof(buf), "[ %d ACTIVE FAULTS / DTC DETECTED ]", total_dtc_count);
-                lv_label_set_text(s_lbl_logs_summary, buf);
-                lv_obj_set_style_text_color(s_lbl_logs_summary, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+                snprintf(buf, sizeof(buf), "[ %d DTC ]", dtc_count);
+                lv_label_set_text(s_lbl_logs_total_cnt, buf);
+                lv_obj_set_style_text_color(s_lbl_logs_total_cnt, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
             }
+        }
+
+        // 6. Update DTC Matrix View
+        if (s_cont_dtc_view) {
+            if (dtc_count == 0) {
+                if (s_card_dtc_healthy) lv_obj_clear_flag(s_card_dtc_healthy, LV_OBJ_FLAG_HIDDEN);
+                if (s_cont_dtc_table)   lv_obj_add_flag(s_cont_dtc_table, LV_OBJ_FLAG_HIDDEN);
+                if (s_lbl_dtc_healthy_sub) {
+                    snprintf(buf, sizeof(buf),
+                             "All low-bus ECUs (SYS, RT, HOST, SEB, SES) operating within nominal envelope.\n"
+                             "Zero active diagnostic trouble codes across steering, braking, and safety interlocks.\n"
+                             "Low-Bus Rate: %.0f msg/s  •  TEC: %d | REC: %d  •  12V Supply: %.1f V  •  Core: %.1f°C",
+                             t->bus_rate_hz, t->twai_tec, t->twai_rec, t->rail_volts_12v, t->esp32_internal_temp_c);
+                    lv_label_set_text(s_lbl_dtc_healthy_sub, buf);
+                }
+            } else {
+                if (s_card_dtc_healthy) lv_obj_add_flag(s_card_dtc_healthy, LV_OBJ_FLAG_HIDDEN);
+                if (s_cont_dtc_table)   lv_obj_clear_flag(s_cont_dtc_table, LV_OBJ_FLAG_HIDDEN);
+
+                for (int r = 0; r < DTC_TABLE_MAX_ROWS; r++) {
+                    if (r < dtc_count) {
+                        lv_obj_clear_flag(s_dtc_rows[r].row_obj, LV_OBJ_FLAG_HIDDEN);
+                        if (r == DTC_TABLE_MAX_ROWS - 1 && dtc_count > DTC_TABLE_MAX_ROWS) {
+                            lv_label_set_text(s_dtc_rows[r].lbl_badge, "+");
+                            lv_obj_set_style_bg_color(s_dtc_rows[r].badge_box, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+                            lv_label_set_text(s_dtc_rows[r].lbl_code, "MORE");
+                            lv_label_set_text(s_dtc_rows[r].lbl_origin, "SYSTEM");
+                            snprintf(buf, sizeof(buf), "+%d additional DTCs active. See Event Journal for full trace.",
+                                     dtc_count - (DTC_TABLE_MAX_ROWS - 1));
+                            lv_label_set_text(s_dtc_rows[r].lbl_desc, buf);
+                            lv_label_set_text(s_dtc_rows[r].lbl_status, "OVERFLOW");
+                            lv_obj_set_style_text_color(s_dtc_rows[r].lbl_status, lv_color_hex(UI_COLOR_STATE_WARN), 0);
+                        } else {
+                            active_dtc_item_t *item = &active_dtcs[r];
+                            const char *badge_str = (item->sev == EVENT_SEV_CRIT) ? "L3" :
+                                                    (item->sev == EVENT_SEV_WARN) ? "L2" : "L1";
+                            uint32_t badge_col = (item->sev == EVENT_SEV_CRIT) ? UI_COLOR_STATE_FAULT :
+                                                 (item->sev == EVENT_SEV_WARN) ? UI_COLOR_STATE_WARN : UI_COLOR_ACCENT_CMD;
+
+                            lv_label_set_text(s_dtc_rows[r].lbl_badge, badge_str);
+                            lv_obj_set_style_bg_color(s_dtc_rows[r].badge_box, lv_color_hex(badge_col), 0);
+                            lv_label_set_text(s_dtc_rows[r].lbl_code, item->code);
+                            lv_label_set_text(s_dtc_rows[r].lbl_origin, item->origin);
+                            lv_label_set_text(s_dtc_rows[r].lbl_desc, item->desc);
+                            lv_label_set_text(s_dtc_rows[r].lbl_status, "ACTIVE");
+                            lv_obj_set_style_text_color(s_dtc_rows[r].lbl_status, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+                        }
+                    } else {
+                        lv_obj_add_flag(s_dtc_rows[r].row_obj, LV_OBJ_FLAG_HIDDEN);
+                    }
+                }
+            }
+        }
+
+        // 7. Update Chronological Event Journal View
+        if (s_cont_journal_view && s_lbl_journal_text) {
+            event_journal_buffer_t journal;
+            low_bus_decoder_get_event_journal(&journal);
+
+            if (s_lbl_journal_stats) {
+                snprintf(buf, sizeof(buf),
+                         "RING BUFFER: %d EVENTS  •  %d STORED (%lu LIFETIME)  •  CHRONOLOGICAL REVERSE TRACE",
+                         EVENT_JOURNAL_CAPACITY, journal.count, (unsigned long)journal.total_events);
+                lv_label_set_text(s_lbl_journal_stats, buf);
+            }
+
+            static char j_buf[2048];
+            int j_offset = 0;
+            j_buf[0] = '\0';
+
+            for (int k = 0; k < journal.count; k++) {
+                int idx = (journal.head - 1 - k + EVENT_JOURNAL_CAPACITY) % EVENT_JOURNAL_CAPACITY;
+                low_bus_event_t *ev = &journal.events[idx];
+                uint32_t s = ev->uptime_ms / 1000;
+                uint32_t ms = ev->uptime_ms % 1000;
+                uint32_t m = s / 60;
+                s = s % 60;
+                const char *sev_str = (ev->sev == EVENT_SEV_CRIT) ? "CRIT" :
+                                      (ev->sev == EVENT_SEV_WARN) ? "WARN" : "INFO";
+                j_offset += snprintf(j_buf + j_offset, sizeof(j_buf) - j_offset,
+                                     "+%02lu:%02lu.%03lu  [%-4s]  %-10s  [%-3s]  %s\n",
+                                     (unsigned long)m, (unsigned long)s, (unsigned long)ms,
+                                     sev_str, ev->code, ev->is_set ? "SET" : "CLR", ev->desc);
+                if (j_offset >= sizeof(j_buf) - 120) break;
+            }
+
+            if (j_offset == 0) {
+                snprintf(j_buf, sizeof(j_buf), "[+00:00.000] [INFO] No state transitions recorded yet.");
+            }
+            lv_label_set_text(s_lbl_journal_text, j_buf);
         }
     }
 

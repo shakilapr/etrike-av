@@ -279,10 +279,47 @@ typedef struct {
     node_watchdog_t nodes[NODE_COUNT];
 } low_bus_telemetry_t;
 
+#define EVENT_JOURNAL_CAPACITY 32
+
+typedef enum {
+    EVENT_SEV_INFO = 0,
+    EVENT_SEV_WARN = 1,
+    EVENT_SEV_CRIT = 2,
+} event_severity_t;
+
+typedef struct {
+    uint32_t uptime_ms;
+    event_severity_t sev;
+    char code[16];        // e.g. "0x731:B1.3", "0x202:B0.4", "SYS_WDT"
+    char origin[8];       // e.g. "SEB", "SES", "SYS", "BUS"
+    char desc[44];        // e.g. "Pressure Sensor O/C (L3 Fatal)"
+    bool is_set;          // true: SET / ACTIVE, false: CLR / HEALED
+} low_bus_event_t;
+
+typedef struct {
+    low_bus_event_t events[EVENT_JOURNAL_CAPACITY];
+    uint16_t head;
+    uint16_t count;
+    uint32_t total_events;
+} event_journal_buffer_t;
+
+typedef struct {
+    uint8_t bit_index;
+    event_severity_t sev;
+    const char *code;
+    const char *desc;
+} dtc_desc_t;
+
+extern const dtc_desc_t SEB_DTC_TABLE[];
+extern const size_t SEB_DTC_COUNT;
+
+extern const dtc_desc_t SES_DTC_TABLE[];
+extern const size_t SES_DTC_COUNT;
+
 typedef struct {
     int16_t cmd[PLOT_POINTS_15S];
     int16_t act[PLOT_POINTS_15S];
-    int16_t aux[PLOT_POINTS_15S]; // Steering: Driver Torque (0.1 Nm), Brake: Stroke (0.1 mm), Drive: RPM/10
+    int16_t aux[PLOT_POINTS_15S]; // Steering: Driver Torque (0.1 Nm), Brake: Stroke (0.1 mm)
     uint16_t head;
     bool is_paused;
 } plot_buffer_15s_t;
@@ -291,6 +328,8 @@ void low_bus_decoder_init(void);
 void low_bus_decoder_process_frame(const twai_message_t *frame);
 void low_bus_decoder_tick_100ms(void);
 void low_bus_decoder_get_telemetry(low_bus_telemetry_t *dest);
+void low_bus_decoder_get_event_journal(event_journal_buffer_t *dest);
+void low_bus_decoder_push_event(event_severity_t sev, const char *code, const char *origin, const char *desc, bool is_set);
 
 void low_bus_decoder_get_steer_plot(plot_buffer_15s_t *dest);
 void low_bus_decoder_get_brake_plot(plot_buffer_15s_t *dest);

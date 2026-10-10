@@ -20,6 +20,10 @@ static SemaphoreHandle_t s_mutex = NULL;
 
 static plot_buffer_15s_t s_plot_steer;
 static plot_buffer_15s_t s_plot_brake;
+static event_journal_buffer_t s_journal;
+static uint32_t s_prev_seb_bitmap = 0;
+static uint32_t s_prev_ses_bitmap = 0;
+static bool s_prev_estop = false;
 
 static uint32_t s_frame_counter = 0;
 static uint32_t s_frames_in_sec = 0;
@@ -66,6 +70,111 @@ static inline float decode_ses_angle(uint16_t raw) {
     }
 }
 
+void low_bus_decoder_push_event(event_severity_t sev, const char *code, const char *origin, const char *desc, bool is_set) {
+    uint16_t idx = s_journal.head;
+    s_journal.events[idx].uptime_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    s_journal.events[idx].sev = sev;
+    strncpy(s_journal.events[idx].code, code ? code : "-", sizeof(s_journal.events[idx].code) - 1);
+    s_journal.events[idx].code[sizeof(s_journal.events[idx].code) - 1] = '\0';
+    strncpy(s_journal.events[idx].origin, origin ? origin : "-", sizeof(s_journal.events[idx].origin) - 1);
+    s_journal.events[idx].origin[sizeof(s_journal.events[idx].origin) - 1] = '\0';
+    strncpy(s_journal.events[idx].desc, desc ? desc : "-", sizeof(s_journal.events[idx].desc) - 1);
+    s_journal.events[idx].desc[sizeof(s_journal.events[idx].desc) - 1] = '\0';
+    s_journal.events[idx].is_set = is_set;
+
+    s_journal.head = (idx + 1) % EVENT_JOURNAL_CAPACITY;
+    if (s_journal.count < EVENT_JOURNAL_CAPACITY) {
+        s_journal.count++;
+    }
+    s_journal.total_events++;
+}
+
+const dtc_desc_t SEB_DTC_TABLE[] = {
+    { 0, EVENT_SEV_WARN, "SEB:B0.0", "ECU supply < 9.0V (UnderVolt)" },
+    { 1, EVENT_SEV_WARN, "SEB:B0.1", "ECU supply > 16.0V (OverVolt)" },
+    { 2, EVENT_SEV_INFO, "SEB:B0.2", "CAN bus frame dropout" },
+    { 3, EVENT_SEV_CRIT, "SEB:B0.3", "PCB/Power stage overtemp (>105C)" },
+    { 4, EVENT_SEV_CRIT, "SEB:B0.4", "Domain drive bridge short-circuit" },
+    { 5, EVENT_SEV_CRIT, "SEB:B0.5", "Gate driver intermediate voltage fault" },
+    { 6, EVENT_SEV_CRIT, "SEB:B0.6", "Gate driver IC junction overtemp" },
+    { 7, EVENT_SEV_CRIT, "SEB:B0.7", "Primary angle sensor open-circuit" },
+    { 8, EVENT_SEV_CRIT, "SEB:B1.0", "Primary angle sensor abnormal freq" },
+    { 9, EVENT_SEV_CRIT, "SEB:B1.1", "Secondary angle sensor open-circuit" },
+    { 10, EVENT_SEV_CRIT, "SEB:B1.2", "Secondary angle sensor abnormal freq" },
+    { 11, EVENT_SEV_CRIT, "SEB:B1.3", "Hydraulic pressure sensor open-circuit" },
+    { 13, EVENT_SEV_CRIT, "SEB:B1.5", "Dual sensor plausibility discrepancy" },
+    { 14, EVENT_SEV_WARN, "SEB:B1.6", "Zero-point calibration failed" },
+    { 15, EVENT_SEV_WARN, "SEB:B1.7", "Motor angle travel limit exceeded" },
+    { 17, EVENT_SEV_CRIT, "SEB:B2.1", "Motor locked-rotor stall detected" },
+    { 18, EVENT_SEV_CRIT, "SEB:B2.2", "Motor phase winding disconnected" },
+    { 19, EVENT_SEV_WARN, "SEB:B2.3", "Hydraulic pressure tracking lag" },
+    { 20, EVENT_SEV_CRIT, "SEB:B2.4", "Residual oil pressure on system boot" },
+    { 21, EVENT_SEV_INFO, "SEB:B2.5", "VCU commanded value out of range" },
+    { 22, EVENT_SEV_CRIT, "SEB:B2.6", "Motor ball screw detached (no load)" },
+    { 24, EVENT_SEV_WARN, "SEB:B3.0", "Pressure sensor over-pressure (>25MPa)" },
+    { 25, EVENT_SEV_WARN, "SEB:B3.1", "Auxiliary backup charging fault" },
+};
+const size_t SEB_DTC_COUNT = sizeof(SEB_DTC_TABLE)/sizeof(SEB_DTC_TABLE[0]);
+
+const dtc_desc_t SES_DTC_TABLE[] = {
+    { 0, EVENT_SEV_WARN, "SES:B0.0", "Steering supply < 9.0V (UnderVolt)" },
+    { 1, EVENT_SEV_WARN, "SES:B0.1", "Steering supply > 16.0V (OverVolt)" },
+    { 2, EVENT_SEV_INFO, "SES:B0.2", "Steering CAN com frame dropout" },
+    { 3, EVENT_SEV_CRIT, "SES:B0.3", "Steering ECU overtemp (>105C)" },
+    { 4, EVENT_SEV_CRIT, "SES:B0.4", "Steering bridge short-circuit" },
+    { 5, EVENT_SEV_CRIT, "SES:B0.5", "Steering gate driver voltage fault" },
+    { 6, EVENT_SEV_CRIT, "SES:B0.6", "Steering gate driver IC overtemp" },
+    { 7, EVENT_SEV_WARN, "SES:B0.7", "Steering temp sensor open/short" },
+    { 8, EVENT_SEV_CRIT, "SES:B1.0", "Primary angle sensor open-circuit" },
+    { 9, EVENT_SEV_CRIT, "SES:B1.1", "Primary angle sensor abnormal freq" },
+    { 10, EVENT_SEV_CRIT, "SES:B1.2", "Secondary angle sensor open-circuit" },
+    { 11, EVENT_SEV_CRIT, "SES:B1.3", "Secondary angle sensor abnormal freq" },
+    { 12, EVENT_SEV_CRIT, "SES:B1.4", "Internal sensor 5V supply fault" },
+    { 13, EVENT_SEV_WARN, "SES:B1.5", "Steering center calibration failed" },
+    { 14, EVENT_SEV_WARN, "SES:B1.6", "Steering angle exceeded +-700 deg" },
+    { 15, EVENT_SEV_CRIT, "SES:B1.7", "Steering motor locked-rotor stall" },
+    { 16, EVENT_SEV_CRIT, "SES:B2.0", "Motor phase overcurrent (>52A)" },
+    { 17, EVENT_SEV_CRIT, "SES:B2.1", "Dual sensor plausibility discrepancy" },
+    { 18, EVENT_SEV_CRIT, "SES:B2.2", "Torque sensor T1 open-circuit" },
+    { 19, EVENT_SEV_CRIT, "SES:B2.3", "Torque sensor T2 open-circuit" },
+    { 20, EVENT_SEV_CRIT, "SES:B2.4", "Torque sensor T1 abnormal frequency" },
+    { 21, EVENT_SEV_CRIT, "SES:B2.5", "Torque sensor T2 abnormal frequency" },
+    { 22, EVENT_SEV_INFO, "SES:B2.6", "Target angle command out of range" },
+    { 23, EVENT_SEV_CRIT, "SES:B2.7", "Steering gearbox decoupled (no load)" },
+    { 24, EVENT_SEV_WARN, "SES:B3.0", "EEPROM calibration parameter fault" },
+};
+const size_t SES_DTC_COUNT = sizeof(SES_DTC_TABLE)/sizeof(SES_DTC_TABLE[0]);
+
+static void check_seb_events(uint32_t curr) {
+    uint32_t diff = curr ^ s_prev_seb_bitmap;
+    if (diff == 0) return;
+    for (size_t i = 0; i < SEB_DTC_COUNT; i++) {
+        uint32_t mask = (1UL << SEB_DTC_TABLE[i].bit_index);
+        if (diff & mask) {
+            bool is_set = (curr & mask) != 0;
+            low_bus_decoder_push_event(is_set ? SEB_DTC_TABLE[i].sev : EVENT_SEV_INFO,
+                                       SEB_DTC_TABLE[i].code, "SEB",
+                                       SEB_DTC_TABLE[i].desc, is_set);
+        }
+    }
+    s_prev_seb_bitmap = curr;
+}
+
+static void check_ses_events(uint32_t curr) {
+    uint32_t diff = curr ^ s_prev_ses_bitmap;
+    if (diff == 0) return;
+    for (size_t i = 0; i < SES_DTC_COUNT; i++) {
+        uint32_t mask = (1UL << SES_DTC_TABLE[i].bit_index);
+        if (diff & mask) {
+            bool is_set = (curr & mask) != 0;
+            low_bus_decoder_push_event(is_set ? SES_DTC_TABLE[i].sev : EVENT_SEV_INFO,
+                                       SES_DTC_TABLE[i].code, "SES",
+                                       SES_DTC_TABLE[i].desc, is_set);
+        }
+    }
+    s_prev_ses_bitmap = curr;
+}
+
 void low_bus_decoder_init(void) {
     if (!s_mutex) {
         s_mutex = xSemaphoreCreateMutex();
@@ -73,6 +182,12 @@ void low_bus_decoder_init(void) {
     memset(&s_telemetry, 0, sizeof(s_telemetry));
     memset(&s_plot_steer, 0, sizeof(s_plot_steer));
     memset(&s_plot_brake, 0, sizeof(s_plot_brake));
+    memset(&s_journal, 0, sizeof(s_journal));
+    s_prev_seb_bitmap = 0;
+    s_prev_ses_bitmap = 0;
+    s_prev_estop = false;
+
+    low_bus_decoder_push_event(EVENT_SEV_INFO, "SYS_BOOT", "SYS", "Low-Bus Inspector HMI initialized", true);
 
     s_telemetry.rail_volts_12v = 0.0f;
     s_telemetry.esp32_internal_temp_c = 0.0f;
@@ -132,16 +247,29 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
         case 0x001: // SAFETY_ESTOP
             s_telemetry.estop_active = true;
             s_telemetry.estop_source_node = 1;
+            if (!s_prev_estop) {
+                low_bus_decoder_push_event(EVENT_SEV_CRIT, "SYS:ESTOP", "SYS", "Emergency Stop tripped / active", true);
+                s_prev_estop = true;
+            }
             break;
 
         case 0x011: // SYS_SAFETY_STS (SYS E-Stop & Presence, 200ms)
             mark_node_seen(NODE_SYS);
             if (dlc >= 1) {
                 // Byte 0: estop_active (0: Inactive, 1: Active)
-                s_telemetry.estop_pin_active = (d[0] != 0);
-                if (d[0] != 0) {
+                bool pin_act = (d[0] != 0);
+                s_telemetry.estop_pin_active = pin_act;
+                if (pin_act) {
                     s_telemetry.estop_active = true;
                     s_telemetry.estop_source_node = 1; // SYS
+                }
+                if (pin_act != s_prev_estop) {
+                    if (pin_act) {
+                        low_bus_decoder_push_event(EVENT_SEV_CRIT, "SYS:ESTOP", "SYS", "Emergency Stop pin active", true);
+                    } else {
+                        low_bus_decoder_push_event(EVENT_SEV_INFO, "SYS:ESTOP", "SYS", "Emergency Stop released", false);
+                    }
+                    s_prev_estop = pin_act;
                 }
             }
             if (dlc >= 3) {
@@ -275,6 +403,8 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
 
                 s_telemetry.ses_errors.raw_bitmap = (uint32_t)d[0] | ((uint32_t)d[1] << 8) |
                                                     ((uint32_t)d[2] << 16) | ((uint32_t)d[3] << 24);
+
+                check_ses_events(s_telemetry.ses_errors.raw_bitmap);
 
                 if (dlc >= 8) {
                     s_telemetry.ses_errors.veh_spd_echo = d[7];
@@ -447,6 +577,8 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
 
                 s_telemetry.seb_errors.raw_bitmap = (uint32_t)d[0] | ((uint32_t)d[1] << 8) |
                                                     ((uint32_t)d[2] << 16) | ((uint32_t)d[3] << 24);
+
+                check_seb_events(s_telemetry.seb_errors.raw_bitmap);
 
                 // Priority human-readable fault triage string
                 if (s_telemetry.seb_errors.no_pres_sensor_err) {
@@ -626,6 +758,7 @@ void low_bus_decoder_tick_100ms(void) {
     }
 
     // 1. Check node liveness watchdogs
+    static bool s_prev_node_timeout[NODE_COUNT] = { true, true, true, true, true };
     for (int i = 0; i < NODE_COUNT; i++) {
         if (s_telemetry.nodes[i].rx_count == 0) {
             s_telemetry.nodes[i].timeout = true;
@@ -635,6 +768,18 @@ void low_bus_decoder_tick_100ms(void) {
             s_telemetry.nodes[i].silent_ms = (uint32_t)(elapsed_us / 1000);
             if (s_telemetry.nodes[i].silent_ms > 350) {
                 s_telemetry.nodes[i].timeout = true;
+            }
+        }
+        bool to = s_telemetry.nodes[i].timeout;
+        if (to != s_prev_node_timeout[i] && s_telemetry.nodes[i].rx_count > 0) {
+            s_prev_node_timeout[i] = to;
+            const char *n_name = (i == NODE_SYS) ? "SYS" : (i == NODE_RT) ? "RT" : (i == NODE_HOST) ? "HOST" : (i == NODE_SEB) ? "SEB" : "SES";
+            char code[16];
+            snprintf(code, sizeof(code), "WDT:%s", n_name);
+            if (to) {
+                low_bus_decoder_push_event(EVENT_SEV_WARN, code, n_name, "Node silent (>350ms timeout)", true);
+            } else {
+                low_bus_decoder_push_event(EVENT_SEV_INFO, code, n_name, "Node communication restored", false);
             }
         }
     }
@@ -664,6 +809,14 @@ void low_bus_decoder_get_telemetry(low_bus_telemetry_t *dest) {
     if (!dest) return;
     if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         memcpy(dest, &s_telemetry, sizeof(low_bus_telemetry_t));
+        xSemaphoreGive(s_mutex);
+    }
+}
+
+void low_bus_decoder_get_event_journal(event_journal_buffer_t *dest) {
+    if (!dest) return;
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        memcpy(dest, &s_journal, sizeof(event_journal_buffer_t));
         xSemaphoreGive(s_mutex);
     }
 }
