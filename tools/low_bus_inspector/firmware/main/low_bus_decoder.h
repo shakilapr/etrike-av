@@ -26,8 +26,7 @@ typedef enum {
     NODE_HOST = 2,
     NODE_SEB  = 3,
     NODE_SES  = 4,
-    NODE_MTR  = 5,
-    NODE_COUNT = 6,
+    NODE_COUNT = 5,
 } low_bus_node_t;
 
 /**
@@ -295,11 +294,9 @@ void low_bus_decoder_get_telemetry(low_bus_telemetry_t *dest);
 
 void low_bus_decoder_get_steer_plot(plot_buffer_15s_t *dest);
 void low_bus_decoder_get_brake_plot(plot_buffer_15s_t *dest);
-void low_bus_decoder_get_drive_plot(plot_buffer_15s_t *dest);
 
 void low_bus_decoder_toggle_pause_steer(void);
 void low_bus_decoder_toggle_pause_brake(void);
-void low_bus_decoder_toggle_pause_drive(void);
 
 #ifdef __cplusplus
 }

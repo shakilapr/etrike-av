@@ -20,7 +20,6 @@ static SemaphoreHandle_t s_mutex = NULL;
 
 static plot_buffer_15s_t s_plot_steer;
 static plot_buffer_15s_t s_plot_brake;
-static plot_buffer_15s_t s_plot_drive;
 
 static uint32_t s_frame_counter = 0;
 static uint32_t s_frames_in_sec = 0;
@@ -74,7 +73,6 @@ void low_bus_decoder_init(void) {
     memset(&s_telemetry, 0, sizeof(s_telemetry));
     memset(&s_plot_steer, 0, sizeof(s_plot_steer));
     memset(&s_plot_brake, 0, sizeof(s_plot_brake));
-    memset(&s_plot_drive, 0, sizeof(s_plot_drive));
 
     s_telemetry.rail_volts_12v = 0.0f;
     s_telemetry.esp32_internal_temp_c = 0.0f;
@@ -546,37 +544,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             }
             break;
 
-        case 0x120: // SYS_THROTTLE_STS (MTR speed feedback, 10ms)
-            mark_node_seen(NODE_MTR);
-            if (dlc >= 2) {
-                int16_t spd_mmps = (int16_t)((d[0] << 8) | d[1]);
-                s_telemetry.drive_act_kmh = (float)spd_mmps * 0.0036f;
-                s_telemetry.drive_delta_kmh = fabsf(s_telemetry.drive_cmd_kmh - s_telemetry.drive_act_kmh);
-            }
-            break;
 
-        case 0x206: // MTR_MOTOR_FBK (MTR commanded speed & gear state, 20ms)
-            mark_node_seen(NODE_MTR);
-            if (dlc >= 2) {
-                // Bytes 0..1: motor_command_speed_mmps
-            }
-            if (dlc >= 3) {
-                // Byte 2: gear_state (0: N, 1: D, 2: S, 3: R)
-                s_telemetry.drive_act_gear = (d[2] <= 3) ? d[2] : VEHICLE_GEAR_NONE;
-            }
-            if (dlc >= 4) {
-                // Byte 3: fault_flags
-                s_telemetry.mtr_fault_flags = d[3];
-            }
-            break;
-
-        case 0x502: // MTR_NODE_STATUS
-            mark_node_seen(NODE_MTR);
-            if (dlc >= 3) {
-                s_telemetry.drive_node_state = d[0] & 0x0F;
-                s_telemetry.drive_block_mask = (uint16_t)((d[1] << 8) | d[2]);
-            }
-            break;
 
         case 0x210: // RT_STATE_RPT
             mark_node_seen(NODE_RT);
@@ -689,15 +657,6 @@ void low_bus_decoder_tick_100ms(void) {
         s_plot_brake.head = (idx + 1) % PLOT_POINTS_15S;
     }
 
-    // 4. Feed 15s Drive Rolling Scope Buffer (0.1 km/h res, aux = speed delta in 0.1 km/h)
-    if (!s_plot_drive.is_paused) {
-        uint16_t idx = s_plot_drive.head;
-        s_plot_drive.cmd[idx] = (int16_t)(s_telemetry.drive_cmd_kmh * 10.0f);
-        s_plot_drive.act[idx] = (int16_t)(s_telemetry.drive_act_kmh * 10.0f);
-        s_plot_drive.aux[idx] = (int16_t)(s_telemetry.drive_delta_kmh * 10.0f);
-        s_plot_drive.head = (idx + 1) % PLOT_POINTS_15S;
-    }
-
     xSemaphoreGive(s_mutex);
 }
 
@@ -725,22 +684,10 @@ void low_bus_decoder_get_brake_plot(plot_buffer_15s_t *dest) {
     }
 }
 
-void low_bus_decoder_get_drive_plot(plot_buffer_15s_t *dest) {
-    if (!dest) return;
-    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        memcpy(dest, &s_plot_drive, sizeof(plot_buffer_15s_t));
-        xSemaphoreGive(s_mutex);
-    }
-}
-
 void low_bus_decoder_toggle_pause_steer(void) {
     s_plot_steer.is_paused = !s_plot_steer.is_paused;
 }
 
 void low_bus_decoder_toggle_pause_brake(void) {
     s_plot_brake.is_paused = !s_plot_brake.is_paused;
-}
-
-void low_bus_decoder_toggle_pause_drive(void) {
-    s_plot_drive.is_paused = !s_plot_drive.is_paused;
 }

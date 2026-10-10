@@ -47,13 +47,11 @@ typedef enum {
     WIN_DASHBOARD      = 0, // Cockpit CAN Watch Dashboard
     WIN_STEER          = 1, // SES Steer digits + embedded 5s plot
     WIN_BRAKE          = 2, // SEB Brake digits + embedded 5s plot
-    WIN_DRIVE          = 3, // MTR Drive digits + embedded 5s plot
-    WIN_BUS_SAFETY     = 4, // Bus & Safety Watchdog Diagnostics
-    WIN_LOGS           = 5, // Active DTC & Fault Logs Screen
-    WIN_STEER_PLOT_15S = 6, // Fullscreen 15s Steer Scope
-    WIN_BRAKE_PLOT_15S = 7, // Fullscreen 15s Brake Scope
-    WIN_DRIVE_PLOT_15S = 8, // Fullscreen 15s Drive Scope
-    WIN_COUNT          = 9
+    WIN_BUS_SAFETY     = 3, // Bus & Safety Watchdog Diagnostics
+    WIN_LOGS           = 4, // Active DTC & Fault Logs Screen
+    WIN_STEER_PLOT_15S = 5, // Fullscreen 15s Steer Scope
+    WIN_BRAKE_PLOT_15S = 6, // Fullscreen 15s Brake Scope
+    WIN_COUNT          = 7
 } inspector_window_t;
 
 /**
