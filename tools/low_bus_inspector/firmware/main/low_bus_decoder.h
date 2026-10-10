@@ -38,6 +38,7 @@ typedef enum {
     VEHICLE_GEAR_DRIVE   = 1,
     VEHICLE_GEAR_SPORT   = 2,
     VEHICLE_GEAR_REVERSE = 3,
+    VEHICLE_GEAR_NONE    = 0xFF,
 } vehicle_gear_t;
 
 static inline char vehicle_gear_to_char(uint8_t gear) {
@@ -46,7 +47,8 @@ static inline char vehicle_gear_to_char(uint8_t gear) {
         case VEHICLE_GEAR_DRIVE:   return 'D';
         case VEHICLE_GEAR_SPORT:   return 'S';
         case VEHICLE_GEAR_REVERSE: return 'R';
-        default:                   return '?';
+        case VEHICLE_GEAR_NONE:    return '-';
+        default:                   return '-';
     }
 }
 
@@ -56,6 +58,7 @@ static inline const char *vehicle_gear_to_str(uint8_t gear) {
         case VEHICLE_GEAR_DRIVE:   return "DRIVE";
         case VEHICLE_GEAR_SPORT:   return "SPORT";
         case VEHICLE_GEAR_REVERSE: return "REVERSE";
+        case VEHICLE_GEAR_NONE:    return "OFFLINE";
         default:                   return "UNKNOWN";
     }
 }
@@ -196,7 +199,9 @@ typedef struct {
     bool seb_cmd_autobrake_enable;
     float brake_cmd_stroke_mm;     // -5.0 to +27.0 mm (Raw: (mm + 30.0) / 0.05)
     float brake_cmd_mpa;           // 0.0 to 12.75 MPa (0.05 MPa res)
-    float brake_cmd_kpa;           // Converted to kPa for display (1 MPa = 1000 kPa)
+    float brake_cmd_kpa;           // Converted to kPa for display (arbitrated between RT and VCU)
+    float rt_brake_cmd_kpa;        // Commanded directly by RT (0x205)
+    float vcu_seb_cmd_kpa;         // Commanded by VCU to SEB (0x7B9)
     uint8_t seb_cmd_roll_cnt;
     bool seb_cmd_chk_valid;
     uint8_t seb_cmd_byte0;

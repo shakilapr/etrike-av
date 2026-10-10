@@ -78,6 +78,8 @@ void low_bus_decoder_init(void) {
 
     s_telemetry.rail_volts_12v = 0.0f;
     s_telemetry.esp32_internal_temp_c = 0.0f;
+    s_telemetry.drive_cmd_gear = VEHICLE_GEAR_NONE;
+    s_telemetry.drive_act_gear = VEHICLE_GEAR_NONE;
     s_telemetry.ses_primary_fault_str = "NORMAL (0x00)";
     s_telemetry.seb_primary_fault_str = "NORMAL (0x00)";
     s_last_sec_time = esp_timer_get_time();
@@ -293,8 +295,12 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             if (dlc >= 4) {
                 int32_t p_kpa = (int32_t)((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]);
                 if (p_kpa >= 0) {
-                    s_telemetry.brake_cmd_kpa = (float)p_kpa;
-                    s_telemetry.brake_cmd_mpa = (float)p_kpa * 0.001f;
+                    s_telemetry.rt_brake_cmd_kpa = (float)p_kpa;
+                    // If VCU 0x7B9 is not actively overriding in Pressure Mode, display RT's commanded pressure
+                    if (s_telemetry.seb_cmd_control_mode != 1 || s_telemetry.nodes[NODE_SYS].timeout) {
+                        s_telemetry.brake_cmd_kpa = (float)p_kpa;
+                        s_telemetry.brake_cmd_mpa = (float)p_kpa * 0.001f;
+                    }
                 }
             }
             break;
@@ -318,8 +324,17 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
                 s_telemetry.brake_cmd_stroke_mm = (float)raw_stroke * 0.05f - 30.0f;
 
                 // Byte 3: Target Pressure: Raw = Pressure_MPa / 0.05
-                s_telemetry.brake_cmd_mpa = (float)d[3] * 0.05f;
-                s_telemetry.brake_cmd_kpa = s_telemetry.brake_cmd_mpa * 1000.0f;
+                s_telemetry.vcu_seb_cmd_kpa = (float)d[3] * 0.05f * 1000.0f;
+
+                // If VCU is running in Pressure Mode, or if RT (0x205) is silent, update commanded pressure from 0x7B9
+                if (s_telemetry.seb_cmd_control_mode == 1 || s_telemetry.nodes[NODE_RT].timeout) {
+                    s_telemetry.brake_cmd_mpa = (float)d[3] * 0.05f;
+                    s_telemetry.brake_cmd_kpa = s_telemetry.vcu_seb_cmd_kpa;
+                } else if (s_telemetry.rt_brake_cmd_kpa > 0.0f) {
+                    // RT pressure command takes precedence if active and SEB is in stroke mode
+                    s_telemetry.brake_cmd_kpa = s_telemetry.rt_brake_cmd_kpa;
+                    s_telemetry.brake_cmd_mpa = s_telemetry.rt_brake_cmd_kpa * 0.001f;
+                }
 
                 // Byte 6: Rolling counter
                 s_telemetry.seb_cmd_roll_cnt = (d[6] >> 4) & 0x0F;
@@ -465,7 +480,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
                 s_telemetry.drive_cmd_kmh = (float)spd_mmps * 0.0036f;
             }
             if (dlc >= 5) {
-                s_telemetry.drive_cmd_gear = d[4];
+                s_telemetry.drive_cmd_gear = (d[4] <= 3) ? d[4] : VEHICLE_GEAR_NONE;
             }
             break;
 
@@ -485,7 +500,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             }
             if (dlc >= 3) {
                 // Byte 2: gear_state (0: N, 1: D, 2: S, 3: R)
-                s_telemetry.drive_act_gear = d[2];
+                s_telemetry.drive_act_gear = (d[2] <= 3) ? d[2] : VEHICLE_GEAR_NONE;
             }
             break;
 
