@@ -49,10 +49,11 @@ typedef enum {
     WIN_BRAKE          = 2, // SEB Brake digits + embedded 5s plot
     WIN_DRIVE          = 3, // MTR Drive digits + embedded 5s plot
     WIN_BUS_SAFETY     = 4, // Bus & Safety Watchdog Diagnostics
-    WIN_STEER_PLOT_15S = 5, // Fullscreen 15s Steer Scope
-    WIN_BRAKE_PLOT_15S = 6, // Fullscreen 15s Brake Scope
-    WIN_DRIVE_PLOT_15S = 7, // Fullscreen 15s Drive Scope
-    WIN_COUNT          = 8
+    WIN_LOGS           = 5, // Active DTC & Fault Logs Screen
+    WIN_STEER_PLOT_15S = 6, // Fullscreen 15s Steer Scope
+    WIN_BRAKE_PLOT_15S = 7, // Fullscreen 15s Brake Scope
+    WIN_DRIVE_PLOT_15S = 8, // Fullscreen 15s Drive Scope
+    WIN_COUNT          = 9
 } inspector_window_t;
 
 /**
