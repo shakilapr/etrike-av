@@ -149,6 +149,8 @@ static lv_obj_t *s_lbl_bus_estop_origin = NULL;
 static lv_obj_t *s_lbl_bus_rail_volts = NULL;
 static lv_obj_t *s_lbl_bus_rate = NULL;
 static lv_obj_t *s_lbl_bus_tec_rec = NULL;
+static lv_obj_t *s_lbl_bus_sys_heap = NULL;
+static lv_obj_t *s_lbl_bus_sys_diag = NULL;
 static lv_obj_t *s_card_bus_nodes[6] = {NULL};
 static lv_obj_t *s_lbl_bus_node_rates[6] = {NULL};
 static lv_obj_t *s_lbl_bus_node_states[6] = {NULL};
@@ -631,7 +633,7 @@ void ui_manager_init(void) {
     lv_obj_set_style_pad_all(c_dbus, 0, 0);
 
     s_lbl_dash_bus_strip = lv_label_create(c_dbus);
-    lv_label_set_text(s_lbl_dash_bus_strip, "LOW-BUS CAN: 420 msg/s  •  TEC: 0 | REC: 0 [BUS OK]  •  12V Rail: 13.8V  •  Core: 41°C");
+    lv_label_set_text(s_lbl_dash_bus_strip, "LOW-BUS CAN: -- msg/s  •  TEC: 0 | REC: 0 [BUS OK]  •  12V Rail: --.- V  •  Core: --°C");
     lv_obj_set_style_text_font(s_lbl_dash_bus_strip, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_dash_bus_strip, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
     lv_obj_align(s_lbl_dash_bus_strip, LV_ALIGN_CENTER, 0, 0);
@@ -799,7 +801,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_steer_override, LV_ALIGN_TOP_LEFT, 4, 126);
 
     s_lbl_steer_volt = lv_label_create(c_sdt);
-    lv_label_set_text(s_lbl_steer_volt, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
+    lv_label_set_text(s_lbl_steer_volt, "SUPPLY VOLT: --.- V  •  PWR: 0 W");
     lv_obj_set_style_text_font(s_lbl_steer_volt, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_volt, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_steer_volt, LV_ALIGN_TOP_LEFT, 4, 180);
@@ -811,7 +813,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_steer_dtc, LV_ALIGN_TOP_LEFT, 4, 212);
 
     s_lbl_steer_watchdog = lv_label_create(c_sdt);
-    lv_label_set_text(s_lbl_steer_watchdog, "WATCHDOG: LAST SEEN 10ms AGO");
+    lv_label_set_text(s_lbl_steer_watchdog, "NODE SILENCE: -- ms  •  RX: 0");
     lv_obj_set_style_text_font(s_lbl_steer_watchdog, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_watchdog, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
     lv_obj_align(s_lbl_steer_watchdog, LV_ALIGN_TOP_LEFT, 4, 240);
@@ -998,7 +1000,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_brake_piston_delta, LV_ALIGN_TOP_LEFT, 4, 126);
 
     s_lbl_brake_volt = lv_label_create(c_bdt);
-    lv_label_set_text(s_lbl_brake_volt, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
+    lv_label_set_text(s_lbl_brake_volt, "SUPPLY VOLT: --.- V  •  PWR: 0 W");
     lv_obj_set_style_text_font(s_lbl_brake_volt, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_brake_volt, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_brake_volt, LV_ALIGN_TOP_LEFT, 4, 180);
@@ -1010,7 +1012,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_brake_dtc, LV_ALIGN_TOP_LEFT, 4, 212);
 
     s_lbl_brake_watchdog = lv_label_create(c_bdt);
-    lv_label_set_text(s_lbl_brake_watchdog, "WATCHDOG: LAST SEEN 10ms AGO");
+    lv_label_set_text(s_lbl_brake_watchdog, "NODE SILENCE: -- ms  •  RX: 0");
     lv_obj_set_style_text_font(s_lbl_brake_watchdog, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_brake_watchdog, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
     lv_obj_align(s_lbl_brake_watchdog, LV_ALIGN_TOP_LEFT, 4, 240);
@@ -1078,7 +1080,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_drive_target_gear, LV_ALIGN_TOP_LEFT, 4, 180);
 
     s_lbl_drive_cmd_telemetry = lv_label_create(c_dcmd);
-    lv_label_set_text(s_lbl_drive_cmd_telemetry, "MODE: SPEED CTRL  •  LIM: 25 km/h");
+    lv_label_set_text(s_lbl_drive_cmd_telemetry, "SYS MODE: --  •  CMD SPEED: 0.0 km/h");
     lv_obj_set_style_text_font(s_lbl_drive_cmd_telemetry, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_cmd_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_drive_cmd_telemetry, LV_ALIGN_TOP_LEFT, 4, 212);
@@ -1134,7 +1136,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_drive_act_gear, LV_ALIGN_TOP_LEFT, 4, 180);
 
     s_lbl_drive_motor_telemetry = lv_label_create(c_dact);
-    lv_label_set_text(s_lbl_drive_motor_telemetry, "RATIO: 8.5:1  •  INV: CLOSED-LOOP");
+    lv_label_set_text(s_lbl_drive_motor_telemetry, "MTR FAULT: 0x00  •  BLOCK: 0x0000");
     lv_obj_set_style_text_font(s_lbl_drive_motor_telemetry, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_motor_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_drive_motor_telemetry, LV_ALIGN_TOP_LEFT, 4, 212);
@@ -1197,7 +1199,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_drive_brake_priority, LV_ALIGN_TOP_LEFT, 4, 126);
 
     s_lbl_drive_volt = lv_label_create(c_ddt);
-    lv_label_set_text(s_lbl_drive_volt, "SUPPLY VOLT: 13.8 V  •  CURRENT: OK");
+    lv_label_set_text(s_lbl_drive_volt, "BUS 12V RAIL: --.- V");
     lv_obj_set_style_text_font(s_lbl_drive_volt, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_volt, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_drive_volt, LV_ALIGN_TOP_LEFT, 4, 180);
@@ -1209,7 +1211,7 @@ void ui_manager_init(void) {
     lv_obj_align(s_lbl_drive_dtc, LV_ALIGN_TOP_LEFT, 4, 212);
 
     s_lbl_drive_watchdog = lv_label_create(c_ddt);
-    lv_label_set_text(s_lbl_drive_watchdog, "WATCHDOG: LAST SEEN 10ms AGO");
+    lv_label_set_text(s_lbl_drive_watchdog, "NODE SILENCE: -- ms  •  RX: 0");
     lv_obj_set_style_text_font(s_lbl_drive_watchdog, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_drive_watchdog, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
     lv_obj_align(s_lbl_drive_watchdog, LV_ALIGN_TOP_LEFT, 4, 240);
@@ -1282,7 +1284,7 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(lbl_r_title, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
     lv_obj_align(lbl_r_title, LV_ALIGN_TOP_LEFT, 0, 0);
     s_lbl_bus_rail_volts = lv_label_create(c_rail);
-    lv_label_set_text(s_lbl_bus_rail_volts, "13.8 V");
+    lv_label_set_text(s_lbl_bus_rail_volts, "--.- V");
     lv_obj_set_style_text_font(s_lbl_bus_rail_volts, &lv_font_montserrat_36, 0);
     lv_obj_set_style_text_color(s_lbl_bus_rail_volts, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_bus_rail_volts, LV_ALIGN_CENTER, 0, 6);
@@ -1300,7 +1302,7 @@ void ui_manager_init(void) {
     lv_obj_set_style_text_color(lbl_c_title, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
     lv_obj_align(lbl_c_title, LV_ALIGN_TOP_LEFT, 0, 0);
     s_lbl_bus_rate = lv_label_create(c_can);
-    lv_label_set_text(s_lbl_bus_rate, "420 msg/s");
+    lv_label_set_text(s_lbl_bus_rate, "-- msg/s");
     lv_obj_set_style_text_font(s_lbl_bus_rate, &lv_font_montserrat_36, 0);
     lv_obj_set_style_text_color(s_lbl_bus_rate, lv_color_hex(UI_COLOR_ACCENT_CMD), 0);
     lv_obj_align(s_lbl_bus_rate, LV_ALIGN_CENTER, 0, -4);
@@ -1318,20 +1320,20 @@ void ui_manager_init(void) {
     lv_obj_set_style_radius(c_rec, 8, 0);
 
     lv_obj_t *lbl_rc_title = lv_label_create(c_rec);
-    lv_label_set_text(lbl_rc_title, "CAN FLIGHT RECORDER");
+    lv_label_set_text(lbl_rc_title, "SYS HEALTH (0x600)");
     lv_obj_set_style_text_font(lbl_rc_title, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(lbl_rc_title, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
     lv_obj_align(lbl_rc_title, LV_ALIGN_TOP_LEFT, 0, 0);
-    lv_obj_t *lbl_rc_st = lv_label_create(c_rec);
-    lv_label_set_text(lbl_rc_st, "LOGGING");
-    lv_obj_set_style_text_font(lbl_rc_st, &lv_font_montserrat_36, 0);
-    lv_obj_set_style_text_color(lbl_rc_st, lv_color_hex(UI_COLOR_STATE_OK), 0);
-    lv_obj_align(lbl_rc_st, LV_ALIGN_CENTER, 0, -4);
-    lv_obj_t *lbl_rc_sub = lv_label_create(c_rec);
-    lv_label_set_text(lbl_rc_sub, "[ RAW_CAN_01.LOG ]");
-    lv_obj_set_style_text_font(lbl_rc_sub, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(lbl_rc_sub, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
-    lv_obj_align(lbl_rc_sub, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    s_lbl_bus_sys_heap = lv_label_create(c_rec);
+    lv_label_set_text(s_lbl_bus_sys_heap, "-- KB");
+    lv_obj_set_style_text_font(s_lbl_bus_sys_heap, &lv_font_montserrat_36, 0);
+    lv_obj_set_style_text_color(s_lbl_bus_sys_heap, lv_color_hex(UI_COLOR_STATE_OK), 0);
+    lv_obj_align(s_lbl_bus_sys_heap, LV_ALIGN_CENTER, 0, -4);
+    s_lbl_bus_sys_diag = lv_label_create(c_rec);
+    lv_label_set_text(s_lbl_bus_sys_diag, "UPTIME: -- s  •  RST: --");
+    lv_obj_set_style_text_font(s_lbl_bus_sys_diag, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(s_lbl_bus_sys_diag, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+    lv_obj_align(s_lbl_bus_sys_diag, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     // Watchdog Deck: 6 Node cards (Height 200px)
     const char *node_names[6] = {
@@ -1531,7 +1533,7 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(btn_back_s, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_STEER);
 
     s_lbl_steer_15s_hdr = lv_label_create(hdr_s15);
-    lv_label_set_text(s_lbl_steer_15s_hdr, "STEER 15s SCOPE  •  CMD: +15.0 deg  |  ACT: +14.7 deg  |  DIFF: 0.3 deg  |  Torque: +0.2 Nm");
+    lv_label_set_text(s_lbl_steer_15s_hdr, "STEER 15s SCOPE  •  CMD: 0.0 deg  |  ACT: 0.0 deg  |  DIFF: 0.0 deg  |  Torque: 0.0 Nm");
     lv_obj_set_style_text_font(s_lbl_steer_15s_hdr, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_steer_15s_hdr, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_steer_15s_hdr, LV_ALIGN_LEFT_MID, 122, 0);
@@ -1633,7 +1635,7 @@ void ui_manager_init(void) {
     lv_obj_add_event_cb(btn_back_b, btn_nav_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)WIN_BRAKE);
 
     s_lbl_brake_15s_hdr = lv_label_create(hdr_b15);
-    lv_label_set_text(s_lbl_brake_15s_hdr, "BRAKE 15s SCOPE  •  CMD: 450 kPa  |  ACT: 442 kPa  |  DIFF: -8 kPa  |  Stroke: 17.8mm");
+    lv_label_set_text(s_lbl_brake_15s_hdr, "BRAKE 15s SCOPE  •  CMD: 0 kPa  |  ACT: 0 kPa  |  DIFF: 0 kPa  |  Stroke: 0.0mm");
     lv_obj_set_style_text_font(s_lbl_brake_15s_hdr, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(s_lbl_brake_15s_hdr, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
     lv_obj_align(s_lbl_brake_15s_hdr, LV_ALIGN_LEFT_MID, 122, 0);
@@ -2353,7 +2355,8 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             lv_label_set_text(s_lbl_drive_target_gear, buf);
         }
         if (s_lbl_drive_cmd_telemetry) {
-            snprintf(buf, sizeof(buf), "MODE: SPEED CTRL  •  LIM: 25 km/h");
+            snprintf(buf, sizeof(buf), "SYS MODE: %s  •  CMD: %0.1f km/h",
+                     sys_mode_to_str(t->sys_mode), t->drive_cmd_kmh);
             lv_label_set_text(s_lbl_drive_cmd_telemetry, buf);
         }
         if (s_lbl_drive_rt_stat) {
@@ -2371,8 +2374,14 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             lv_label_set_text(s_lbl_drive_act_gear, buf);
         }
         if (s_lbl_drive_motor_telemetry) {
-            snprintf(buf, sizeof(buf), "RATIO: 8.5:1  •  INV: CLOSED-LOOP");
+            snprintf(buf, sizeof(buf), "MTR FAULT: 0x%02X  •  BLOCK: 0x%04X",
+                     t->mtr_fault_flags, t->drive_block_mask);
             lv_label_set_text(s_lbl_drive_motor_telemetry, buf);
+            if (t->mtr_fault_flags != 0 || t->drive_block_mask != 0) {
+                lv_obj_set_style_text_color(s_lbl_drive_motor_telemetry, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                lv_obj_set_style_text_color(s_lbl_drive_motor_telemetry, lv_color_hex(UI_COLOR_TEXT_PRIMARY), 0);
+            }
         }
         if (s_lbl_drive_state_cutout) {
             snprintf(buf, sizeof(buf), "STATE CODE: 0x%02X (%s)",
@@ -2418,9 +2427,9 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
         }
         if (s_lbl_drive_volt) {
             if (t->rail_volts_12v > 1.0f) {
-                snprintf(buf, sizeof(buf), "BUS VOLTAGE: %0.1f V  •  CURRENT: OK", t->rail_volts_12v);
+                snprintf(buf, sizeof(buf), "BUS 12V RAIL: %0.1f V", t->rail_volts_12v);
             } else {
-                snprintf(buf, sizeof(buf), "BUS VOLTAGE: --.- V  •  CURRENT: OK");
+                snprintf(buf, sizeof(buf), "BUS 12V RAIL: --.- V");
             }
             lv_label_set_text(s_lbl_drive_volt, buf);
         }
@@ -2501,6 +2510,27 @@ void ui_manager_update(const low_bus_telemetry_t *t) {
             snprintf(buf, sizeof(buf), "TEC: %d | REC: %d [%s]",
                      t->twai_tec, t->twai_rec, t->twai_tec > 96 || t->twai_rec > 96 ? "WARN" : "NORMAL");
             lv_label_set_text(s_lbl_bus_tec_rec, buf);
+        }
+        if (s_lbl_bus_sys_heap) {
+            if (t->nodes[NODE_SYS].timeout) {
+                lv_label_set_text(s_lbl_bus_sys_heap, "-- KB");
+                lv_obj_set_style_text_color(s_lbl_bus_sys_heap, lv_color_hex(UI_COLOR_TEXT_SECONDARY), 0);
+            } else {
+                snprintf(buf, sizeof(buf), "%u KB", t->sys_free_heap_kb);
+                lv_label_set_text(s_lbl_bus_sys_heap, buf);
+                lv_obj_set_style_text_color(s_lbl_bus_sys_heap, lv_color_hex(UI_COLOR_STATE_OK), 0);
+            }
+        }
+        if (s_lbl_bus_sys_diag) {
+            if (t->nodes[NODE_SYS].timeout) {
+                lv_label_set_text(s_lbl_bus_sys_diag, "SYS OFFLINE (>250ms)");
+                lv_obj_set_style_text_color(s_lbl_bus_sys_diag, lv_color_hex(UI_COLOR_STATE_FAULT), 0);
+            } else {
+                snprintf(buf, sizeof(buf), "UPTIME: %us  •  RST: %s",
+                         t->sys_uptime_s, sys_reset_reason_to_str(t->sys_reset_reason));
+                lv_label_set_text(s_lbl_bus_sys_diag, buf);
+                lv_obj_set_style_text_color(s_lbl_bus_sys_diag, lv_color_hex(UI_COLOR_BORDER_ACTIVE), 0);
+            }
         }
         for (int i = 0; i < 6; i++) {
             if (s_lbl_bus_node_rates[i]) {

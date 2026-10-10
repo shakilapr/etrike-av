@@ -139,7 +139,7 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
         case 0x011: // SYS_SAFETY_STS (SYS E-Stop & Presence, 200ms)
             mark_node_seen(NODE_SYS);
             if (dlc >= 1) {
-                // Byte 0: estop_source (0: None, non-zero: Active)
+                // Byte 0: estop_active (0: Inactive, 1: Active)
                 s_telemetry.estop_pin_active = (d[0] != 0);
                 if (d[0] != 0) {
                     s_telemetry.estop_active = true;
@@ -147,8 +147,32 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
                 }
             }
             if (dlc >= 3) {
-                // Byte 2: estop_reason
-                s_telemetry.estop_reason_code = d[2];
+                // Byte 2: bit 0: light_left, bit 1: light_right, bit 2: light_brake, bit 3: light_head
+                s_telemetry.turn_left_active   = (d[2] & 0x01) != 0;
+                s_telemetry.turn_right_active  = (d[2] & 0x02) != 0;
+                s_telemetry.hazard_active      = ((d[2] & 0x03) == 0x03);
+                s_telemetry.brake_light_active = (d[2] & 0x04) != 0;
+                s_telemetry.high_beam_active   = (d[2] & 0x08) != 0;
+            }
+            break;
+
+        case 0x110: // SYS_MODE_CMD (Mode from SYS, 100ms)
+            mark_node_seen(NODE_SYS);
+            if (dlc >= 1) {
+                s_telemetry.sys_mode = d[0]; // 0: MANUAL, 1: AUTO
+            }
+            break;
+
+        case 0x600: // SYS_DIAG_RPT (SYS System Diagnostics, 1000ms)
+            mark_node_seen(NODE_SYS);
+            if (dlc >= 8) {
+                s_telemetry.sys_can_state = (d[0] >> 6) & 0x03;
+                s_telemetry.twai_tec = d[1];
+                s_telemetry.twai_rec = d[2];
+                // Byte 3 is task_health_mask
+                s_telemetry.sys_free_heap_kb = d[4];
+                s_telemetry.sys_reset_reason = d[5];
+                s_telemetry.sys_uptime_s = (uint16_t)(((uint16_t)d[6] << 8) | d[7]);
             }
             break;
 
@@ -501,6 +525,10 @@ void low_bus_decoder_process_frame(const twai_message_t *frame) {
             if (dlc >= 3) {
                 // Byte 2: gear_state (0: N, 1: D, 2: S, 3: R)
                 s_telemetry.drive_act_gear = (d[2] <= 3) ? d[2] : VEHICLE_GEAR_NONE;
+            }
+            if (dlc >= 4) {
+                // Byte 3: fault_flags
+                s_telemetry.mtr_fault_flags = d[3];
             }
             break;
 

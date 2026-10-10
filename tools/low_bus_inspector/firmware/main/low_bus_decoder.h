@@ -63,6 +63,26 @@ static inline const char *vehicle_gear_to_str(uint8_t gear) {
     }
 }
 
+static inline const char *sys_mode_to_str(uint8_t mode) {
+    switch (mode) {
+        case 0:  return "MANUAL";
+        case 1:  return "AUTO";
+        case 2:  return "ESTOP";
+        default: return "OFFLINE";
+    }
+}
+
+static inline const char *sys_reset_reason_to_str(uint8_t reason) {
+    switch (reason) {
+        case 0:  return "PWR_ON";
+        case 1:  return "SW_RST";
+        case 2:  return "TASK_WDT";
+        case 3:  return "BROWNOUT";
+        case 4:  return "PANIC";
+        default: return "UNKNOWN";
+    }
+}
+
 typedef struct {
     uint32_t rx_count;
     float rate_hz;
@@ -240,6 +260,7 @@ typedef struct {
     float drive_delta_kmh;
     uint16_t drive_block_mask;
     uint8_t drive_node_state;
+    uint8_t mtr_fault_flags;
 
     // 5. Low-Bus Controller Health & Thermal Status (0°C..+65°C Limit)
     uint32_t total_low_bus_frames;
@@ -249,6 +270,11 @@ typedef struct {
     bool bus_off;
     float rail_volts_12v;
     float esp32_internal_temp_c;
+    uint16_t sys_free_heap_kb;
+    uint8_t sys_mode;
+    uint16_t sys_uptime_s;
+    uint8_t sys_reset_reason;
+    uint8_t sys_can_state;
 
     // 6. Node Watchdogs
     node_watchdog_t nodes[NODE_COUNT];
