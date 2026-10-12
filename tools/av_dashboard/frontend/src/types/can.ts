@@ -78,7 +78,7 @@ export interface TelemetrySummary {
 
 export interface PerceptionObject {
   id: string | number;
-  label: 'CAR' | 'TRUCK' | 'BUS' | 'PEDESTRIAN' | 'BICYCLE' | 'BOX' | 'UNKNOWN';
+  label: 'CAR' | 'TRUCK' | 'BUS' | 'MOTORCYCLE' | 'PEDESTRIAN' | 'BICYCLE' | 'BOX' | 'UNKNOWN';
   x: number; // lateral position (meters, left is negative, right is positive)
   y: number; // vertical height (meters)
   z: number; // longitudinal position (meters ahead, forward is negative Z in Three.js)
@@ -99,4 +99,13 @@ export interface RosStatus {
   active: boolean;
   hz: number;
   tracked_count: number;
+  object_count?: number;
+  source?: 'tracking' | 'prediction' | 'detection' | null;
+  pose_ok?: boolean;
+  frame_id?: string;
+  has_ego_pose?: boolean;
+  class_counts?: Record<string, number>;
+  bridge_available?: boolean;
+  subscribed?: Record<string, boolean>;
+  last_error?: string | null;
 }

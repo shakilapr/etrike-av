@@ -47,6 +47,48 @@ registry: ContractRegistry = ContractRegistry()
 transport: Optional[BaseCanTransport] = None
 active_websockets: Set[WebSocket] = set()
 
+# Serializes concurrent sends (CAN batch loop + independent ROS loop) on the same sockets.
+_send_lock = asyncio.Lock()
+
+
+def _ros_snapshot() -> Dict[str, Any]:
+    """Build the ROS 2 perception/planning payload plus its diagnostic status."""
+    ros_data = ros_bridge.get_latest_data()
+    return {
+        "ros_status": {
+            "active": ros_data["active"],
+            "hz": ros_data["hz"],
+            "tracked_count": ros_data["tracked_count"],
+            "object_count": ros_data["object_count"],
+            "source": ros_data["source"],
+            "pose_ok": ros_data["pose_ok"],
+            "frame_id": ros_data["frame_id"],
+            "has_ego_pose": ros_data["has_ego_pose"],
+            "class_counts": ros_data["class_counts"],
+            "bridge_available": ros_data["bridge_available"],
+            "subscribed": ros_data["subscribed"],
+            "last_error": ros_data["last_error"],
+        },
+        "perception_objects": ros_data["objects"],
+        "planned_trajectory": ros_data["trajectory"],
+    }
+
+
+async def _send_all(payload: Dict[str, Any]) -> None:
+    """Broadcast a JSON payload to all live websockets, pruning stale ones."""
+    if not active_websockets:
+        return
+    msg_text = json.dumps(payload)
+    async with _send_lock:
+        stale_sockets: List[WebSocket] = []
+        for ws in list(active_websockets):
+            try:
+                await ws.send_text(msg_text)
+            except Exception:
+                stale_sockets.append(ws)
+        for ws in stale_sockets:
+            active_websockets.discard(ws)
+
 # Live tracking state
 total_frames: int = 0
 start_time: float = time.time()
@@ -229,34 +271,17 @@ async def ingest_can_loop() -> None:
                 # Throttle broadcast to ~25 Hz (every 40ms)
                 if (now - last_broadcast) >= 0.040:
                     last_broadcast = now
-                    if active_websockets and pending_updates:
-                        ros_data = ros_bridge.get_latest_data()
+                    if pending_updates:
                         payload = {
                             "type": "batch",
                             "total_frames": total_frames,
                             "uptime_sec": round(now - start_time, 1),
                             "frames": list(pending_updates.values()),
                             "telemetry": telemetry_summary,
-                            "ros_status": {
-                                "active": ros_data["active"],
-                                "hz": ros_data["hz"],
-                                "tracked_count": ros_data["tracked_count"],
-                            },
-                            "perception_objects": ros_data["objects"],
-                            "planned_trajectory": ros_data["trajectory"],
+                            **_ros_snapshot(),
                         }
-                        msg_text = json.dumps(payload)
                         pending_updates.clear()
-
-                        stale_sockets: List[WebSocket] = []
-                        # Iterate copy to prevent 'Set changed size during iteration'
-                        for ws in list(active_websockets):
-                            try:
-                                await ws.send_text(msg_text)
-                            except Exception:
-                                stale_sockets.append(ws)
-                        for ws in stale_sockets:
-                            active_websockets.discard(ws)
+                        await _send_all(payload)
 
         except asyncio.CancelledError:
             break
@@ -268,10 +293,30 @@ async def ingest_can_loop() -> None:
 
 
 
+async def broadcast_ros_loop() -> None:
+    """Stream ROS 2 perception/planning independently of CAN traffic (~10 Hz).
+
+    This guarantees live cockpit objects appear even when no CAN frames are flowing
+    (e.g. bench-testing perception without the vehicle bus attached).
+    """
+    while True:
+        try:
+            await asyncio.sleep(0.1)
+            if not active_websockets:
+                continue
+            await _send_all({"type": "ros", **_ros_snapshot()})
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[ROS Broadcast] Recovering from error: {e}")
+            await asyncio.sleep(0.1)
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
     ros_bridge.start()
     asyncio.create_task(ingest_can_loop())
+    asyncio.create_task(broadcast_ros_loop())
 
 
 # Canonical REST /api/v1 endpoints
@@ -290,7 +335,6 @@ async def get_catalog() -> JSONResponse:
 @app.get("/api/v1/status")
 async def get_status() -> JSONResponse:
     """Return backend status, interface, and live frame counter."""
-    ros_data = ros_bridge.get_latest_data()
     return JSONResponse(
         {
             "total_frames": total_frames,
@@ -298,11 +342,7 @@ async def get_status() -> JSONResponse:
             "active_clients": len(active_websockets),
             "contracts_source": registry.source_description,
             "telemetry": telemetry_summary,
-            "ros": {
-                "active": ros_data["active"],
-                "hz": ros_data["hz"],
-                "tracked_count": ros_data["tracked_count"],
-            },
+            "ros": _ros_snapshot()["ros_status"],
         }
     )
 
@@ -320,20 +360,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     active_websockets.add(websocket)
     try:
-        ros_data = ros_bridge.get_latest_data()
         snapshot = {
             "type": "snapshot",
             "total_frames": total_frames,
             "uptime_sec": round(time.time() - start_time, 1),
             "frames": list(latest_frames.values()),
             "telemetry": telemetry_summary,
-            "ros_status": {
-                "active": ros_data["active"],
-                "hz": ros_data["hz"],
-                "tracked_count": ros_data["tracked_count"],
-            },
-            "perception_objects": ros_data["objects"],
-            "planned_trajectory": ros_data["trajectory"],
+            **_ros_snapshot(),
         }
         await websocket.send_text(json.dumps(snapshot))
         while True:

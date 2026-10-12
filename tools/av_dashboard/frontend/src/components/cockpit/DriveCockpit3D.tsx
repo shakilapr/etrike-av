@@ -119,10 +119,13 @@ export const DriveCockpit3D: React.FC = () => {
         dt
       );
 
-      // Update Surrounding Traffic, Pedestrians & Obstacles
+      // Update Surrounding Traffic, Pedestrians & Obstacles.
+      // Hide objects entirely until ego pose is valid, otherwise every actor would
+      // pile up at the origin while localization is still converging.
+      const poseOk = state.rosStatus.pose_ok !== false;
       traffic.update(
         telemetry.speed_act_kmh,
-        state.perceptionObjects,
+        poseOk ? state.perceptionObjects : [],
         state.rosStatus.active,
         dt
       );

@@ -7,6 +7,7 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
+  TriangleAlert,
 } from 'lucide-react';
 import {
   ParkTelltale,
@@ -20,6 +21,7 @@ import {
   HighBeamTelltale,
   HazardTelltale,
 } from './AutomotiveTelltales';
+import { PerceptionRadar } from './PerceptionRadar';
 
 export const CockpitHud: React.FC = () => {
   const {
@@ -33,6 +35,7 @@ export const CockpitHud: React.FC = () => {
     framesById,
     isConnected,
     rosStatus,
+    perceptionObjects,
   } = useCanStore();
 
   // Speed calculation
@@ -100,6 +103,33 @@ export const CockpitHud: React.FC = () => {
   // Motor / Powertrain estimate
   const motorRpm = Math.round(telemetry.speed_act_kmh * 110);
   const throttlePercent = Math.min(Math.round((telemetry.speed_act_kmh / 45) * 100), 100);
+
+  // Autoware perception: forward-corridor proximity watch (ahead = negative Z)
+  const corridorThreats = perceptionObjects
+    .map((o) => ({ obj: o, dist: -o.z }))
+    .filter((e) => e.dist > 0 && e.dist < 25 && Math.abs(e.obj.x) < 3.0)
+    .sort((a, b) => a.dist - b.dist);
+  const nearestThreat = corridorThreats[0];
+  const threatIsPed = nearestThreat?.obj.label === 'PEDESTRIAN';
+  const showThreat = Boolean(nearestThreat && nearestThreat.dist < (threatIsPed ? 12 : 8));
+
+  // Autoware link status wording — honest about why objects may be absent.
+  const rosPoseOk = rosStatus.pose_ok !== false;
+  let rosStatusText: string;
+  let rosDot: string;
+  if (!rosStatus.bridge_available) {
+    rosStatusText = 'AUTOWARE BRIDGE UNAVAILABLE • rclpy NOT LOADED';
+    rosDot = 'bg-neutral-600';
+  } else if (!rosStatus.active) {
+    rosStatusText = 'AUTOWARE UNIVERSE OFFLINE • WAITING FOR TOPICS';
+    rosDot = 'bg-neutral-600';
+  } else if (!rosPoseOk) {
+    rosStatusText = 'AUTOWARE LIVE • WAITING FOR LOCALIZATION (ego pose)';
+    rosDot = 'bg-amber-400 animate-pulse';
+  } else {
+    rosStatusText = `AUTOWARE UNIVERSE LIVE • ${rosStatus.object_count ?? rosStatus.tracked_count} OBJECTS (${rosStatus.hz} Hz)`;
+    rosDot = 'bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(6,182,212,1)]';
+  }
 
   return (
     <>
@@ -378,17 +408,42 @@ export const CockpitHud: React.FC = () => {
             ))}
           </div>
 
-          {/* Bottom-Center: Drive Mode & Autoware Universe Perception Status */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 flex flex-col items-center pointer-events-none gap-0.5">
+          {/* Bottom-Center: Autoware Perception Radar, Drive Mode & Link Status */}
+          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 flex flex-col items-center pointer-events-none gap-1">
+            {/* Proximity warning banner (Symbol + Text + Colour) */}
+            {showThreat && nearestThreat && (
+              <div
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border font-mono font-black text-xs shadow-2xl animate-pulse ${
+                  threatIsPed
+                    ? 'bg-amber-950/90 border-amber-400 text-amber-300'
+                    : 'bg-rose-950/90 border-rose-400 text-rose-300'
+                }`}
+              >
+                <TriangleAlert className="w-4 h-4" />
+                <span>
+                  {threatIsPed ? 'PEDESTRIAN' : nearestThreat.obj.label} AHEAD • {nearestThreat.dist.toFixed(1)} m
+                  {nearestThreat.obj.x < -0.5 ? ' • LEFT' : nearestThreat.obj.x > 0.5 ? ' • RIGHT' : ''}
+                </span>
+              </div>
+            )}
+
+            <PerceptionRadar />
+
             <span className="text-[11px] text-neutral-300 uppercase tracking-widest font-black drop-shadow-md">
               {isAuto ? 'AUTONOMOUS DRIVING SYSTEM • DRIVE-BY-WIRE ACTIVE' : 'MANUAL DRIVE OVERRIDE'}
             </span>
             <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider">
-              <div className={`w-2 h-2 rounded-full ${rosStatus.active ? 'bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(6,182,212,1)]' : 'bg-neutral-600'}`} />
-              <span className={rosStatus.active ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]' : 'text-neutral-500'}>
-                {rosStatus.active
-                  ? `AUTOWARE UNIVERSE LIVE • ${rosStatus.tracked_count} OBJECTS (${rosStatus.hz} Hz)`
-                  : 'AUTOWARE UNIVERSE OFFLINE • WAITING FOR TOPICS'}
+              <div className={`w-2 h-2 rounded-full ${rosDot}`} />
+              <span
+                className={
+                  rosStatus.active && rosPoseOk
+                    ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]'
+                    : rosStatus.active
+                    ? 'text-amber-400'
+                    : 'text-neutral-500'
+                }
+              >
+                {rosStatusText}
               </span>
             </div>
           </div>
