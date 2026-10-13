@@ -1,0 +1,11 @@
+/sensing/lidar/top/pointcloud_raw_ex:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: volatile
+
+/sensing/lidar/top/aw_points:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: volatile
