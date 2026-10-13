@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCanStore } from '../store/canStore';
-import { Play, Pause, Activity, Wifi, WifiOff, Search, Database, Eye } from 'lucide-react';
+import { Play, Pause, Activity, Wifi, WifiOff, Search, Database, Eye, Radio } from 'lucide-react';
 
 export const Topbar: React.FC = () => {
   const {
@@ -37,7 +37,7 @@ export const Topbar: React.FC = () => {
 
         <div className="h-4 w-px bg-neutral-800 mx-1" />
 
-        {/* View Switcher: CAN MONITOR vs 3D COCKPIT */}
+        {/* View Switcher: CAN MONITOR vs 3D COCKPIT vs 360° RADAR */}
         <div className="flex bg-[#0a0a0a] border border-neutral-800 rounded p-0.5 text-[10px] font-mono shrink-0">
           <button
             onClick={() => setActiveView('monitor')}
@@ -62,6 +62,18 @@ export const Topbar: React.FC = () => {
           >
             <Eye className="w-3 h-3 text-cyan-400" />
             <span>3D COCKPIT</span>
+          </button>
+          <button
+            onClick={() => setActiveView('radar')}
+            className={`px-2.5 py-1 rounded transition-all font-bold uppercase flex items-center gap-1.5 ${
+              activeView === 'radar'
+                ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/60 shadow-sm'
+                : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+            title="360° Perception Radar & Surround Threat Inspection (Tab)"
+          >
+            <Radio className="w-3 h-3 text-emerald-400" />
+            <span>360° RADAR</span>
           </button>
         </div>
 

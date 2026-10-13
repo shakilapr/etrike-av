@@ -31,10 +31,10 @@ export const DriveCockpit3D: React.FC = () => {
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: false,
-        powerPreference: 'high-performance',
         precision: 'mediump',
         stencil: false,
         depth: true,
+        failIfMajorPerformanceCaveat: false,
       });
       renderer.setSize(width, height);
       renderer.setPixelRatio(1.0);

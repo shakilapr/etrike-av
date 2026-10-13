@@ -5,6 +5,7 @@ import { CanDirectoryTable } from './components/CanDirectoryTable';
 import { BitMatrix64 } from './components/BitMatrix64';
 import { SignalRoster } from './components/SignalRoster';
 import { DriveCockpit3D } from './components/cockpit/DriveCockpit3D';
+import { RadarView } from './components/radar/RadarView';
 import { useCanStore } from './store/canStore';
 
 export const App: React.FC = () => {
@@ -114,11 +115,16 @@ export const App: React.FC = () => {
       {/* Topbar */}
       <Topbar />
 
-      {/* View Routing */}
+      {/* View Routing: 3D Cockpit vs 360 Radar vs CAN Monitor */}
       {activeView === 'cockpit' ? (
         /* Full-Screen 3D Driving Cockpit */
         <div className="flex-1 flex min-h-0 overflow-hidden relative">
           <DriveCockpit3D />
+        </div>
+      ) : activeView === 'radar' ? (
+        /* Full-Screen 360° Perception Radar Scope */
+        <div className="flex-1 flex min-h-0 overflow-hidden relative bg-black">
+          <RadarView />
         </div>
       ) : (
         /* Main Cockpit Layout: 3 Panes (CAN Monitor) */

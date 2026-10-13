@@ -20,12 +20,12 @@ interface CanState {
   searchQuery: string;
   zoomLevel: number;
   zoomToast: string | null;
-  activeView: 'monitor' | 'cockpit';
+  activeView: 'monitor' | 'cockpit' | 'radar';
   cameraMode: 'chase' | 'cabin' | 'orbit';
   speedUnit: 'km/h' | 'mph';
 
   // Actions
-  setActiveView: (view: 'monitor' | 'cockpit') => void;
+  setActiveView: (view: 'monitor' | 'cockpit' | 'radar') => void;
   toggleActiveView: () => void;
   setCameraMode: (mode: 'chase' | 'cabin' | 'orbit') => void;
   setSpeedUnit: (unit: 'km/h' | 'mph') => void;
@@ -93,14 +93,7 @@ export const useCanStore = create<CanState>((set, get) => ({
     }
   })(),
   zoomToast: null,
-  activeView: (() => {
-    try {
-      const v = localStorage.getItem('av_dashboard_active_view');
-      return v === 'monitor' ? 'monitor' : 'cockpit';
-    } catch {
-      return 'cockpit';
-    }
-  })(),
+  activeView: 'cockpit',
   cameraMode: 'chase',
   speedUnit: 'km/h',
 
@@ -111,7 +104,8 @@ export const useCanStore = create<CanState>((set, get) => ({
     set({ activeView });
   },
   toggleActiveView: () => {
-    const next = get().activeView === 'monitor' ? 'cockpit' : 'monitor';
+    const cur = get().activeView;
+    const next = cur === 'monitor' ? 'cockpit' : cur === 'cockpit' ? 'radar' : 'monitor';
     try {
       localStorage.setItem('av_dashboard_active_view', next);
     } catch {}

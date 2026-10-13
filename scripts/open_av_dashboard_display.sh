@@ -175,6 +175,7 @@ nohup "$BROWSER_CMD" \
     --enable-gpu-rasterization \
     --enable-zero-copy \
     --enable-webgl \
+    --enable-unsafe-swiftshader \
     --disable-gpu-sandbox \
     --test-type \
     < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &

@@ -21,7 +21,6 @@ import {
   HighBeamTelltale,
   HazardTelltale,
 } from './AutomotiveTelltales';
-import { PerceptionRadar } from './PerceptionRadar';
 
 export const CockpitHud: React.FC = () => {
   const {
@@ -491,8 +490,6 @@ export const CockpitHud: React.FC = () => {
                 </span>
               </div>
             )}
-
-            <PerceptionRadar />
 
             <span className="text-[11px] text-neutral-300 uppercase tracking-widest font-black drop-shadow-md">
               {isAuto ? 'AUTONOMOUS DRIVING SYSTEM • DRIVE-BY-WIRE ACTIVE' : 'MANUAL DRIVE OVERRIDE'}
