@@ -213,7 +213,10 @@ class RemoteControlNode(LifecycleNode if (HAS_ROS2 and HAS_LIFECYCLE_LIB) else (
             durability=DurabilityPolicy.VOLATILE,
         )
 
-        create_pub = self.create_lifecycle_publisher if (HAS_LIFECYCLE_LIB and hasattr(self, "create_lifecycle_publisher")) else self.create_publisher
+        # Use plain publishers: the cockpit is launched as a regular Node and never
+        # runs the lifecycle configure/activate transition, so a LifecyclePublisher
+        # would stay disabled and silently drop every command.
+        create_pub = self.create_publisher
 
         self._pub_control = create_pub(Control, self.control_topic, qos)
         self._pub_gear = create_pub(GearCommand, self.gear_topic, qos)
