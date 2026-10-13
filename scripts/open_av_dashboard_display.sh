@@ -113,7 +113,7 @@ start_in_container() {
             > /tmp/av_dashboard.log 2>&1
     "
 
-    for i in {1..14}; do
+    for i in {1..30}; do
         if curl -s "http://127.0.0.1:${PORT}/api/v1/status" >/dev/null 2>&1; then
             echo "  [OK] AV Dashboard backend server is UP (container ROS 2 bridge active)."
             return 0
