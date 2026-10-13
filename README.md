@@ -70,4 +70,5 @@ the list of patches applied to upstream Autoware.
 | `docs/operations/ETRIKE_RUN.md` | Quick start: launch, drive, stop |
 | `docs/hardware/WORKSTATION_SSH.md` | Workstation remote access & credentials |
 | `docs/llm/LLM_WORKSTATION_INTEGRATION.md` | Dedicated AI Workstation & vLLM Qwen3.8-27B |
+| `docs/reference/PERCEPTION_CLASSIFICATION_AND_VISUALIZATION.md` | Perception, classification models & 3D driving visualization |
 | `UPSTREAM_MODIFICATIONS.md` | Upstream patches registry |
