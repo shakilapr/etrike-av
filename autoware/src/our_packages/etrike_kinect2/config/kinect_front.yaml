@@ -2,7 +2,7 @@
 # Find serial with: ./run.sh discover
 /**:
   ros__parameters:
-    serial: "500076343042"
+    serial: "500396543042"  # Single Kinect v2 (USB @2:4)
     color_enabled: true
     depth_enabled: true
     ir_enabled: false

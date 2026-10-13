@@ -120,12 +120,24 @@ bool Kinect2Device::open(
     pipeline_.reset(new libfreenect2::CpuPacketPipeline());
   }
 
-  device_ = freenect2_->openDevice(serial, pipeline_.get());
+  if (serial.empty() || serial == "auto" || serial == "default") {
+    device_ = freenect2_->openDefaultDevice(pipeline_.get());
+  } else {
+    device_ = freenect2_->openDevice(serial, pipeline_.get());
+    if (!device_) {
+      // Fallback to default connected device if specified serial is not found
+      fprintf(
+        stderr, "[kinect2_device] serial '%s' not found — falling back to default device\n",
+        serial.c_str());
+      device_ = freenect2_->openDefaultDevice(pipeline_.get());
+    }
+  }
+
   if (!device_) {
     return false;
   }
 
-  serial_ = serial;
+  serial_ = device_->getSerialNumber();
   enable_color_ = enable_color;
   enable_depth_ = enable_depth;
   enable_ir_ = enable_ir;

@@ -10,7 +10,7 @@
   <arg name="sensor_frame" default="lidar_link"/>
   <arg name="return_mode" default="LastStrongest"/>
   <arg name="sensor_ip" default="192.168.1.201"/>
-  <arg name="host_ip" default="192.168.1.10"/>
+  <arg name="host_ip" default="0.0.0.0"/>
   <arg name="data_port" default="2368"/>
   <arg name="gnss_port" default="10110"/>
   <arg name="scan_phase" default="0.0"/>
@@ -37,7 +37,7 @@
   <arg name="ptp_transport_type" default="UDP"/>
   <arg name="ptp_switch_type" default="TSN"/>
   <arg name="ptp_lock_threshold" default="100"/>
-  <arg name="udp_only" default="false"/>
+  <arg name="udp_only" default="true"/>
   <arg name="calibration_download_enabled" default="false"/>
 
   <include file="$(find-pkg-share etrike_common_launch)/launch/nebula_node_container.launch.py">

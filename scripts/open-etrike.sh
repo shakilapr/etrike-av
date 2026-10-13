@@ -10,16 +10,18 @@
 #   - AV Dashboard backend + Chromium app window on the display
 #
 # Usage:
-#   bash scripts/open-etrike.sh            # Full bench stack (Simulator + RViz + CAN + Bridge + AV Dashboard)
-#   bash scripts/open-etrike.sh --live     # Full live hardware stack (Hesai + Kinect + CenterPoint + NDT + CAN + Bridge + AV Dashboard)
-#   bash scripts/open-etrike.sh --universe # Simulator + RViz + AV Dashboard (without hardware CAN)
-#   bash scripts/open-etrike.sh --status   # Show status of all services
-#   bash scripts/open-etrike.sh --stop     # Stop all E-Trike services and bring down CAN
+#   bash scripts/open-etrike.sh                 # Hybrid bench stack (Simulator + RViz + 1 LiDAR + 1 Camera Perception + CAN + AV Dashboard)
+#   bash scripts/open-etrike.sh --hybrid-bench  # Explicit hybrid bench mode
+#   bash scripts/open-etrike.sh --bench         # Pure bench simulation without physical sensors
+#   bash scripts/open-etrike.sh --live          # Full live hardware stack (Hesai + Kinect + CenterPoint + NDT + CAN + AV Dashboard)
+#   bash scripts/open-etrike.sh --universe      # Simulator + RViz + AV Dashboard (without hardware CAN)
+#   bash scripts/open-etrike.sh --status        # Show status of all services
+#   bash scripts/open-etrike.sh --stop          # Stop all E-Trike services and bring down CAN
 # ==============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODE="${1:---bench}"
+MODE="${1:---hybrid-bench}"
 
 exec bash "$SCRIPT_DIR/../autoware/scripts/loading/load_pipeline.sh" "$MODE"

@@ -101,6 +101,7 @@ class Ros2Bridge:
             "tf": 0,
         }
         self._perception_timestamps: List[float] = []
+        self._last_detection_canonical_time: float = 0.0
 
         # Live planned trajectory points (vehicle-relative, Three.js coordinates)
         self._planned_trajectory: List[Dict[str, float]] = []
@@ -244,7 +245,6 @@ class Ros2Bridge:
                     "/perception/object_recognition/detection/objects",
                     "/perception/object_recognition/detection/centerpoint/objects",
                     "/perception/object_recognition/detection/centerpoint/validation/objects",
-                    "/perception/object_recognition/detection/clustering/objects",
                 ):
                     node.create_subscription(
                         DetectedObjects,
@@ -252,6 +252,12 @@ class Ros2Bridge:
                         self._on_detected_objects,
                         qos_sensor,
                     )
+                node.create_subscription(
+                    DetectedObjects,
+                    "/perception/object_recognition/detection/clustering/objects",
+                    self._on_clustering_objects,
+                    qos_sensor,
+                )
                 self._mark_subscribed("detection", True)
                 print("[ROS 2 Bridge] Subscribed to perception detection topics")
             except Exception as e:
@@ -633,6 +639,13 @@ class Ros2Bridge:
 
     def _on_detected_objects(self, msg: Any) -> None:
         """Handle incoming detected objects from Autoware."""
+        self._last_detection_canonical_time = time.time()
+        self._process_objects_batch(msg.objects, msg.header.frame_id, "detection", is_predicted=False)
+
+    def _on_clustering_objects(self, msg: Any) -> None:
+        """Fallback for clustering objects when canonical detection is absent."""
+        if time.time() - getattr(self, "_last_detection_canonical_time", 0.0) < 0.5:
+            return
         self._process_objects_batch(msg.objects, msg.header.frame_id, "detection", is_predicted=False)
 
     def _on_trajectory(self, msg: Any) -> None:
@@ -729,20 +742,54 @@ class Ros2Bridge:
                 name for name in SOURCE_PRIORITY
                 if self._source_time[name] > 0.0 and (now - self._source_time[name]) < SOURCE_STALE_SEC
             ]
-            non_empty_fresh = [name for name in fresh_sources if len(self._sources[name]) > 0]
-            source: Optional[str] = (
-                non_empty_fresh[0]
-                if non_empty_fresh
-                else (fresh_sources[0] if fresh_sources else None)
-            )
 
             ego_fresh = self._has_ego_pose and (now - self._ego_time) < SOURCE_STALE_SEC
             traj_fresh = self._last_trajectory_time > 0.0 and (now - self._last_trajectory_time) < 2.5
             veh_fresh = self._veh_status_time > 0.0 and (now - self._veh_status_time) < SOURCE_STALE_SEC
 
-            objects: List[Dict[str, Any]] = list(self._sources[source]) if source else []
-            pose_ok = self._source_pose_ok[source] if source else ego_fresh
-            frame_id = self._source_frame[source] if source else ""
+            # Merge real-time sensor detection (e.g. from 1 LiDAR + 1 Camera bench perception in base_link)
+            # with upstream tracking / prediction objects
+            det_fresh = ("detection" in fresh_sources)
+            det_objects = list(self._sources.get("detection", [])) if det_fresh else []
+            det_pose_ok = self._source_pose_ok.get("detection", False)
+
+            # Determine primary upstream tracking/prediction source (if any)
+            primary_source = None
+            for s_name in ("tracking", "prediction"):
+                if s_name in fresh_sources and len(self._sources[s_name]) > 0:
+                    primary_source = s_name
+                    break
+
+            if primary_source and det_objects:
+                # Merge tracking and detection, deduplicating close centroids (< 1.2m)
+                merged_objects: List[Dict[str, Any]] = list(self._sources[primary_source])
+                for d_obj in det_objects:
+                    d_x = d_obj.get("x", 0.0)
+                    d_z = d_obj.get("z", 0.0)
+                    if not any(
+                        math.hypot(d_x - ex.get("x", 0.0), d_z - ex.get("z", 0.0)) < 1.2
+                        for ex in merged_objects
+                    ):
+                        merged_objects.append(d_obj)
+                objects = merged_objects
+                source = f"{primary_source}+detection"
+                frame_id = self._source_frame[primary_source]
+                pose_ok = self._source_pose_ok[primary_source] or det_pose_ok or True
+            elif primary_source:
+                objects = list(self._sources[primary_source])
+                source = primary_source
+                frame_id = self._source_frame[primary_source]
+                pose_ok = self._source_pose_ok[primary_source]
+            elif det_fresh:
+                objects = det_objects
+                source = "detection"
+                frame_id = self._source_frame.get("detection", "base_link")
+                pose_ok = det_pose_ok or True
+            else:
+                source = fresh_sources[0] if fresh_sources else None
+                objects = list(self._sources[source]) if source else []
+                pose_ok = self._source_pose_ok[source] if source else ego_fresh
+                frame_id = self._source_frame[source] if source else ""
 
             hz = float(len(self._perception_timestamps)) if fresh_sources else 0.0
 

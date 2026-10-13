@@ -12,6 +12,11 @@ if(BUILD_TESTING)
   ament_add_pytest_test(${PROJECT_NAME}_pytest test/test_calibration_and_configs.py)
 endif()
 
+install(PROGRAMS
+  scripts/bench_perception_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_auto_package(INSTALL_TO_SHARE
   launch
   config

@@ -89,12 +89,49 @@ ensure_x11_access() {
   DISPLAY="$X_DISPLAY" XAUTHORITY="$XAUTH" xhost +SI:localuser:root >/dev/null 2>&1 || true
 }
 
+ensure_kinect_libs() {
+  if ! docker exec "$CONTAINER" test -f /usr/local/lib/libfreenect2.so.0.2 >/dev/null 2>&1 || \
+     ! docker exec "$CONTAINER" test -f /usr/local/include/libfreenect2/libfreenect2.hpp >/dev/null 2>&1; then
+    echo "  Provisioning Kinect v2 and display libraries into container..."
+    if [ -d /usr/local/include/libfreenect2 ]; then
+      docker cp /usr/local/include/libfreenect2 "$CONTAINER":/usr/local/include/ 2>/dev/null || true
+    fi
+    if [ -d /usr/local/lib/cmake/freenect2 ]; then
+      docker exec "$CONTAINER" mkdir -p /usr/local/lib/cmake 2>/dev/null || true
+      docker cp /usr/local/lib/cmake/freenect2 "$CONTAINER":/usr/local/lib/cmake/ 2>/dev/null || true
+    fi
+    if [ -f /usr/local/lib/libfreenect2.so.0.2.0 ]; then
+      docker cp /usr/local/lib/libfreenect2.so.0.2.0 "$CONTAINER":/usr/local/lib/ 2>/dev/null || true
+      docker exec "$CONTAINER" ln -sf /usr/local/lib/libfreenect2.so.0.2.0 /usr/local/lib/libfreenect2.so.0.2 2>/dev/null || true
+      docker exec "$CONTAINER" ln -sf /usr/local/lib/libfreenect2.so.0.2 /usr/local/lib/libfreenect2.so 2>/dev/null || true
+    fi
+    if [ -f /usr/include/turbojpeg.h ]; then
+      docker cp /usr/include/turbojpeg.h "$CONTAINER":/usr/include/ 2>/dev/null || true
+    fi
+    if [ -f /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0.2.0 ]; then
+      docker cp /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0.2.0 "$CONTAINER":/usr/lib/aarch64-linux-gnu/ 2>/dev/null || true
+      docker exec "$CONTAINER" ln -sf /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0.2.0 /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0 2>/dev/null || true
+      docker exec "$CONTAINER" ln -sf /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0 /usr/lib/aarch64-linux-gnu/libturbojpeg.so 2>/dev/null || true
+    fi
+    if [ -d /usr/include/GLFW ]; then
+      docker cp /usr/include/GLFW "$CONTAINER":/usr/include/ 2>/dev/null || true
+    fi
+    if [ -f /usr/lib/aarch64-linux-gnu/libglfw.so.3.3 ]; then
+      docker cp /usr/lib/aarch64-linux-gnu/libglfw.so.3.3 "$CONTAINER":/usr/lib/aarch64-linux-gnu/ 2>/dev/null || true
+      docker exec "$CONTAINER" ln -sf /usr/lib/aarch64-linux-gnu/libglfw.so.3.3 /usr/lib/aarch64-linux-gnu/libglfw.so.3 2>/dev/null || true
+      docker exec "$CONTAINER" ln -sf /usr/lib/aarch64-linux-gnu/libglfw.so.3 /usr/lib/aarch64-linux-gnu/libglfw.so 2>/dev/null || true
+    fi
+    docker exec "$CONTAINER" ldconfig >/dev/null 2>&1 || true
+  fi
+}
+
 start_container() {
   say "Container: $CONTAINER ($IMAGE)"
   ensure_x11_access
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     if docker exec "$CONTAINER" test -d /workspace/av_project/tools >/dev/null 2>&1; then
       echo "  already running."
+      ensure_kinect_libs
       return
     fi
     echo "  recreating container to mount /workspace/av_project..."
@@ -118,6 +155,7 @@ start_container() {
     -v "$HOME/.local:/host_local:ro" \
     -v /usr/local/lib/python3.10/dist-packages:/host_dist_packages:ro \
     "$IMAGE" bash -c 'while true; do sleep 1000; done'
+  ensure_kinect_libs
   echo "  started."
 }
 
@@ -170,6 +208,37 @@ start_live_autoware() {
       tracker_publish_merged_objects:=true \
       rviz:=true > /tmp/universe_live.log 2>&1"
   echo "  launched (log inside container: /tmp/universe_live.log)."
+}
+
+ensure_lidar_network() {
+  say "LiDAR network on eno1 (Hesai XT32M2X @ 192.168.1.201)"
+  if ip addr show eno1 2>/dev/null | grep -q "192.168.1."; then
+    echo "  eno1 already has 192.168.1.x IP configured."
+  else
+    if [ -f "$WORKSPACE_ROOT/scripts/setup_lidar_network.sh" ]; then
+      sudo bash "$WORKSPACE_ROOT/scripts/setup_lidar_network.sh" eno1 192.168.1.10 192.168.1.201 || true
+    else
+      sudo ip addr add 192.168.1.10/24 dev eno1 2>/dev/null || true
+      sudo ip link set eno1 up 2>/dev/null || true
+    fi
+  fi
+}
+
+start_hybrid_sensing() {
+  say "Hybrid Bench Sensing (Hesai XT32M2X LiDAR + Kinect v2 Camera + Bench 3D Perception)"
+  ensure_lidar_network
+  ensure_kinect_libs
+  docker exec -d "$CONTAINER" bash -c "
+    export DISPLAY=$X_DISPLAY;
+    export XAUTHORITY=$XAUTH;
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
+    if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
+    export LD_LIBRARY_PATH=/usr/local/lib:/host_local/lib:\$LD_LIBRARY_PATH;
+    source /opt/ros/humble/setup.bash;
+    source /opt/autoware/setup.bash;
+    source /workspace/autoware/install/setup.bash;
+    ros2 launch etrike_common_launch hybrid_bench_sensing.launch.py > /tmp/hybrid_sensing.log 2>&1"
+  echo "  launched (log inside container: /tmp/hybrid_sensing.log). View with: docker exec $CONTAINER ros2 topic hz /sensing/lidar/top/pointcloud_raw_ex"
 }
 
 start_can() {
@@ -235,6 +304,10 @@ stop_all() {
       pkill -9 -f 'component_container' 2>/dev/null || true
       pkill -9 -f 'vehicle_bridge' 2>/dev/null || true
       pkill -9 -f 'kinect2_node' 2>/dev/null || true
+      pkill -9 -f 'bench_perception_node' 2>/dev/null || true
+      pkill -9 -f 'hesai_ros_wrapper_node' 2>/dev/null || true
+      pkill -9 -f 'hybrid_bench_sensing' 2>/dev/null || true
+      pkill -9 -f 'single_kinect' 2>/dev/null || true
       pkill -9 -f 'topic_tools' 2>/dev/null || true
       pkill -9 -f 'tools.av_dashboard.backend.server' 2>/dev/null || true
       pkill -9 -f 'tools.can_watcher.backend.server' 2>/dev/null || true
@@ -266,7 +339,7 @@ status_all() {
   say "System Status"
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     echo "  [Container]   $CONTAINER: RUNNING"
-    docker exec "$CONTAINER" bash -c "ps -ef | grep -E 'ros2 launch|vehicle_bridge|av_dashboard|rviz2' | grep -v grep" || echo "                (no active ROS/Dashboard processes inside container)"
+    docker exec "$CONTAINER" bash -c "ps -ef | grep -E 'ros2 launch|vehicle_bridge|av_dashboard|rviz2|hybrid_bench|bench_perception' | grep -v grep" || echo "                (no active ROS/Dashboard processes inside container)"
   else
     echo "  [Container]   $CONTAINER: STOPPED"
   fi
@@ -284,12 +357,24 @@ status_all() {
 }
 
 case "$MODE" in
-  all|open|--open|--bench)
+  all|open|--open|--hybrid-bench|hybrid-bench)
+    start_container
+    start_can
+    start_universe
+    start_hybrid_sensing
+    start_bridge true
+    start_dashboard
+    ;;
+  bench|--bench)
     start_container
     start_can
     start_universe
     start_bridge true
     start_dashboard
+    ;;
+  sensing|--sensing)
+    start_container
+    start_hybrid_sensing
     ;;
   live|--live)
     start_container
@@ -323,7 +408,7 @@ case "$MODE" in
     status_all
     ;;
   *)
-    echo "Usage: $0 [open|all|--bench|live|--live|--universe|--can|--bridge|--dashboard|--watcher|close|--stop|status|--status]"
+    echo "Usage: $0 [open|--hybrid-bench|--bench|live|--live|--universe|--sensing|--can|--bridge|--dashboard|--watcher|close|--stop|status|--status]"
     exit 1
     ;;
 esac
