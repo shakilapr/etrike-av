@@ -19,6 +19,9 @@ pkill -f "etrike_remote_control" 2>/dev/null || true
 pkill -f "vehicle_bridge" 2>/dev/null || true
 pkill -f "localhost:8000" 2>/dev/null || true
 pkill -f "localhost:8080" 2>/dev/null || true
+pkill -f "run_bench_perception" 2>/dev/null || true
+pkill -f "bench_perception_node" 2>/dev/null || true
+pkill -f "chromium" 2>/dev/null || true
 
 echo "=== Done ==="
 echo "Containers:"

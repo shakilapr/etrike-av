@@ -101,11 +101,11 @@ start_in_container() {
         source /opt/ros/humble/setup.bash 2>/dev/null || true
         source /opt/autoware/setup.bash 2>/dev/null || true
         source /workspace/autoware/install/setup.bash 2>/dev/null || true
-        export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+        export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
         if [ -f /home/aw/cyclonedds.xml ]; then
-            export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml
-        fi
-        export PYTHONPATH=/workspace/av_project:/host_local/lib/python3.10/site-packages:/host_dist_packages:\$PYTHONPATH
+            export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml;
+        fi;
+        export PYTHONPATH=/workspace/av_project:/host_local/lib/python3.10/site-packages:/host_dist_packages:\$PYTHONPATH;
         python3 -m tools.av_dashboard.backend.server \
             --interface '$INTERFACE' \
             --host '0.0.0.0' \
@@ -165,16 +165,10 @@ else
     BROWSER_CMD="x-www-browser"
 fi
 
-USER_DATA_DIR="$HOME/.config/chromium_av"
-if [ -d "$HOME/snap/chromium" ]; then
-    USER_DATA_DIR="$HOME/snap/chromium/common/av_dashboard"
-fi
-mkdir -p "$USER_DATA_DIR" 2>/dev/null || true
 
 echo "Opening $URL in $BROWSER_CMD on $DISPLAY..."
 nohup "$BROWSER_CMD" \
     --app="$URL" \
-    --user-data-dir="$USER_DATA_DIR" \
     --start-maximized \
     --no-first-run \
     --no-default-browser-check \
@@ -182,6 +176,7 @@ nohup "$BROWSER_CMD" \
     --enable-gpu-rasterization \
     --enable-zero-copy \
     --enable-webgl \
+    --enable-unsafe-swiftshader \
     --disable-gpu-sandbox \
     --test-type \
     < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &

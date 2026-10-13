@@ -63,8 +63,32 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         echo "  Starting existing '$CONTAINER' container..."
         docker start "$CONTAINER" >/dev/null
     else
-        echo "  [ERROR] Container '$CONTAINER' does not exist. Run open_av_dashboard_display.sh first."
-        exit 1
+        echo "  Creating '$CONTAINER' container..."
+        if docker image inspect etrike-kinect-build:latest >/dev/null 2>&1; then
+            IMAGE="etrike-kinect-build:latest"
+        else
+            IMAGE="ghcr.io/autowarefoundation/autoware:universe-cuda-humble"
+        fi
+        mkdir -p "$WORKSPACE_ROOT/data" 2>/dev/null || true
+        docker run -d --name "$CONTAINER" \
+            --privileged --runtime=nvidia --gpus all \
+            --net=host --ipc=host \
+            -e DISPLAY="$DISPLAY" \
+            -e XAUTHORITY="$XAUTHORITY" \
+            -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
+            -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+            -v /run/user/1000:/run/user/1000:ro \
+            -v /dev/bus/usb:/dev/bus/usb \
+            -v "$WORKSPACE_ROOT:/workspace/av_project" \
+            -v "$WORKSPACE_ROOT/autoware:/workspace/autoware" \
+            -v "$WORKSPACE_ROOT/data:/workspace/data" \
+            -v "$HOME/autoware_map:/autoware_map" \
+            -v "$HOME/.local:/host_local:ro" \
+            -v /usr/local/lib/python3.10/dist-packages:/host_dist_packages:ro \
+            -v /usr/local/lib/libfreenect2.so.0.2.0:/usr/local/lib/libfreenect2.so.0.2:ro \
+            -v /usr/lib/aarch64-linux-gnu/libturbojpeg.so.0:/usr/lib/aarch64-linux-gnu/libturbojpeg.so.0:ro \
+            -v /usr/lib/aarch64-linux-gnu/libglfw.so.3:/usr/lib/aarch64-linux-gnu/libglfw.so.3:ro \
+            "$IMAGE" bash -c 'ldconfig 2>/dev/null || true; while true; do sleep 1000; done' >/dev/null
     fi
 fi
 echo "  [OK] Container '$CONTAINER' is active."
@@ -135,8 +159,9 @@ docker exec -d "$CONTAINER" bash -c "
 # Wait for live camera topic publishing
 echo "  Verifying live camera topics on ROS 2 bus..."
 CAMERA_VERIFIED=0
-for i in {1..20}; do
-    if docker exec "$CONTAINER" bash -c "source /opt/ros/humble/setup.bash; ros2 topic hz /kinect_${CAMERA_NAME}/depth/image_raw --window 3" 2>&1 | grep -q "average rate"; then
+sleep 2
+for i in {1..12}; do
+    if docker exec "$CONTAINER" bash -c "source /opt/ros/humble/setup.bash; timeout 3 ros2 topic hz /kinect_${CAMERA_NAME}/depth/image_raw --window 3 2>/dev/null" 2>&1 | grep -q "average rate"; then
         CAMERA_VERIFIED=1
         echo "  [OK] Live Kinect depth stream verified on /kinect_${CAMERA_NAME}/depth/image_raw!"
         break
@@ -157,8 +182,8 @@ docker exec -d "$CONTAINER" bash -c "
     source /opt/ros/humble/setup.bash
     source /opt/autoware/setup.bash 2>/dev/null || true
     source /workspace/autoware/install/setup.bash 2>/dev/null || true
-    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-    export PYTHONPATH=/workspace/av_project:\$PYTHONPATH
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
+    export PYTHONPATH=/workspace/av_project:\$PYTHONPATH;
     python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/bench_perception_node.py \
         --ros-args \
         -p publish_rate_hz:=10.0 \
@@ -173,7 +198,7 @@ PERCEPTION_VERIFIED=0
 for i in {1..15}; do
     STATUS_JSON=$(docker exec "$CONTAINER" bash -c "
         source /opt/ros/humble/setup.bash
-        ros2 topic echo /bench_perception/status --once 2>/dev/null
+        timeout 2 ros2 topic echo /bench_perception/status --once 2>/dev/null
     " || true)
     if echo "$STATUS_JSON" | grep -q "mode"; then
         PERCEPTION_VERIFIED=1
