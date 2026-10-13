@@ -672,6 +672,7 @@ class RemoteControlMainWindow(QMainWindow):
 
         lbl_guide = QLabel(
             "Controls: W/↑ Fwd • S/↓ Rev • A/← Steer Left • D/→ Steer Right\n"
+            "Gears:    V Drive • P Park • N Neutral • R Reverse • G/Enter Engage\n"
             "Hotkeys:  Space Instant Brake • C Center • X Auto-Center • Esc E-Stop"
         )
         lbl_guide.setStyleSheet("color: #707886; font-size: 10px; padding-top: 2px;")
