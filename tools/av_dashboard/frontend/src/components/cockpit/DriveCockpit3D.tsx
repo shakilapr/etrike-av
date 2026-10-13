@@ -96,10 +96,15 @@ export const DriveCockpit3D: React.FC = () => {
       const state = useCanStore.getState();
       const telemetry = state.telemetry;
       const isAuto = telemetry.mode === 'AUTONOMOUS' || telemetry.mode === 'AUTO';
-      const yawRateSignal = state.framesById[0x121]?.signals?.['yaw_rate_mrad_s']?.value;
-      const yawRate = typeof yawRateSignal === 'number'
-        ? yawRateSignal
-        : Math.round(-telemetry.steer_act_deg * telemetry.speed_act_kmh * 0.28);
+      const yawRate121 = state.framesById[0x121]?.signals?.['yaw_rate_mrad_s']?.value;
+      const yawRate300 = state.framesById[0x300]?.signals?.['yaw_rate_mrad_s']?.value;
+      const yawRate = typeof yawRate121 === 'number'
+        ? yawRate121
+        : typeof yawRate300 === 'number'
+        ? yawRate300
+        : typeof state.rosStatus.ego_yaw_rate_mrad_s === 'number'
+        ? state.rosStatus.ego_yaw_rate_mrad_s
+        : 0;
 
       // Update Tuktuk vehicle dynamics
       tuktuk.update(

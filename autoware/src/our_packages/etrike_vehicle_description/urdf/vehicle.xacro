@@ -194,4 +194,12 @@
     <!-- Sensor frame origin matches Hesai optical measurement origin (+46.4mm above roof) -->
     <origin xyz="${lidar_x} ${lidar_y} ${lidar_roof_z + lidar_optical_height}" rpy="0 0 0"/>
   </joint>
+
+  <!-- IMU frame (co-located with base_link until dedicated IMU mount is calibrated) -->
+  <link name="imu_link"/>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
 </robot>

@@ -113,7 +113,7 @@ export const useCanStore = create<CanState>((set, get) => ({
   toggleActiveView: () => {
     const next = get().activeView === 'monitor' ? 'cockpit' : 'monitor';
     try {
-      localStorage.setItem('seer_active_view', next);
+      localStorage.setItem('av_dashboard_active_view', next);
     } catch {}
     set({ activeView: next });
   },

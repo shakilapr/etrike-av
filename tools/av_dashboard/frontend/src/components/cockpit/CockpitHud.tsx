@@ -60,7 +60,7 @@ export const CockpitHud: React.FC = () => {
   const steerActual = telemetry.steer_act_deg;
   const steerCmd = telemetry.steer_cmd_deg;
   const brakePressure = telemetry.brake_act_kpa;
-  const brakePercent = Math.min((brakePressure / 1500) * 100, 100);
+  const brakePercent = Math.min((brakePressure / 5000) * 100, 100);
 
   // Deep CAN Diagnostic Signals from contracts
   // 0x310 steer_diag
@@ -68,41 +68,65 @@ export const CockpitHud: React.FC = () => {
   const steerFault = Boolean(steerDiagFrame?.['fault']?.value);
   const steerCurrent = typeof steerDiagFrame?.['motor_current']?.value === 'number'
     ? steerDiagFrame['motor_current'].value
-    : Math.round(Math.abs(steerActual) * 0.25 * 10) / 10;
+    : null;
   const steerTemp = typeof steerDiagFrame?.['ecu_temp']?.value === 'number'
     ? steerDiagFrame['ecu_temp'].value
-    : 38;
+    : null;
 
   // 0x311 brake_diag
   const brakeDiagFrame = framesById[0x311]?.signals;
   const brakeFault = Boolean(brakeDiagFrame?.['fault']?.value);
   const brakeTemp = typeof brakeDiagFrame?.['ecu_temp']?.value === 'number'
     ? brakeDiagFrame['ecu_temp'].value
-    : 42;
+    : null;
 
-  // 0x211 rt_diag_rpt (CAN Controller Health)
-  const rtDiagFrame = framesById[0x211]?.signals;
+  // 0x620 rt_diag_rpt & 0x600 sys_diag_rpt (CAN Controller Health)
+  const rtDiagFrame = framesById[0x620]?.signals;
+  const sysDiagFrame = framesById[0x600]?.signals;
+  const hasRtDiag = Boolean(framesById[0x620] || framesById[0x600]);
   const mcpBusOff = Boolean(rtDiagFrame?.['mcp_bus_off']?.value);
-  const mcpTec = typeof rtDiagFrame?.['mcp_tec']?.value === 'number' ? rtDiagFrame['mcp_tec'].value : 0;
-  const mcpRec = typeof rtDiagFrame?.['mcp_rec']?.value === 'number' ? rtDiagFrame['mcp_rec'].value : 0;
+  const mcpTec =
+    typeof rtDiagFrame?.['mcp_tec']?.value === 'number'
+      ? rtDiagFrame['mcp_tec'].value
+      : typeof sysDiagFrame?.['tec']?.value === 'number'
+      ? sysDiagFrame['tec'].value
+      : 0;
+  const mcpRec =
+    typeof rtDiagFrame?.['mcp_rec']?.value === 'number'
+      ? rtDiagFrame['mcp_rec'].value
+      : typeof sysDiagFrame?.['rec']?.value === 'number'
+      ? sysDiagFrame['rec'].value
+      : 0;
+
+  // CAN Bus link & source status
+  const busRateHz = typeof telemetry.bus_rate_hz === 'number' ? telemetry.bus_rate_hz : 0.0;
+  const canConnected = Boolean(telemetry.can_connected);
+  const telemetrySource = telemetry.telemetry_source ?? 'OFFLINE';
 
   // Derived Vehicle States for Telltales
   const isPark = telemetry.gear === 'P';
   const isBraking = brakePressure > 100 || isBrakeLight;
   const isHold = telemetry.speed_act_kmh < 0.5 && brakePressure > 250;
-  const isReady = isConnected && !isEstop;
-  const isEpsWarning = steerFault || Math.abs(steerCmd - steerActual) > 5.0;
-  const maxEcuTemp = Math.max(steerTemp, brakeTemp);
+  const isReady = isConnected && (canConnected || rosStatus.active) && !isEstop;
+  const isEpsWarning = steerFault || (framesById[0x310] !== undefined && Math.abs(steerCmd - steerActual) > 5.0);
+  const maxEcuTemp = Math.max(steerTemp ?? 0, brakeTemp ?? 0);
 
-  // Yaw rate from motion report frame or computed
-  const yawRateSignal = framesById[0x121]?.signals?.['yaw_rate_mrad_s']?.value;
-  const yawRate = typeof yawRateSignal === 'number'
-    ? yawRateSignal
-    : Math.round(-steerActual * telemetry.speed_act_kmh * 0.28);
+  // Yaw rate from motion report (0x121), host drive cmd (0x300), or ROS odometry
+  const yawRate121 = framesById[0x121]?.signals?.['yaw_rate_mrad_s']?.value;
+  const yawRate300 = framesById[0x300]?.signals?.['yaw_rate_mrad_s']?.value;
+  const yawRate = typeof yawRate121 === 'number'
+    ? Math.round(yawRate121)
+    : typeof yawRate300 === 'number'
+    ? Math.round(yawRate300)
+    : typeof rosStatus.ego_yaw_rate_mrad_s === 'number'
+    ? Math.round(rosStatus.ego_yaw_rate_mrad_s)
+    : 0;
 
-  // Motor / Powertrain estimate
-  const motorRpm = Math.round(telemetry.speed_act_kmh * 110);
-  const throttlePercent = Math.min(Math.round((telemetry.speed_act_kmh / 45) * 100), 100);
+  // Motor / Powertrain from 0x206 & 0x120 (or commanded demand in bench mode)
+  const motorRpm = typeof telemetry.motor_rpm === 'number' ? telemetry.motor_rpm : null;
+  const throttlePercent = typeof telemetry.throttle_pct === 'number'
+    ? Math.min(Math.max(Math.round(telemetry.throttle_pct), 0), 100)
+    : Math.min(Math.round((Math.abs(telemetry.speed_cmd_kmh) / 10.8) * 100), 100);
 
   // Autoware perception: forward-corridor proximity watch (ahead = negative Z)
   const corridorThreats = perceptionObjects
@@ -281,8 +305,12 @@ export const CockpitHud: React.FC = () => {
 
             {/* Steering Actuator Diagnostics (Floating Telemetry Row) */}
             <div className="flex justify-between items-center text-xs py-1 border-b border-neutral-900/80 font-mono">
-              <span className="text-neutral-400">EPS Current: <span className="text-cyan-300 font-bold">{steerCurrent}A</span></span>
-              <span className="text-neutral-400">ECU: <span className="text-amber-300 font-bold">{steerTemp}°C</span></span>
+              <span className="text-neutral-400">
+                EPS Current: <span className="text-cyan-300 font-bold">{steerCurrent !== null ? `${steerCurrent}A` : '--'}</span>
+              </span>
+              <span className="text-neutral-400">
+                ECU: <span className="text-amber-300 font-bold">{steerTemp !== null ? `${steerTemp}°C` : '--'}</span>
+              </span>
             </div>
 
             {/* Yaw Rate */}
@@ -319,9 +347,9 @@ export const CockpitHud: React.FC = () => {
                 />
               </div>
               <div className="flex justify-between text-xs text-neutral-400 mt-1 font-mono">
-                <span>Brake ECU: <span className="text-neutral-300">{brakeTemp}°C</span></span>
+                <span>Brake ECU: <span className="text-neutral-300">{brakeTemp !== null ? `${brakeTemp}°C` : '--'}</span></span>
                 <span className={brakeFault ? 'text-rose-400 font-bold' : 'text-emerald-400 font-semibold'}>
-                  {brakeFault ? 'BRAKE FAULT' : 'NORMAL'}
+                  {brakeFault ? 'BRAKE FAULT' : framesById[0x311] ? 'NORMAL' : 'NO 0x311'}
                 </span>
               </div>
             </div>
@@ -333,8 +361,26 @@ export const CockpitHud: React.FC = () => {
               <span className="text-xs uppercase font-black text-neutral-400 tracking-wider">
                 POWERTRAIN & BUS
               </span>
-              <span className="text-[10px] text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/60 font-bold">
-                ACTIVE
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
+                  telemetrySource === 'ECU_FEEDBACK'
+                    ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/60'
+                    : telemetrySource === 'BENCH_CMD' || telemetrySource === 'ROS_SIM'
+                    ? 'text-cyan-300 bg-cyan-950/40 border-cyan-800/60'
+                    : telemetrySource === 'SIMULATED'
+                    ? 'text-amber-300 bg-amber-950/40 border-amber-800/60'
+                    : 'text-neutral-400 bg-neutral-900/60 border-neutral-700/60'
+                }`}
+              >
+                {telemetrySource === 'ECU_FEEDBACK'
+                  ? 'ECU LIVE'
+                  : telemetrySource === 'BENCH_CMD'
+                  ? 'BENCH CMD'
+                  : telemetrySource === 'ROS_SIM'
+                  ? 'ROS SIM'
+                  : telemetrySource === 'SIMULATED'
+                  ? 'DEMO SIM'
+                  : 'CAN OFFLINE'}
               </span>
             </div>
 
@@ -343,7 +389,8 @@ export const CockpitHud: React.FC = () => {
               <div className="flex justify-between items-baseline mb-1">
                 <span className="text-sm font-semibold text-neutral-300">Electric Motor</span>
                 <span className="text-2xl font-black tabular-nums text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
-                  {motorRpm.toLocaleString()} <span className="text-xs font-normal text-neutral-400">RPM</span>
+                  {motorRpm !== null ? motorRpm.toLocaleString() : '--'}{' '}
+                  <span className="text-xs font-normal text-neutral-400">RPM</span>
                 </span>
               </div>
               {/* Floating Throttle Tube */}
@@ -362,19 +409,37 @@ export const CockpitHud: React.FC = () => {
 
             {/* CAN Bus Update Rate */}
             <div className="flex justify-between items-baseline pt-0.5 border-t border-neutral-900/80">
-              <span className="text-sm font-semibold text-neutral-300">Bus Rate</span>
+              <span className="text-sm font-semibold text-neutral-300">
+                Bus Rate ({telemetry.can_interface || 'can2'})
+              </span>
               <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-cyan-400 animate-pulse" />
-                <span className="text-2xl font-black text-emerald-400 tabular-nums drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">28.0 Hz</span>
+                <Activity className={`w-4 h-4 ${busRateHz > 0 ? 'text-cyan-400 animate-pulse' : 'text-neutral-600'}`} />
+                <span
+                  className={`text-2xl font-black tabular-nums ${
+                    busRateHz > 0
+                      ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]'
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  {busRateHz.toFixed(1)} Hz
+                </span>
               </div>
             </div>
 
             {/* CAN Controller Counters (Floating Diagnostic Row) */}
             <div className="flex justify-between items-center text-xs py-1 border-b border-neutral-900/80 font-mono">
-              <span className="text-neutral-400">TEC: <span className="text-emerald-400 font-bold">{mcpTec}</span></span>
-              <span className="text-neutral-400">REC: <span className="text-emerald-400 font-bold">{mcpRec}</span></span>
-              <span className={mcpBusOff ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
-                {mcpBusOff ? 'BUS OFF' : 'HEALTHY'}
+              <span className="text-neutral-400">TEC: <span className="text-emerald-400 font-bold">{hasRtDiag ? mcpTec : '--'}</span></span>
+              <span className="text-neutral-400">REC: <span className="text-emerald-400 font-bold">{hasRtDiag ? mcpRec : '--'}</span></span>
+              <span
+                className={
+                  mcpBusOff
+                    ? 'text-rose-400 font-bold'
+                    : canConnected
+                    ? 'text-emerald-400 font-bold'
+                    : 'text-neutral-500 font-bold'
+                }
+              >
+                {mcpBusOff ? 'BUS OFF' : canConnected ? 'LINK UP' : 'WAITING'}
               </span>
             </div>
 

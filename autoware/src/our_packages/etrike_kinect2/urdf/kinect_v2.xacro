@@ -18,16 +18,16 @@
   -->
 
   <xacro:macro name="kinect_v2_macro" params="name parent x y z roll pitch yaw">
-    <!-- Sensor body link -->
+    <!-- Sensor body link (ROS body convention: +X forward, +Y left, +Z up) -->
     <link name="${name}_link">
       <visual name="body">
         <origin xyz="0 0 0.0335" rpy="0 0 0"/>
-        <geometry><box size="0.249 0.066 0.067"/></geometry>
+        <geometry><box size="0.067 0.249 0.066"/></geometry>
         <material name="kinect_dark"><color rgba="0.1 0.1 0.12 1.0"/></material>
       </visual>
       <collision>
         <origin xyz="0 0 0.0335" rpy="0 0 0"/>
-        <geometry><box size="0.249 0.066 0.067"/></geometry>
+        <geometry><box size="0.067 0.249 0.066"/></geometry>
       </collision>
     </link>
 
@@ -37,28 +37,28 @@
       <origin xyz="${x} ${y} ${z}" rpy="${roll} ${pitch} ${yaw}"/>
     </joint>
 
-    <!-- RGB optical frame (same as sensor frame for Kinect v2) -->
+    <!-- RGB optical frame (REP-103 optical convention: +Z forward, +X right, +Y down) -->
     <link name="${name}_rgb_optical_frame"/>
     <joint name="${name}_rgb_optical_joint" type="fixed">
       <parent link="${name}_link"/>
       <child link="${name}_rgb_optical_frame"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
     </joint>
 
-    <!-- Depth/IR optical frame -->
+    <!-- Depth/IR optical frame (REP-103 optical convention: +Z forward, +X right, +Y down) -->
     <link name="${name}_depth_optical_frame"/>
     <joint name="${name}_depth_optical_joint" type="fixed">
       <parent link="${name}_link"/>
       <child link="${name}_depth_optical_frame"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
     </joint>
 
-    <!-- IR optical frame -->
+    <!-- IR optical frame (REP-103 optical convention: +Z forward, +X right, +Y down) -->
     <link name="${name}_ir_optical_frame"/>
     <joint name="${name}_ir_optical_joint" type="fixed">
       <parent link="${name}_link"/>
       <child link="${name}_ir_optical_frame"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
     </joint>
   </xacro:macro>
 </robot>

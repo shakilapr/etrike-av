@@ -85,15 +85,15 @@ private:
   std::unique_ptr<Kinect2Device> device_;
 
   // Publishers
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr color_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_registered_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr ir_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr color_info_pub_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr depth_info_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr color_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr depth_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr depth_registered_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::Image>::SharedPtr ir_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::CameraInfo>::SharedPtr color_info_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::CameraInfo>::SharedPtr depth_info_pub_;
 
   // Diagnostics
-  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
 
   // Camera info (intrinsics from libfreenect2 factory params)
   sensor_msgs::msg::CameraInfo color_info_;

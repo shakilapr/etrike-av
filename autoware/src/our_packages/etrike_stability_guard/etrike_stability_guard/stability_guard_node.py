@@ -29,16 +29,25 @@ cut. A future command-limiter could scale velocity instead of cutting.
 """
 
 import math
+from typing import Any
 
 import rclpy
 from rclpy.node import Node
+
+try:
+    from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
+    HAS_LIFECYCLE = True
+except ImportError:
+    LifecycleNode = Node  # type: ignore[misc, assignment]
+    TransitionCallbackReturn = None  # type: ignore[misc, assignment]
+    HAS_LIFECYCLE = False
 
 from autoware_vehicle_msgs.msg import SteeringReport, VelocityReport
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from tier4_vehicle_msgs.msg import VehicleEmergencyStamped
 
 
-class StabilityGuardNode(Node):
+class StabilityGuardNode(LifecycleNode):
     def __init__(self) -> None:
         super().__init__("etrike_stability_guard")
 
@@ -50,11 +59,30 @@ class StabilityGuardNode(Node):
         self.declare_parameter("warn_ratio", 0.7)
         self.declare_parameter("error_ratio", 0.9)
         self.declare_parameter("enable_emergency", False)
+        self.declare_parameter("subscription_timeout_sec", 0.5)
         self.declare_parameter("velocity_topic", "/vehicle/status/velocity_status")
         self.declare_parameter("steering_topic", "/vehicle/status/steering_status")
         self.declare_parameter("emergency_topic", "/control/command/emergency_cmd")
         self.declare_parameter("diagnostics_topic", "/diagnostics")
 
+        self._velocity: float = 0.0
+        self._steer: float = 0.0
+        self._lateral_accel: float = 0.0  # signed (positive = right turn)
+        self._lateral_accel_abs: float = 0.0  # magnitude — used for threshold logic
+        self._emergency_asserted: bool = False
+        self._last_velocity_time: Any = None
+        self._last_steering_time: Any = None
+        self._is_active: bool = True
+
+        self._configure_from_parameters()
+
+        self.get_logger().info(
+            f"stability guard initialised: threshold={self.threshold:.2f} m/s^2 "
+            f"(warn={self.warn_threshold:.2f}, error={self.error_threshold:.2f}), "
+            f"emergency={'ENABLED' if self.enable_emergency else 'disabled (monitor only)'}"
+        )
+
+    def _configure_from_parameters(self) -> None:
         # Launch passes these as strings (LaunchConfiguration), so coerce
         # explicitly. Without this the node crashes on `str * float` and the
         # "monitor-only" default would be misread as truthy (emergency ON).
@@ -68,6 +96,7 @@ class StabilityGuardNode(Node):
         safety_margin = as_float("safety_margin")
         warn_ratio = as_float("warn_ratio")
         error_ratio = as_float("error_ratio")
+        self.subscription_timeout_sec = as_float("subscription_timeout_sec")
         self.enable_emergency = str(self.get_parameter("enable_emergency").value).lower() in (
             "true",
             "1",
@@ -82,16 +111,10 @@ class StabilityGuardNode(Node):
         self.warn_threshold = self.threshold * warn_ratio
         self.error_threshold = self.threshold * error_ratio
 
-        self.velocity_topic = self.get_parameter("velocity_topic").value
-        self.steering_topic = self.get_parameter("steering_topic").value
-        emergency_topic = self.get_parameter("emergency_topic").value
-        diagnostics_topic = self.get_parameter("diagnostics_topic").value
-
-        self._velocity = 0.0
-        self._steer = 0.0
-        self._lateral_accel = 0.0  # signed (positive = right turn)
-        self._lateral_accel_abs = 0.0  # magnitude — used for threshold logic
-        self._emergency_asserted = False
+        self.velocity_topic = str(self.get_parameter("velocity_topic").value)
+        self.steering_topic = str(self.get_parameter("steering_topic").value)
+        emergency_topic = str(self.get_parameter("emergency_topic").value)
+        diagnostics_topic = str(self.get_parameter("diagnostics_topic").value)
 
         self.sub_velocity = self.create_subscription(
             VelocityReport, self.velocity_topic, self.on_velocity, 10
@@ -102,24 +125,54 @@ class StabilityGuardNode(Node):
         self.diag_pub = self.create_publisher(DiagnosticArray, diagnostics_topic, 10)
         self.estop_pub = self.create_publisher(VehicleEmergencyStamped, emergency_topic, 10)
 
-        # Throttled diagnostics so the topic is not flooded at sensor rate.
+        # Throttled diagnostics and subscription timeout check.
         self.timer = self.create_timer(0.1, self.publish_diagnostics)
 
-        self.get_logger().info(
-            f"stability guard initialised: threshold={self.threshold:.2f} m/s^2 "
-            f"(warn={self.warn_threshold:.2f}, error={self.error_threshold:.2f}), "
-            f"emergency={'ENABLED' if self.enable_emergency else 'disabled (monitor only)'}"
-        )
+    def on_configure(self, state: Any) -> Any:
+        return TransitionCallbackReturn.SUCCESS if TransitionCallbackReturn else 0
+
+    def on_activate(self, state: Any) -> Any:
+        self._is_active = True
+        if hasattr(self.diag_pub, "on_activate"):
+            self.diag_pub.on_activate()
+        if hasattr(self.estop_pub, "on_activate"):
+            self.estop_pub.on_activate()
+        return TransitionCallbackReturn.SUCCESS if TransitionCallbackReturn else 0
+
+    def on_deactivate(self, state: Any) -> Any:
+        self._is_active = False
+        if hasattr(self.diag_pub, "on_deactivate"):
+            self.diag_pub.on_deactivate()
+        if hasattr(self.estop_pub, "on_deactivate"):
+            self.estop_pub.on_deactivate()
+        return TransitionCallbackReturn.SUCCESS if TransitionCallbackReturn else 0
 
     def on_velocity(self, msg: VelocityReport) -> None:
+        self._last_velocity_time = self.get_clock().now()
         self._velocity = float(msg.longitudinal_velocity)
         self.update()
 
     def on_steering(self, msg: SteeringReport) -> None:
+        self._last_steering_time = self.get_clock().now()
         self._steer = float(msg.steering_tire_angle)
         self.update()
 
+    def _check_subscription_timeouts(self) -> bool:
+        now = self.get_clock().now()
+        timeout_ns = int(self.subscription_timeout_sec * 1e9)
+        if self._last_velocity_time is not None:
+            if (now - self._last_velocity_time).nanoseconds > timeout_ns:
+                self._velocity = 0.0
+                return True
+        if self._last_steering_time is not None:
+            if (now - self._last_steering_time).nanoseconds > timeout_ns:
+                self._steer = 0.0
+                return True
+        return False
+
     def update(self) -> None:
+        if not self._is_active:
+            return
         speed = abs(self._velocity)
         # a_y = v^2 * tan(steer) / L  (kinematic bicycle model, planar)
         wheel_base = self.get_wheel_base()
@@ -149,9 +202,16 @@ class StabilityGuardNode(Node):
         msg = VehicleEmergencyStamped()
         msg.stamp = self.get_clock().now().to_msg()
         msg.emergency = value
-        self.estop_pub.publish(msg)
+        if not hasattr(self.estop_pub, "is_activated") or self.estop_pub.is_activated:
+            self.estop_pub.publish(msg)
 
     def publish_diagnostics(self) -> None:
+        if not self._is_active:
+            return
+        timed_out = self._check_subscription_timeouts()
+        if timed_out:
+            self.update()
+
         array = DiagnosticArray()
         array.header.stamp = self.get_clock().now().to_msg()
 
@@ -165,6 +225,9 @@ class StabilityGuardNode(Node):
         elif self._lateral_accel_abs >= self.warn_threshold:
             status.level = DiagnosticStatus.WARN
             status.message = "approaching tip-over threshold"
+        elif timed_out:
+            status.level = DiagnosticStatus.WARN
+            status.message = "telemetry subscription timeout (fail-closed zero)"
         else:
             status.level = DiagnosticStatus.OK
             status.message = "within stable band"
@@ -186,12 +249,16 @@ class StabilityGuardNode(Node):
         kv("emergency_asserted", str(self._emergency_asserted))
 
         array.status.append(status)
-        self.diag_pub.publish(array)
+        if not hasattr(self.diag_pub, "is_activated") or self.diag_pub.is_activated:
+            self.diag_pub.publish(array)
 
 
-def main(args=None) -> None:
+def main(args: Any = None) -> None:
     rclpy.init(args=args)
     node = StabilityGuardNode()
+    if hasattr(node, "trigger_configure"):
+        node.trigger_configure()
+        node.trigger_activate()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

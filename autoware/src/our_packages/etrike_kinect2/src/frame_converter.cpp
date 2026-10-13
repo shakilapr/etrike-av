@@ -80,21 +80,19 @@ sensor_msgs::msg::Image::SharedPtr FrameConverter::to_registered_depth_image(
   const std::string & frame_id,
   const rclcpp::Time & stamp)
 {
-  // Undistorted depth (depth-camera resolution) and color registered onto the
-  // depth camera's grid, produced by libfreenect2's factory-calibrated
-  // Registration::apply(). The color frame must be in BGRX/RGBX format
-  // (libfreenect2 native color output) — matching how the raw color stream is
-  // produced, so the registered result is a BGR8 image at depth resolution.
+  // Undistorted depth (512x424 float mm) produced by libfreenect2's
+  // factory-calibrated Registration::apply(), converted to 32FC1 meters
+  // for downstream depth_image_proc / obstacle avoidance consumers.
   libfreenect2::Frame undistorted(depth.width, depth.height, 4);
   libfreenect2::Frame registered(depth.width, depth.height, 4);
 
   registration.apply(&rgb, &depth, &undistorted, &registered);
 
-  cv::Mat registered_mat(depth.height, depth.width, CV_8UC4, registered.data);
-  cv::Mat bgr;
-  cv::cvtColor(registered_mat, bgr, cv::COLOR_BGRA2BGR);
+  cv::Mat raw_undistorted(depth.height, depth.width, CV_32FC1, undistorted.data);
+  cv::Mat depth_meters;
+  raw_undistorted.convertTo(depth_meters, CV_32FC1, 1.0 / 1000.0);
 
-  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr).toImageMsg();
+  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "32FC1", depth_meters).toImageMsg();
   msg->header.frame_id = frame_id;
   msg->header.stamp = stamp;
   return msg;

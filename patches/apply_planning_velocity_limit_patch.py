@@ -28,27 +28,30 @@ def apply_velocity_limit(config_path: Path, target_speed: float = 2.78) -> bool:
 
     content: str = config_path.read_text(encoding="utf-8")
 
-    pattern: str = r"(max_vel:\s*)\d+(\.\d+)?"
-    replacement: str = rf"\g<1>{target_speed:.2f}"
+    pattern: str = r"^(\s*max_vel:\s*)\d+(?:\.\d+)?(.*)$"
+    override_tag: str = "{OVERRIDE: E-Trike 10 km/h limit}"
 
-    match = re.search(pattern, content)
+    match = re.search(pattern, content, flags=re.MULTILINE)
     if not match:
         print(f"ERROR: Could not find 'max_vel:' pattern in {config_path}", file=sys.stderr)
         return False
 
-    current_val_str: str = match.group(0)
+    current_line: str = match.group(0)
     expected_str: str = f"max_vel: {target_speed:.2f}"
 
-    if expected_str in current_val_str:
-        print(f"[SKIP] {config_path.name} already has {expected_str}")
+    if expected_str in current_line and override_tag in current_line:
+        print(f"[SKIP] {config_path.name} already has {expected_str} with {override_tag}")
         return True
 
-    updated_content: str = re.sub(pattern, replacement, content, count=1)
+    replacement: str = (
+        rf"\g<1>{target_speed:.2f}           # max velocity limit [m/s] # {override_tag}"
+    )
+    updated_content: str = re.sub(pattern, replacement, content, count=1, flags=re.MULTILINE)
     config_path.write_text(updated_content, encoding="utf-8")
 
     # Verify
     verify_content: str = config_path.read_text(encoding="utf-8")
-    if expected_str not in verify_content:
+    if expected_str not in verify_content or override_tag not in verify_content:
         print(f"ERROR: Verification failed after patching {config_path}", file=sys.stderr)
         return False
 

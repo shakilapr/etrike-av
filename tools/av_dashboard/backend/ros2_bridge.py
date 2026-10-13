@@ -76,6 +76,8 @@ class Ros2Bridge:
         self._ego_y: float = 0.0
         self._ego_z: float = 0.0
         self._ego_yaw: float = 0.0
+        self._ego_speed_kmh: float = 0.0
+        self._ego_yaw_rate_mrad_s: float = 0.0
         self._has_ego_pose: bool = False
         self._ego_time: float = 0.0
         self._tf_buffer: Any = None
@@ -104,6 +106,19 @@ class Ros2Bridge:
         self._planned_trajectory: List[Dict[str, float]] = []
         self._last_trajectory_time: float = 0.0
         self._trajectory_frame: str = ""
+        self._trajectory_pose_ok: bool = False
+
+        # Live ROS 2 vehicle status / command fallback (for --universe mode without CAN)
+        self._veh_speed_act_kmh: Optional[float] = None
+        self._veh_speed_cmd_kmh: Optional[float] = None
+        self._veh_steer_act_deg: Optional[float] = None
+        self._veh_steer_cmd_deg: Optional[float] = None
+        self._veh_gear: Optional[str] = None
+        self._veh_mode: Optional[str] = None
+        self._veh_turn_left: bool = False
+        self._veh_turn_right: bool = False
+        self._veh_hazard: bool = False
+        self._veh_status_time: float = 0.0
 
     def start(self) -> None:
         """Start the ROS 2 node in a background daemon thread."""
@@ -225,14 +240,20 @@ class Ros2Bridge:
 
             try:
                 from autoware_perception_msgs.msg import DetectedObjects
-                node.create_subscription(
-                    DetectedObjects,
+                for det_topic in (
                     "/perception/object_recognition/detection/objects",
-                    self._on_detected_objects,
-                    qos_sensor,
-                )
+                    "/perception/object_recognition/detection/centerpoint/objects",
+                    "/perception/object_recognition/detection/centerpoint/validation/objects",
+                    "/perception/object_recognition/detection/clustering/objects",
+                ):
+                    node.create_subscription(
+                        DetectedObjects,
+                        det_topic,
+                        self._on_detected_objects,
+                        qos_sensor,
+                    )
                 self._mark_subscribed("detection", True)
-                print("[ROS 2 Bridge] Subscribed to /perception/object_recognition/detection/objects")
+                print("[ROS 2 Bridge] Subscribed to perception detection topics")
             except Exception as e:
                 self._mark_subscribed("detection", False)
                 print(f"[ROS 2 Bridge] DetectedObjects subscription failed: {e}")
@@ -258,6 +279,70 @@ class Ros2Bridge:
                 self._mark_subscribed("trajectory", False)
                 print(f"[ROS 2 Bridge] Trajectory subscription failed: {e}")
 
+            # 4. Vehicle Status & Control Command (fallback for --universe mode without CAN)
+            try:
+                from autoware_vehicle_msgs.msg import (
+                    ControlModeReport,
+                    GearReport,
+                    HazardLightsReport,
+                    SteeringReport,
+                    TurnIndicatorsReport,
+                    VelocityReport,
+                )
+                node.create_subscription(
+                    VelocityReport,
+                    "/vehicle/status/velocity_status",
+                    self._on_velocity_report,
+                    qos_sensor,
+                )
+                node.create_subscription(
+                    SteeringReport,
+                    "/vehicle/status/steering_status",
+                    self._on_steering_report,
+                    qos_sensor,
+                )
+                node.create_subscription(
+                    GearReport,
+                    "/vehicle/status/gear_status",
+                    self._on_gear_report,
+                    qos_sensor,
+                )
+                node.create_subscription(
+                    ControlModeReport,
+                    "/vehicle/status/control_mode",
+                    self._on_control_mode_report,
+                    qos_sensor,
+                )
+                node.create_subscription(
+                    TurnIndicatorsReport,
+                    "/vehicle/status/turn_indicators_status",
+                    self._on_turn_indicators_report,
+                    qos_sensor,
+                )
+                node.create_subscription(
+                    HazardLightsReport,
+                    "/vehicle/status/hazard_lights_status",
+                    self._on_hazard_lights_report,
+                    qos_sensor,
+                )
+                self._mark_subscribed("vehicle_status", True)
+            except Exception as e:
+                self._mark_subscribed("vehicle_status", False)
+                print(f"[ROS 2 Bridge] Vehicle status subscription failed: {e}")
+
+            try:
+                from autoware_control_msgs.msg import Control
+                node.create_subscription(
+                    Control,
+                    "/control/command/control_cmd",
+                    self._on_control_cmd,
+                    qos_sensor,
+                )
+                self._mark_subscribed("control_cmd", True)
+            except Exception as e:
+                self._mark_subscribed("control_cmd", False)
+                print(f"[ROS 2 Bridge] Control cmd subscription failed: {e}")
+
             while rclpy.ok() and self.is_running:
                 rclpy.spin_once(node, timeout_sec=0.1)
 
@@ -274,11 +359,19 @@ class Ros2Bridge:
         ori = msg.pose.pose.orientation
         yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
 
+        vx = 0.0
+        wz = 0.0
+        if hasattr(msg, "twist") and hasattr(msg.twist, "twist"):
+            vx = float(msg.twist.twist.linear.x)
+            wz = float(msg.twist.twist.angular.z)
+
         with self._lock:
             self._ego_x = float(pos.x)
             self._ego_y = float(pos.y)
             self._ego_z = float(pos.z)
             self._ego_yaw = yaw
+            self._ego_speed_kmh = round(abs(vx) * 3.6, 1)
+            self._ego_yaw_rate_mrad_s = round(wz * 1000.0, 1)
             self._has_ego_pose = True
             self._ego_time = time.time()
             self._topic_counts["odometry"] += 1
@@ -327,7 +420,12 @@ class Ros2Bridge:
             self._topic_counts["tf"] += 1
 
     def _transform_map_to_base_link(
-        self, x: float, y: float, z: float, yaw: float
+        self,
+        x: float,
+        y: float,
+        z: float,
+        yaw: float,
+        ego_pose: Optional[Tuple[float, float, float, float]] = None,
     ) -> Tuple[float, float, float, float]:
         """Transform coordinates from map frame to ego vehicle base_link frame.
 
@@ -337,17 +435,23 @@ class Ros2Bridge:
         - three_z: Longitudinal offset in Three.js (meters, forward is negative Z)
         - rel_yaw: Heading difference in radians
         """
-        dx = x - self._ego_x
-        dy = y - self._ego_y
-        dz = z - self._ego_z
+        if ego_pose is not None:
+            ego_x, ego_y, ego_z, ego_yaw = ego_pose
+        else:
+            with self._lock:
+                ego_x, ego_y, ego_z, ego_yaw = self._ego_x, self._ego_y, self._ego_z, self._ego_yaw
 
-        cos_yaw = math.cos(self._ego_yaw)
-        sin_yaw = math.sin(self._ego_yaw)
+        dx = x - ego_x
+        dy = y - ego_y
+        dz = z - ego_z
+
+        cos_yaw = math.cos(ego_yaw)
+        sin_yaw = math.sin(ego_yaw)
 
         # Base_link: forward (+X), left (+Y)
         base_x = cos_yaw * dx + sin_yaw * dy
         base_y = -sin_yaw * dx + cos_yaw * dy
-        rel_yaw = yaw - self._ego_yaw
+        rel_yaw = yaw - ego_yaw
 
         # Three.js: right (+X), up (+Y), forward (-Z)
         three_x = -base_y
@@ -406,15 +510,47 @@ class Ros2Bridge:
         return getattr(kin, "twist", None)
 
     def _convert_pose(
-        self, x: float, y: float, z: float, yaw: float, is_map_frame: bool, pose_ok: bool
+        self,
+        x: float,
+        y: float,
+        z: float,
+        yaw: float,
+        is_map_frame: bool,
+        pose_ok: bool,
+        ego_pose: Optional[Tuple[float, float, float, float]] = None,
+        sensor_tf: Optional[Tuple[float, float, float, float]] = None,
     ) -> Tuple[float, float, float, float]:
         if not is_map_frame:
+            if sensor_tf is not None:
+                sx, sy, sz, syaw = sensor_tf
+                cos_s = math.cos(syaw)
+                sin_s = math.sin(syaw)
+                bx = sx + cos_s * x - sin_s * y
+                by = sy + sin_s * x + cos_s * y
+                bz = sz + z
+                byaw = yaw + syaw
+                return self._relative_transform(bx, by, bz, byaw)
             return self._relative_transform(x, y, z, yaw)
         if pose_ok:
-            return self._transform_map_to_base_link(x, y, z, yaw)
+            return self._transform_map_to_base_link(x, y, z, yaw, ego_pose=ego_pose)
         # No valid ego pose: coordinates are not trustworthy. Emit placeholders so the
         # HUD can honestly report "WAITING FOR LOCALIZATION" instead of drawing ghosts.
         return (0.0, 0.0, 0.0, 0.0)
+
+    def _lookup_sensor_to_base_link(self, frame_id: str) -> Optional[Tuple[float, float, float, float]]:
+        """Look up static/dynamic transform from sensor frame_id to base_link when available."""
+        clean_frame = frame_id.lstrip("/")
+        if not clean_frame or clean_frame == "base_link" or self._tf_buffer is None:
+            return None
+        try:
+            from rclpy.time import Time
+            tf = self._tf_buffer.lookup_transform("base_link", clean_frame, Time())
+            tr = tf.transform.translation
+            rot = tf.transform.rotation
+            syaw = quaternion_to_yaw(rot.x, rot.y, rot.z, rot.w)
+            return (float(tr.x), float(tr.y), float(tr.z), syaw)
+        except Exception:
+            return None
 
     def _process_objects_batch(
         self, objects: List[Any], frame_id: str, source: str, is_predicted: bool = False
@@ -422,9 +558,11 @@ class Ros2Bridge:
         """Process and normalize raw Autoware perception objects for one source."""
         now = time.time()
         is_map_frame = ("map" in frame_id) or ("odom" in frame_id)
+        sensor_tf = None if is_map_frame else self._lookup_sensor_to_base_link(frame_id)
 
         with self._lock:
             pose_ok = (not is_map_frame) or (self._has_ego_pose and (now - self._ego_time) < SOURCE_STALE_SEC)
+            ego_snapshot = (self._ego_x, self._ego_y, self._ego_z, self._ego_yaw)
 
         converted: List[Dict[str, Any]] = []
         for obj in objects:
@@ -436,7 +574,14 @@ class Ros2Bridge:
             ori = pose.orientation
             yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
             tx, ty, tz, rel_yaw = self._convert_pose(
-                float(pos.x), float(pos.y), float(pos.z), yaw, is_map_frame, pose_ok
+                float(pos.x),
+                float(pos.y),
+                float(pos.z),
+                yaw,
+                is_map_frame,
+                pose_ok,
+                ego_pose=ego_snapshot,
+                sensor_tf=sensor_tf,
             )
 
             label = self._classify(obj)
@@ -497,25 +642,73 @@ class Ros2Bridge:
 
         with self._lock:
             pose_ok = (not is_map_frame) or (self._has_ego_pose and (now - self._ego_time) < SOURCE_STALE_SEC)
+            ego_snapshot = (self._ego_x, self._ego_y, self._ego_z, self._ego_yaw)
 
         traj_points: List[Dict[str, float]] = []
-        # Downsample trajectory if too long (keep up to 32 points)
-        step = max(1, len(msg.points) // 32)
-        for i in range(0, len(msg.points), step):
-            pt = msg.points[i]
-            pos = pt.pose.position
-            ori = pt.pose.orientation
-            yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
-            tx, ty, tz, _ = self._convert_pose(
-                float(pos.x), float(pos.y), float(pos.z), yaw, is_map_frame, pose_ok
-            )
-            traj_points.append({"x": tx, "y": ty, "z": tz})
+        n_pts = len(msg.points)
+        if pose_ok and n_pts > 0:
+            # Cap sampled trajectory to at most 32 points while always preserving the endpoint
+            if n_pts <= 32:
+                indices = list(range(n_pts))
+            else:
+                indices = [round(k * (n_pts - 1) / 31) for k in range(32)]
+            for i in indices:
+                pt = msg.points[i]
+                pos = pt.pose.position
+                ori = pt.pose.orientation
+                yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
+                tx, ty, tz, _ = self._convert_pose(
+                    float(pos.x), float(pos.y), float(pos.z), yaw, is_map_frame, pose_ok, ego_pose=ego_snapshot
+                )
+                traj_points.append({"x": tx, "y": ty, "z": tz})
 
         with self._lock:
             self._planned_trajectory = traj_points
             self._last_trajectory_time = now
             self._trajectory_frame = msg.header.frame_id
+            self._trajectory_pose_ok = pose_ok
             self._topic_counts["trajectory"] += 1
+
+    def _on_velocity_report(self, msg: Any) -> None:
+        with self._lock:
+            self._veh_speed_act_kmh = round(abs(float(msg.longitudinal_velocity)) * 3.6, 1)
+            self._veh_status_time = time.time()
+
+    def _on_steering_report(self, msg: Any) -> None:
+        with self._lock:
+            self._veh_steer_act_deg = round(math.degrees(float(msg.steering_tire_angle)), 1)
+            self._veh_status_time = time.time()
+
+    def _on_gear_report(self, msg: Any) -> None:
+        gear_map = {1: "N", 2: "D", 20: "R", 22: "P"}
+        with self._lock:
+            self._veh_gear = gear_map.get(int(msg.report), "D")
+            self._veh_status_time = time.time()
+
+    def _on_control_mode_report(self, msg: Any) -> None:
+        mode_map = {1: "AUTO", 4: "MANUAL"}
+        with self._lock:
+            self._veh_mode = mode_map.get(int(msg.mode), "MANUAL")
+            self._veh_status_time = time.time()
+
+    def _on_turn_indicators_report(self, msg: Any) -> None:
+        with self._lock:
+            self._veh_turn_left = int(msg.report) == 2
+            self._veh_turn_right = int(msg.report) == 3
+            self._veh_status_time = time.time()
+
+    def _on_hazard_lights_report(self, msg: Any) -> None:
+        with self._lock:
+            self._veh_hazard = int(msg.report) == 2
+            self._veh_status_time = time.time()
+
+    def _on_control_cmd(self, msg: Any) -> None:
+        with self._lock:
+            if hasattr(msg, "longitudinal") and hasattr(msg.longitudinal, "velocity"):
+                self._veh_speed_cmd_kmh = round(abs(float(msg.longitudinal.velocity)) * 3.6, 1)
+            if hasattr(msg, "lateral") and hasattr(msg.lateral, "steering_tire_angle"):
+                self._veh_steer_cmd_deg = round(math.degrees(float(msg.lateral.steering_tire_angle)), 1)
+            self._veh_status_time = time.time()
 
     @staticmethod
     def _class_counts(objects: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -529,29 +722,38 @@ class Ros2Bridge:
         """Fetch the latest perception objects and trajectory snapshot (thread-safe)."""
         now = time.time()
         with self._lock:
-            fresh = [
+            while self._perception_timestamps and (now - self._perception_timestamps[0]) > 1.0:
+                self._perception_timestamps.pop(0)
+
+            fresh_sources = [
                 name for name in SOURCE_PRIORITY
-                if self._sources[name] and (now - self._source_time[name]) < SOURCE_STALE_SEC
+                if self._source_time[name] > 0.0 and (now - self._source_time[name]) < SOURCE_STALE_SEC
             ]
-            source: Optional[str] = fresh[0] if fresh else None
+            non_empty_fresh = [name for name in fresh_sources if len(self._sources[name]) > 0]
+            source: Optional[str] = (
+                non_empty_fresh[0]
+                if non_empty_fresh
+                else (fresh_sources[0] if fresh_sources else None)
+            )
+
+            ego_fresh = self._has_ego_pose and (now - self._ego_time) < SOURCE_STALE_SEC
+            traj_fresh = self._last_trajectory_time > 0.0 and (now - self._last_trajectory_time) < 2.5
+            veh_fresh = self._veh_status_time > 0.0 and (now - self._veh_status_time) < SOURCE_STALE_SEC
 
             objects: List[Dict[str, Any]] = list(self._sources[source]) if source else []
-            pose_ok = self._source_pose_ok[source] if source else self._has_ego_pose
+            pose_ok = self._source_pose_ok[source] if source else ego_fresh
             frame_id = self._source_frame[source] if source else ""
 
-            hz = 0.0
-            if fresh:
-                # Combined rate across all live perception sources.
-                hz = float(len(self._perception_timestamps))
+            hz = float(len(self._perception_timestamps)) if fresh_sources else 0.0
 
             trajectory = (
                 list(self._planned_trajectory)
-                if (now - self._last_trajectory_time) < 2.5
+                if traj_fresh and self._trajectory_pose_ok and (ego_fresh or not (("map" in self._trajectory_frame) or ("odom" in self._trajectory_frame)))
                 else []
             )
 
             return {
-                "active": bool(fresh),
+                "active": bool(fresh_sources) or ego_fresh or traj_fresh or veh_fresh,
                 "hz": round(hz, 1),
                 # tracked_count retained for the existing HUD label; equals rendered objects.
                 "tracked_count": len(objects),
@@ -561,10 +763,27 @@ class Ros2Bridge:
                 "source": source,
                 "pose_ok": bool(pose_ok),
                 "frame_id": frame_id,
-                "has_ego_pose": self._has_ego_pose,
+                "has_ego_pose": ego_fresh,
+                "ego_speed_kmh": self._ego_speed_kmh if ego_fresh else 0.0,
+                "ego_yaw_rate_mrad_s": self._ego_yaw_rate_mrad_s if ego_fresh else 0.0,
+                "vehicle_status": {
+                    "fresh": veh_fresh,
+                    "speed_act_kmh": self._veh_speed_act_kmh,
+                    "speed_cmd_kmh": self._veh_speed_cmd_kmh,
+                    "steer_act_deg": self._veh_steer_act_deg,
+                    "steer_cmd_deg": self._veh_steer_cmd_deg,
+                    "gear": self._veh_gear,
+                    "mode": self._veh_mode,
+                    "lights": {
+                        "left": self._veh_turn_left,
+                        "right": self._veh_turn_right,
+                        "hazard": self._veh_hazard,
+                    },
+                },
                 "class_counts": self._class_counts(objects),
                 "bridge_available": self.is_available,
                 "subscribed": dict(self._subscribed),
                 "topic_counts": dict(self._topic_counts),
                 "last_error": self._last_error,
             }
+

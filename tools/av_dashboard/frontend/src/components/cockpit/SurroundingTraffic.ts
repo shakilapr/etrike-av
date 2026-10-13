@@ -4,6 +4,7 @@ import { PerceptionObject } from '../../types/can';
 interface Actor {
   group: THREE.Group;
   meshes: Record<string, THREE.Object3D>;
+  currentLabel: string;
   lastSeen: number;
   targetPos: THREE.Vector3;
   targetYaw: number;
@@ -289,6 +290,7 @@ export class SurroundingTraffic {
     return {
       group,
       meshes,
+      currentLabel: obj.label,
       lastSeen: 0,
       targetPos: new THREE.Vector3(),
       targetYaw: 0,
@@ -301,6 +303,15 @@ export class SurroundingTraffic {
       mesh.visible = key === obj.label || (key === 'UNKNOWN' && !CLASS_COLORS[obj.label]);
     }
 
+    if (actor.currentLabel !== obj.label) {
+      actor.currentLabel = obj.label;
+      const labelSprite = actor.meshes['__label'] as THREE.Sprite | undefined;
+      if (labelSprite) {
+        const colorHex = CLASS_COLORS[obj.label] ?? CLASS_COLORS.UNKNOWN;
+        labelSprite.material = this.getLabelMaterial(obj.label, colorHex);
+      }
+    }
+
     const active = actor.meshes[obj.label] ?? actor.meshes['UNKNOWN'];
     if (!active) return;
 
@@ -309,13 +320,31 @@ export class SurroundingTraffic {
     const length = obj.dx && obj.dx > 0 ? obj.dx : 4.0;
     const height = obj.dz && obj.dz > 0 ? obj.dz : 1.5;
 
-    if (obj.label === 'PEDESTRIAN' || obj.label === 'BICYCLE' || obj.label === 'MOTORCYCLE') {
+    if (obj.label === 'PEDESTRIAN') {
       active.scale.set(1, height / 1.8, 1);
+    } else if (obj.label === 'BICYCLE' || obj.label === 'MOTORCYCLE') {
+      active.scale.set(Math.max(width / 0.8, 0.7), height / 1.6, Math.max(length / 1.8, 0.7));
     } else if (obj.label === 'TRUCK' || obj.label === 'BUS') {
       active.scale.set(width / 2.5, height / 2.8, length / 8.0);
     } else {
       active.scale.set(width / 1.8, height / 1.4, length / 4.2);
     }
+  }
+
+  private disposeActor(actor: Actor) {
+    actor.group.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.geometry) {
+        mesh.geometry.dispose();
+      }
+      if (mesh.material) {
+        if (Array.isArray(mesh.material)) {
+          mesh.material.forEach((m) => m.dispose());
+        } else {
+          mesh.material.dispose();
+        }
+      }
+    });
   }
 
   /**
@@ -356,16 +385,19 @@ export class SurroundingTraffic {
       });
     }
 
-    // Smoothly interpolate every actor toward its latest target (10 Hz input -> 60 fps).
+    // Smoothly interpolate every visible actor toward its latest target (10 Hz input -> 60 fps).
     const posLerp = 1 - Math.exp(-step * 12);
     const yawLerp = 1 - Math.exp(-step * 10);
+    const TWO_PI = Math.PI * 2;
     for (const [key, actor] of this.actors) {
       const isVisible = seen.has(key);
       if (!isVisible && now - actor.lastSeen > 0.5) {
         actor.group.visible = false;
+        continue;
       }
       actor.group.position.lerp(actor.targetPos, posLerp);
-      const delta = ((actor.targetYaw - actor.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
+      const rawDiff = actor.targetYaw - actor.group.rotation.y + Math.PI;
+      const delta = (((rawDiff % TWO_PI) + TWO_PI) % TWO_PI) - Math.PI;
       actor.group.rotation.y += delta * yawLerp;
     }
 
@@ -374,6 +406,7 @@ export class SurroundingTraffic {
       for (const [key, actor] of this.actors) {
         if (now - actor.lastSeen > 3.0) {
           this.group.remove(actor.group);
+          this.disposeActor(actor);
           this.actors.delete(key);
         }
       }

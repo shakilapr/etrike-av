@@ -57,6 +57,7 @@ class MessageDef:
     id: int
     id_hex: str
     bus: str = "high"
+    buses: List[str] = field(default_factory=list)
     sender: str = ""
     receivers: List[str] = field(default_factory=list)
     cycle_ms: int = 0
@@ -194,7 +195,7 @@ class ContractRegistry:
                         instances = [{"bus": "high", "id": raw_id, "cycle_ms": raw_msg.get("cycle_ms", 0)}]
 
                 for inst in instances:
-                    bus = inst.get("bus", "high")
+                    bus = str(inst.get("bus", "high")).lower()
                     raw_inst_id = inst.get("id", 0)
                     can_id = int(str(raw_inst_id), 0) if isinstance(raw_inst_id, (str, int)) else int(raw_inst_id)
                     cycle_ms = int(inst.get("cycle_ms", raw_msg.get("cycle_ms", 0)))
@@ -202,12 +203,29 @@ class ContractRegistry:
                     receivers = inst.get("receivers", raw_msg.get("receivers", []))
                     if isinstance(receivers, str):
                         receivers = [r.strip() for r in receivers.split(",") if r.strip()]
+                    else:
+                        receivers = list(receivers)
 
                     # Infer Access relative to Host computer:
                     if inst_sender.lower() == "host" or "hmi" in key.lower():
                         access = "TX"
                     else:
                         access = "RX"
+
+                    existing = self.messages_by_id.get(can_id)
+                    if existing is not None and existing.key == key:
+                        if bus not in existing.buses:
+                            existing.buses.append(bus)
+                        if "high" in existing.buses and "low" in existing.buses:
+                            existing.bus = "high/low"
+                        else:
+                            existing.bus = existing.buses[0]
+                        for r in receivers:
+                            if r not in existing.receivers:
+                                existing.receivers.append(r)
+                        if cycle_ms > 0 and (existing.cycle_ms == 0 or bus == "high"):
+                            existing.cycle_ms = cycle_ms
+                        continue
 
                     msg_def = MessageDef(
                         key=key,
@@ -216,6 +234,7 @@ class ContractRegistry:
                         id=can_id,
                         id_hex=f"0x{can_id:03X}",
                         bus=bus,
+                        buses=[bus],
                         sender=inst_sender,
                         receivers=receivers,
                         cycle_ms=cycle_ms,
@@ -254,10 +273,23 @@ class ContractRegistry:
                     for bi in range(n_bytes):
                         if sig.byte + bi < data_len:
                             raw_val = (raw_val << 8) | data[sig.byte + bi]
-                elif sig.endian == "big" and sig.bits < 8:
+                elif sig.endian == "big" and (sig.bit + sig.bits) <= 8:
                     mask = (1 << sig.bits) - 1
                     if sig.byte < data_len:
                         raw_val = (data[sig.byte] >> sig.bit) & mask
+                elif sig.endian == "big":
+                    # Unaligned or non-byte-multiple big-endian signal across byte boundaries
+                    remaining = sig.bits
+                    cur_byte = sig.byte
+                    cur_bit = sig.bit
+                    while remaining > 0 and cur_byte < data_len:
+                        take = min(remaining, 8 - cur_bit)
+                        mask = (1 << take) - 1
+                        chunk = (data[cur_byte] >> cur_bit) & mask
+                        raw_val = (raw_val << take) | chunk
+                        remaining -= take
+                        cur_byte += 1
+                        cur_bit = 0
                 else:
                     for b_offset in range(sig.bits):
                         g_bit = start_bit + b_offset

@@ -1334,6 +1334,11 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
         gear_report.stamp = velocity.header.stamp;
         if (decoder_->decode_motion(frame, velocity, gear_report)) {
           motion_report_.feed(decoder_->motion_counter(), velocity.header.stamp);
+          if (std::abs(velocity.heading_rate) < 1e-4F && params_.wheel_base > 0.1) {
+            const float steer_rad = latest_steering_rad_.load(std::memory_order_relaxed);
+            velocity.heading_rate = static_cast<float>(
+              velocity.longitudinal_velocity * std::tan(steer_rad) / params_.wheel_base);
+          }
           if (park_requested_.load(std::memory_order_relaxed) &&
             gear_report.report == autoware_vehicle_msgs::msg::GearReport::NEUTRAL)
           {
@@ -1422,6 +1427,7 @@ void VehicleBridgeNode::publish_vehicle_reports(const struct can_frame & frame)
         autoware_vehicle_msgs::msg::SteeringReport steer;
         steer.stamp = now();
         steer.steering_tire_angle = motion::universe_steering_rad(trike_angle);
+        latest_steering_rad_.store(steer.steering_tire_angle, std::memory_order_relaxed);
         if (!params_.sim_mode && pub_steering_->is_activated()) {pub_steering_->publish(steer);}
         break;
       }

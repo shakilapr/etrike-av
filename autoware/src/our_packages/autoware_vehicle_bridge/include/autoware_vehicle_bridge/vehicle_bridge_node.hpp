@@ -306,6 +306,7 @@ private:
   std::atomic<bool> mcp_bus_off_{false};
   std::atomic<uint8_t> mcp_spi_faults_{0};
   std::atomic<uint8_t> reset_seq_{0};
+  std::atomic<float> latest_steering_rad_{0.0f};
 
   // ---- Rate limiting ----
   rclcpp::Time last_estop_tx_{0, 0, RCL_ROS_TIME};

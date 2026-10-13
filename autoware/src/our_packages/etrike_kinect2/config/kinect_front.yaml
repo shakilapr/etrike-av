@@ -1,6 +1,6 @@
 # Kinect v2 FRONT — E-Trike
 # Find serial with: ./run.sh discover
-kinect_front:
+/**:
   ros__parameters:
     serial: "500076343042"
     color_enabled: true

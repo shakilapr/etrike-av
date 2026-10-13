@@ -316,7 +316,7 @@ class RemoteControlMainWindow(QMainWindow):
         self.btn_gear_park = QPushButton("PARK (P)")
         self.btn_gear_rev = QPushButton("REV (R)")
         self.btn_gear_neu = QPushButton("NEU (N)")
-        self.btn_gear_drive = QPushButton("DRIVE (D)")
+        self.btn_gear_drive = QPushButton("DRIVE (V)")
         self.btn_gear_low = QPushButton("LOW (L)")
 
         self._gear_group = QButtonGroup(self)
@@ -800,7 +800,7 @@ class RemoteControlMainWindow(QMainWindow):
             self._select_gear(GearConstants.REVERSE)
         elif key == Qt.Key_N:
             self._select_gear(GearConstants.NEUTRAL)
-        elif key == Qt.Key_D:
+        elif key == Qt.Key_V:
             self._select_gear(GearConstants.DRIVE)
         elif key == Qt.Key_L:
             self._select_gear(GearConstants.LOW)

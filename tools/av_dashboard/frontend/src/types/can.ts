@@ -21,6 +21,7 @@ export interface MessageDef {
   id: number;
   id_hex: string;
   bus: string;
+  buses?: string[];
   sender: string;
   receivers: string[];
   cycle_ms: number;
@@ -54,6 +55,8 @@ export interface TelemetrySummary {
   estop: boolean;
   estop_reason: number;
   gear: string;
+  gear_cmd?: string;
+  gear_act?: string;
   speed_cmd_kmh: number;
   speed_act_kmh: number;
   steer_cmd_deg: number;
@@ -74,6 +77,13 @@ export interface TelemetrySummary {
     headlight: boolean;
     brake: boolean;
   };
+  motor_rpm?: number | null;
+  throttle_pct?: number | null;
+  bus_rate_hz?: number;
+  can_connected?: boolean;
+  is_simulated?: boolean;
+  can_interface?: string;
+  telemetry_source?: 'ECU_FEEDBACK' | 'BENCH_CMD' | 'ROS_SIM' | 'SIMULATED' | 'OFFLINE';
 }
 
 export interface PerceptionObject {
@@ -82,9 +92,9 @@ export interface PerceptionObject {
   x: number; // lateral position (meters, left is negative, right is positive)
   y: number; // vertical height (meters)
   z: number; // longitudinal position (meters ahead, forward is negative Z in Three.js)
-  dx?: number; // length
-  dy?: number; // height
-  dz?: number; // width
+  dx?: number; // length (REP-103 X)
+  dy?: number; // width (REP-103 Y)
+  dz?: number; // height (REP-103 Z)
   yaw?: number; // heading in radians
   speed_kmh?: number;
 }
@@ -104,8 +114,11 @@ export interface RosStatus {
   pose_ok?: boolean;
   frame_id?: string;
   has_ego_pose?: boolean;
+  ego_speed_kmh?: number;
+  ego_yaw_rate_mrad_s?: number;
   class_counts?: Record<string, number>;
   bridge_available?: boolean;
   subscribed?: Record<string, boolean>;
   last_error?: string | null;
 }
+

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Update etrike_protocol from the etrike repo
 #
 # This script fetches the YAML contract files from
@@ -35,12 +36,20 @@ COMMIT_HASH=$(git rev-parse --short HEAD)
 # Generate C++ header from YAML contracts
 echo "Generating C++ header from YAML contracts..."
 cd "$TMPDIR/etrike/protocol"
-python -m tools.protocol generate
+PYTHON_BIN=$(command -v python3 || command -v python)
+"$PYTHON_BIN" -m tools.protocol generate
 
 # Copy generated C++ header
 echo "Updating generated C++ header..."
 mkdir -p "$PROTO_DIR/generated/cpp"
 cp "$TMPDIR/etrike/protocol/generated/cpp/etrike_protocol.hpp" "$PROTO_DIR/generated/cpp/etrike_protocol.hpp"
+
+# Sync YAML contracts to av_dashboard and can_watcher
+for target_contracts in "$PROJECT_ROOT/tools/av_dashboard/contracts" "$PROJECT_ROOT/tools/can_watcher/contracts"; do
+    if [ -d "$target_contracts" ]; then
+        cp "$TMPDIR/etrike/protocol/contracts/"*.yaml "$target_contracts/"
+    fi
+done
 
 # Update vectors (for golden-vector tests)
 if [ -d "$TMPDIR/etrike/protocol/vectors" ]; then

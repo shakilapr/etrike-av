@@ -89,6 +89,7 @@ echo "[STEP 4] Verifying E-Trike packages ..."
 OUR_PKG_DIR="$AUTOWARE_DIR/src/our_packages"
 EXPECTED_PACKAGES=(
     autoware_vehicle_bridge
+    direct_bridge
     etrike_protocol
     etrike_vehicle_description
     etrike_vehicle_launch
@@ -97,6 +98,10 @@ EXPECTED_PACKAGES=(
     etrike_common_launch
     etrike_stability_guard
     etrike_kinect2
+    etrike_lidar_viewer
+    etrike_remote_control
+    mapping/lidarslam_ros2
+    mapping/ndt_omp
 )
 MISSING=0
 for pkg in "${EXPECTED_PACKAGES[@]}"; do

@@ -255,7 +255,7 @@ public:
     }
 
     int channel_offset_ns;
-    if (firetime_offsets_ns_.has_value()) {
+    if (firetime_offsets_ns_.has_value() && channel_id < n_channels) {
       channel_offset_ns = (*firetime_offsets_ns_)[channel_id];
     } else {
       channel_offset_ns = 368 + 2888 * ch_idx;

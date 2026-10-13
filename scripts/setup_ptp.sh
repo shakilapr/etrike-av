@@ -72,16 +72,17 @@ echo "  ptp4l config installed at /etc/ptp4l.conf"
 echo "[3/4] Starting ptp4l on $IFACE..."
 sudo pkill ptp4l 2>/dev/null || true
 if [ "$TIMESTAMING" = "hardware" ]; then
-    sudo ptp4l -i "$IFACE" -f /etc/ptp4l.conf -m &
-    echo "  ptp4l started with hardware timestamping"
+    sudo ptp4l -i "$IFACE" -f /etc/ptp4l.conf -H -m &
+    echo "  ptp4l started with hardware timestamping (-H)"
     sleep 2
     echo "[4/4] Starting phc2sys to sync PTP clock -> system clock..."
     sudo pkill phc2sys 2>/dev/null || true
     sudo phc2sys -s "$PTP_DEVICE" -c CLOCK_REALTIME -m -O 0 &
     echo "  phc2sys started"
 else
-    sudo ptp4l -i "$IFACE" -f /etc/ptp4l.conf -m -S &
-    echo "  ptp4l started with software timestamping"
+    sudo pkill phc2sys 2>/dev/null || true
+    sudo ptp4l -i "$IFACE" -f /etc/ptp4l.conf -S -m &
+    echo "  ptp4l started with software timestamping (-S)"
 fi
 
 echo ""

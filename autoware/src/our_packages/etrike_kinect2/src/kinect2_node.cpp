@@ -148,6 +148,14 @@ CallbackReturn Kinect2Node::on_activate(const rclcpp_lifecycle::State &)
   depth_frames_in_window_ = 0;
   ir_frames_in_window_ = 0;
 
+  if (color_pub_) {color_pub_->on_activate();}
+  if (depth_pub_) {depth_pub_->on_activate();}
+  if (depth_registered_pub_) {depth_registered_pub_->on_activate();}
+  if (ir_pub_) {ir_pub_->on_activate();}
+  if (color_info_pub_) {color_info_pub_->on_activate();}
+  if (depth_info_pub_) {depth_info_pub_->on_activate();}
+  if (diag_pub_) {diag_pub_->on_activate();}
+
   capture_thread_ = std::thread(&Kinect2Node::capture_loop, this);
 
   RCLCPP_INFO(get_logger(), "activated — hotplug worker started");
@@ -160,6 +168,14 @@ CallbackReturn Kinect2Node::on_deactivate(const rclcpp_lifecycle::State &)
   if (capture_thread_.joinable()) {
     capture_thread_.join();
   }
+
+  if (color_pub_) {color_pub_->on_deactivate();}
+  if (depth_pub_) {depth_pub_->on_deactivate();}
+  if (depth_registered_pub_) {depth_registered_pub_->on_deactivate();}
+  if (ir_pub_) {ir_pub_->on_deactivate();}
+  if (color_info_pub_) {color_info_pub_->on_deactivate();}
+  if (depth_info_pub_) {depth_info_pub_->on_deactivate();}
+  if (diag_pub_) {diag_pub_->on_deactivate();}
 
   {
     std::lock_guard<std::mutex> lock(device_mutex_);

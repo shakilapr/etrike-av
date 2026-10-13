@@ -1,6 +1,6 @@
 # Kinect v2 REAR — E-Trike
 # Find serial with: ./run.sh discover
-kinect_rear:
+/**:
   ros__parameters:
     serial: "500396543042"  # rear Kinect (discovered 2026-08-24)
     color_enabled: true

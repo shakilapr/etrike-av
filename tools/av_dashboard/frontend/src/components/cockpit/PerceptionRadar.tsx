@@ -68,7 +68,7 @@ export const PerceptionRadar: React.FC = () => {
 
           {/* Perception objects */}
           {objects.map((obj, i) => {
-            if (obj.z > 6 || obj.z < -RANGE_M - 10) return null; // behind / far
+            if (Math.abs(obj.z) > RANGE_M + 10 || Math.abs(obj.x) > RANGE_M + 10) return null;
             const px = CENTER + obj.x * SCALE;
             const py = CENTER + obj.z * SCALE;
             if (px < 6 || px > VIEW - 6 || py < 6 || py > VIEW - 6) return null;

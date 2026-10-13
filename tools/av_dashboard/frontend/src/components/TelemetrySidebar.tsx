@@ -5,8 +5,8 @@ import { ShieldAlert, AlertTriangle, Lightbulb } from 'lucide-react';
 export const TelemetrySidebar: React.FC = () => {
   const telemetry = useCanStore((state) => state.telemetry);
 
-  // Speedometer calculation (0 to 50 km/h)
-  const maxSpeed = 50;
+  // Speedometer calculation (0 to 15 km/h for E-Trike)
+  const maxSpeed = 15;
   const speedActClamped = Math.min(Math.max(telemetry.speed_act_kmh, 0), maxSpeed);
   const speedCmdClamped = Math.min(Math.max(telemetry.speed_cmd_kmh, 0), maxSpeed);
   // Speed arc angles: from -135deg to +45deg (total 180deg)
@@ -21,8 +21,8 @@ export const TelemetrySidebar: React.FC = () => {
   const steerActAngle = -90 + (steerActClamped / maxSteer) * 45;
   const steerCmdAngle = -90 + (steerCmdClamped / maxSteer) * 45;
 
-  // Brake pressure (0 to 1500 kPa)
-  const maxBrake = 1500;
+  // Brake pressure (0 to 5000 kPa per brk.yaml)
+  const maxBrake = 5000;
   const brakeActPercent = Math.min(Math.max((telemetry.brake_act_kpa / maxBrake) * 100, 0), 100);
   const brakeCmdPercent = Math.min(Math.max((telemetry.brake_cmd_kpa / maxBrake) * 100, 0), 100);
 

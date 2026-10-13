@@ -301,7 +301,7 @@ export class TuktukVehicle {
 
     // 4. Chassis Pitch dynamics (brake dive & acceleration squat)
     const isBraking = brakeKpa > 20;
-    const targetPitch = isBraking ? Math.min((brakeKpa / 1500) * 0.04, 0.05) : 0;
+    const targetPitch = isBraking ? Math.min((brakeKpa / 5000) * 0.04, 0.05) : 0;
     this.currentPitch += (targetPitch - this.currentPitch) * Math.min(dt * 12, 1);
     this.chassisGroup.rotation.x = this.currentPitch;
 

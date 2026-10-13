@@ -128,6 +128,24 @@ def launch_setup(context, *args, **kwargs):
                     "calibration_file": sensor_calib_fp,
                     "sensor_model": sensor_model,
                     "launch_hw": LaunchConfiguration("launch_driver"),
+                    "retry_hw": LaunchConfiguration("retry_hw"),
+                    "multicast_ip": LaunchConfiguration("multicast_ip"),
+                    "cut_angle": LaunchConfiguration("cut_angle"),
+                    "sync_angle": LaunchConfiguration("sync_angle"),
+                    "udp_socket_receive_buffer_size_bytes": LaunchConfiguration(
+                        "udp_socket_receive_buffer_size_bytes"
+                    ),
+                    "diag_span": LaunchConfiguration("diag_span"),
+                    "diagnostics.packet_loss.error_threshold": LaunchConfiguration(
+                        "diag_packet_loss_error_threshold"
+                    ),
+                    "diagnostics.pointcloud_publish_rate.frequency_ok.min_hz": LaunchConfiguration(
+                        "diag_publish_rate_ok_min_hz"
+                    ),
+                    "diagnostics.pointcloud_publish_rate.frequency_warn.min_hz": LaunchConfiguration(
+                        "diag_publish_rate_warn_min_hz"
+                    ),
+                    "forward_packets_to_rosbag": False,
                     **create_parameter_dict(
                         "host_ip",
                         "sensor_ip",
@@ -156,8 +174,7 @@ def launch_setup(context, *args, **kwargs):
                 },
             ],
             remappings=[
-                # cSpell:ignore knzo25
-                # TODO(knzo25): fix the remapping once nebula gets updated
+                ("pandar_points", "pointcloud_raw_ex"),
                 ("velodyne_points", "pointcloud_raw_ex"),
             ],
             extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
@@ -253,7 +270,7 @@ def launch_setup(context, *args, **kwargs):
         namespace="autoware_pointcloud_preprocessor",
         package="rclcpp_components",
         executable=LaunchConfiguration("container_executable"),
-        compositional_node_descriptions=nodes,
+        composable_node_descriptions=nodes,
         output="both",
     )
 
@@ -273,9 +290,13 @@ def generate_launch_description():
     add_launch_arg("config_file", "", description="sensor configuration file")
     add_launch_arg("launch_driver", "True", "do launch driver")
     add_launch_arg("setup_sensor", "True", "configure sensor")
+    add_launch_arg("retry_hw", "True", "retry sensor hardware connection")
     add_launch_arg("sensor_ip", "192.168.1.201", "device ip address")
-    add_launch_arg("host_ip", "255.255.255.255", "host ip address")
+    add_launch_arg("host_ip", "0.0.0.0", "host ip address")
+    add_launch_arg("multicast_ip", "", "optional multicast ip address")
     add_launch_arg("scan_phase", "0.0")
+    add_launch_arg("cut_angle", "0.0", "scan cut angle in degrees")
+    add_launch_arg("sync_angle", "0", "sensor sync angle in degrees")
     add_launch_arg("base_frame", "base_link", "base frame id")
     add_launch_arg("min_range", "0.3", "minimum view range")
     add_launch_arg("max_range", "300.0", "maximum view range")
@@ -284,15 +305,17 @@ def generate_launch_description():
     add_launch_arg("data_port", "2368", "device data port number")
     add_launch_arg("gnss_port", "10110", "device gnss port number")
     add_launch_arg("packet_mtu_size", "1500", "packet mtu size")
+    add_launch_arg("udp_socket_receive_buffer_size_bytes", "26214400", "UDP socket receive buffer size")
     add_launch_arg("rotation_speed", "600", "rotational frequency")
     add_launch_arg("dual_return_distance_threshold", "0.1", "dual return distance threshold")
-    add_launch_arg("frame_id", "lidar", "frame id")
+    add_launch_arg("frame_id", "lidar_link", "frame id")
     add_launch_arg("input_frame", LaunchConfiguration("base_frame"), "use for cropbox")
     add_launch_arg("output_frame", LaunchConfiguration("base_frame"), "use for cropbox")
     add_launch_arg("use_multithread", "False", "use multithread")
     add_launch_arg("use_intra_process", "False", "use ROS 2 component container communication")
+    add_launch_arg("container_name", "nebula_node_container", "composable node container name")
     add_launch_arg("lidar_container_name", "nebula_node_container")
-    add_launch_arg("output_as_sensor_frame", "True", "output final pointcloud in sensor frame")
+    add_launch_arg("output_as_sensor_frame", "False", "output final pointcloud in base_link for downstream perception")
     add_launch_arg(
         "vehicle_mirror_param_file", description="path to the file of vehicle mirror position yaml"
     )
@@ -310,6 +333,10 @@ def generate_launch_description():
     add_launch_arg("ptp_transport_type", "UDP", "PTP transport: UDP / L2")
     add_launch_arg("ptp_switch_type", "TSN", "PTP switch type")
     add_launch_arg("ptp_lock_threshold", "100", "PTP lock threshold")
+    add_launch_arg("diag_span", "1000", "diagnostic polling interval ms")
+    add_launch_arg("diag_packet_loss_error_threshold", "5", "packet loss error threshold")
+    add_launch_arg("diag_publish_rate_ok_min_hz", "9.0", "min ok publish rate Hz")
+    add_launch_arg("diag_publish_rate_warn_min_hz", "8.0", "min warn publish rate Hz")
 
     add_launch_arg(
         "distortion_correction_node_param_path",

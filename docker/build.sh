@@ -45,8 +45,9 @@ docker run -it --rm \
       --cmake-args -DCMAKE_BUILD_TYPE=Release \
       --packages-select \
         autoware_launch \
-        autoware_vehicle_bridge \
         etrike_protocol \
+        autoware_vehicle_bridge \
+        direct_bridge \
         etrike_vehicle_description \
         etrike_vehicle_launch \
         etrike_sensor_kit_description \
@@ -54,5 +55,12 @@ docker run -it --rm \
         etrike_common_launch \
         etrike_stability_guard \
         etrike_kinect2 \
+        etrike_lidar_viewer \
+        etrike_remote_control \
+        lidarslam_msgs \
+        ndt_omp \
+        scanmatcher \
+        graph_based_slam \
+        lidarslam \
       2>&1
   "

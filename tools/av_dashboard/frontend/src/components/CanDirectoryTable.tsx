@@ -39,8 +39,13 @@ export const CanDirectoryTable: React.FC = () => {
         return false;
       }
       // Bus filter
-      if (filterBus !== 'all' && msg.bus.toLowerCase() !== filterBus) {
-        return false;
+      if (filterBus !== 'all') {
+        const hasBus = Array.isArray(msg.buses)
+          ? msg.buses.some((b) => b.toLowerCase() === filterBus)
+          : msg.bus.toLowerCase().includes(filterBus);
+        if (!hasBus) {
+          return false;
+        }
       }
       // Search query
       if (query) {

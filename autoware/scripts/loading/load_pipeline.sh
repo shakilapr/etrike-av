@@ -26,9 +26,13 @@ if [ ! -d "$WORKSPACE_ROOT/scripts" ] && [ -d "$HOME/av_project/scripts" ]; then
 fi
 
 CONTAINER="autoware_test"
-IMAGE="ghcr.io/autowarefoundation/autoware:universe-cuda-humble"
+if docker image inspect etrike-kinect-build:latest >/dev/null 2>&1; then
+  IMAGE="${IMAGE:-etrike-kinect-build:latest}"
+else
+  IMAGE="${IMAGE:-ghcr.io/autowarefoundation/autoware:universe-cuda-humble}"
+fi
 CAN_BITRATE="${CAN_BITRATE:-500000}"
-MAP_PATH="/autoware_map/sample-map-planning"
+MAP_PATH="${MAP_PATH:-/autoware_map/sample-map-planning}"
 VEHICLE_MODEL="etrike_vehicle"
 SENSOR_MODEL="etrike_sensor_kit"
 
@@ -60,37 +64,112 @@ detect_can() {
   fi
 }
 
-start_container() {
-  say "Container: $CONTAINER"
-  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    echo "  already running."
-  else
-    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-    DISPLAY=:1 XAUTHORITY=/run/user/1000/gdm/Xauthority xhost +local:docker >/dev/null 2>&1 || true
-    docker run -d --name "$CONTAINER" \
-      --privileged --runtime=nvidia --gpus all \
-      --net=host --ipc=host \
-      -e DISPLAY=:1 \
-      -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
-      -v "$HOME/av_project/autoware:/workspace/autoware" \
-      -v "$HOME/autoware_map:/autoware_map" \
-      "$IMAGE" bash -c 'while true; do sleep 1000; done'
-    echo "  started."
+detect_x11() {
+  X_DISPLAY="${DISPLAY:-:1}"
+  if [ ! -e "/tmp/.X11-unix/X${X_DISPLAY#:}" ]; then
+    for d in 1 0; do
+      if [ -e "/tmp/.X11-unix/X${d}" ]; then
+        X_DISPLAY=":${d}"
+        break
+      fi
+    done
   fi
+  XAUTH="/run/user/$(id -u)/gdm/Xauthority"
+  if [ ! -f "$XAUTH" ] && [ -f "/run/user/1000/gdm/Xauthority" ]; then
+    XAUTH="/run/user/1000/gdm/Xauthority"
+  fi
+  if [ ! -f "$XAUTH" ] && [ -f "$HOME/.Xauthority" ]; then
+    XAUTH="$HOME/.Xauthority"
+  fi
+}
+
+ensure_x11_access() {
+  detect_x11
+  DISPLAY="$X_DISPLAY" XAUTHORITY="$XAUTH" xhost +local:docker >/dev/null 2>&1 || true
+  DISPLAY="$X_DISPLAY" XAUTHORITY="$XAUTH" xhost +SI:localuser:root >/dev/null 2>&1 || true
+}
+
+start_container() {
+  say "Container: $CONTAINER ($IMAGE)"
+  ensure_x11_access
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    if docker exec "$CONTAINER" test -d /workspace/av_project/tools >/dev/null 2>&1; then
+      echo "  already running."
+      return
+    fi
+    echo "  recreating container to mount /workspace/av_project..."
+  fi
+
+  mkdir -p "$WORKSPACE_ROOT/data" 2>/dev/null || true
+  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  docker run -d --name "$CONTAINER" \
+    --privileged --runtime=nvidia --gpus all \
+    --net=host --ipc=host \
+    -e DISPLAY="$X_DISPLAY" \
+    -e XAUTHORITY="$XAUTH" \
+    -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
+    -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+    -v /run/user/1000:/run/user/1000:ro \
+    -v /dev/bus/usb:/dev/bus/usb \
+    -v "$WORKSPACE_ROOT:/workspace/av_project" \
+    -v "$WORKSPACE_ROOT/autoware:/workspace/autoware" \
+    -v "$WORKSPACE_ROOT/data:/workspace/data" \
+    -v "$HOME/autoware_map:/autoware_map" \
+    -v "$HOME/.local:/host_local:ro" \
+    -v /usr/local/lib/python3.10/dist-packages:/host_dist_packages:ro \
+    "$IMAGE" bash -c 'while true; do sleep 1000; done'
+  echo "  started."
 }
 
 start_universe() {
   say "Autoware Universe (planning simulator + RViz) on the monitor"
+  ensure_x11_access
   docker exec -d "$CONTAINER" bash -c "
-    export DISPLAY=:1;
+    export DISPLAY=$X_DISPLAY;
+    export XAUTHORITY=$XAUTH;
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
+    if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
+    export LD_LIBRARY_PATH=/usr/local/lib:/host_local/lib:\$LD_LIBRARY_PATH;
+    source /opt/ros/humble/setup.bash;
     source /opt/autoware/setup.bash;
     source /workspace/autoware/install/setup.bash;
     ros2 launch autoware_launch planning_simulator.launch.xml \
       map_path:=$MAP_PATH \
       vehicle_model:=$VEHICLE_MODEL \
       sensor_model:=$SENSOR_MODEL \
-      rviz:=true"
-  echo "  launched. Wait ~40s for RViz; then in RViz: pose -> goal -> engage."
+      rviz:=true > /tmp/universe.log 2>&1"
+  echo "  launched (log inside container: /tmp/universe.log). Wait ~40s for RViz; then in RViz: pose -> goal -> engage."
+}
+
+start_live_autoware() {
+  say "Autoware Universe LIVE (Hesai LiDAR + Kinect v2 + CenterPoint Perception + NDT Localization + RViz)"
+  ensure_x11_access
+  detect_can
+  docker exec -d "$CONTAINER" bash -c "
+    export DISPLAY=$X_DISPLAY;
+    export XAUTHORITY=$XAUTH;
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
+    if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
+    export LD_LIBRARY_PATH=/usr/local/lib:/host_local/lib:\$LD_LIBRARY_PATH;
+    source /opt/ros/humble/setup.bash;
+    source /opt/autoware/setup.bash;
+    source /workspace/autoware/install/setup.bash;
+    ros2 launch autoware_launch autoware.launch.xml \
+      map_path:=$MAP_PATH \
+      vehicle_model:=$VEHICLE_MODEL \
+      sensor_model:=$SENSOR_MODEL \
+      launch_sensing:=true \
+      launch_sensing_driver:=true \
+      launch_localization:=true \
+      launch_perception:=true \
+      launch_planning:=true \
+      launch_control:=true \
+      launch_vehicle:=true \
+      launch_vehicle_interface:=false \
+      perception_mode:=lidar \
+      tracker_publish_merged_objects:=true \
+      rviz:=true > /tmp/universe_live.log 2>&1"
+  echo "  launched (log inside container: /tmp/universe_live.log)."
 }
 
 start_can() {
@@ -115,14 +194,18 @@ start_can() {
 }
 
 start_bridge() {
+  local sim_flag="${1:-true}"
   detect_can
-  say "Vehicle bridge (sim_mode) on $CAN_IFACE"
+  say "Vehicle bridge (sim_mode=$sim_flag) on $CAN_IFACE"
   docker exec -d "$CONTAINER" bash -c "
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
+    if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
+    source /opt/ros/humble/setup.bash;
     source /opt/autoware/setup.bash;
     source /workspace/autoware/install/setup.bash;
     ros2 launch autoware_vehicle_bridge vehicle_bridge.launch.py \
       can_interface:=$CAN_IFACE \
-      sim_mode:=true > /tmp/bridge_can.log 2>&1"
+      sim_mode:=$sim_flag > /tmp/bridge_can.log 2>&1"
   echo "  launched (log: /tmp/bridge_can.log). Verify with: candump -tz $CAN_IFACE"
 }
 
@@ -144,14 +227,29 @@ start_watcher() {
 
 stop_all() {
   detect_can
-  say "Stopping"
+  say "Stopping all Autoware, Bridge, Dashboard, and CAN services"
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    docker exec "$CONTAINER" bash -c "
+      pkill -9 -f 'ros2' 2>/dev/null || true
+      pkill -9 -f 'rviz2' 2>/dev/null || true
+      pkill -9 -f 'component_container' 2>/dev/null || true
+      pkill -9 -f 'vehicle_bridge' 2>/dev/null || true
+      pkill -9 -f 'kinect2_node' 2>/dev/null || true
+      pkill -9 -f 'topic_tools' 2>/dev/null || true
+      pkill -9 -f 'tools.av_dashboard.backend.server' 2>/dev/null || true
+      pkill -9 -f 'tools.can_watcher.backend.server' 2>/dev/null || true
+    " >/dev/null 2>&1 || true
     docker restart "$CONTAINER" >/dev/null 2>&1 || true
   fi
-  # Also stop CAN Watcher and AV Dashboard server and browser UI if running
+
+  # Also stop host-side servers and browser/Electron windows if running
   pkill -9 -f "tools.can_watcher.backend.server" 2>/dev/null || true
   pkill -9 -f "tools.av_dashboard.backend.server" 2>/dev/null || true
+  pkill -9 -f "chromium.*8080" 2>/dev/null || true
+  pkill -9 -f "chromium.*8000" 2>/dev/null || true
   pkill -9 -f "chromium" 2>/dev/null || true
+  pkill -9 -f "electron" 2>/dev/null || true
+  pkill -9 -f "rviz2" 2>/dev/null || true
 
   if [ "$CAN_IFACE" = "can2" ] || [ "$CAN_DRIVER" = "canalyst" ]; then
     if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
@@ -160,26 +258,57 @@ stop_all() {
   else
     sudo ip link set "$CAN_IFACE" down >/dev/null 2>&1 || true
   fi
-  echo "  bridge, simulator, CAN Watcher, AV Dashboard stopped; $CAN_IFACE down. (container left running)"
+  echo "  [OK] Autoware, RViz, Vehicle Bridge, CAN Watcher, AV Dashboard stopped; $CAN_IFACE down."
+}
+
+status_all() {
+  detect_can
+  say "System Status"
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    echo "  [Container]   $CONTAINER: RUNNING"
+    docker exec "$CONTAINER" bash -c "ps -ef | grep -E 'ros2 launch|vehicle_bridge|av_dashboard|rviz2' | grep -v grep" || echo "                (no active ROS/Dashboard processes inside container)"
+  else
+    echo "  [Container]   $CONTAINER: STOPPED"
+  fi
+  if ip link show "$CAN_IFACE" 2>/dev/null | grep -q "UP"; then
+    echo "  [CAN Bus]     $CAN_IFACE: UP"
+  else
+    echo "  [CAN Bus]     $CAN_IFACE: DOWN"
+  fi
+  if curl -s "http://127.0.0.1:8080/api/v1/status" >/dev/null 2>&1; then
+    echo "  [Dashboard]   http://localhost:8080: ONLINE"
+    curl -s "http://127.0.0.1:8080/api/v1/ros" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'                ROS Bridge: available={d.get(\"bridge_available\")} active={d.get(\"active\")} objects={d.get(\"object_count\")} hz={d.get(\"hz\")}')" 2>/dev/null || true
+  else
+    echo "  [Dashboard]   http://localhost:8080: OFFLINE"
+  fi
 }
 
 case "$MODE" in
-  all|--bench)
+  all|open|--open|--bench)
     start_container
     start_can
     start_universe
-    start_bridge
+    start_bridge true
+    start_dashboard
+    ;;
+  live|--live)
+    start_container
+    start_can
+    start_live_autoware
+    start_bridge false
+    start_dashboard
     ;;
   --universe)
     start_container
     start_universe
+    start_dashboard
     ;;
   --can|--canable)
     start_can
-    start_bridge
+    start_bridge true
     ;;
   --bridge)
-    start_bridge
+    start_bridge true
     ;;
   --dashboard)
     start_dashboard
@@ -187,11 +316,14 @@ case "$MODE" in
   --watcher|--canwatch)
     start_watcher
     ;;
-  --stop)
+  stop|close|--stop|--close)
     stop_all
     ;;
+  status|--status)
+    status_all
+    ;;
   *)
-    echo "Usage: $0 [all|--bench|--universe|--can|--bridge|--dashboard|--watcher|--stop]"
+    echo "Usage: $0 [open|all|--bench|live|--live|--universe|--can|--bridge|--dashboard|--watcher|close|--stop|status|--status]"
     exit 1
     ;;
 esac

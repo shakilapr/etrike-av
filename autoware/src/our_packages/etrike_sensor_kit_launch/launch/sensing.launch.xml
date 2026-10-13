@@ -3,7 +3,8 @@
   <arg name="vehicle_mirror_param_file" description="path to the file of vehicle mirror position yaml"/>
   <arg name="pointcloud_container_name" default="pointcloud_container"/>
   <arg name="vehicle_id" default="$(env VEHICLE_ID default)"/>
-  <arg name="launch_kinect" default="false" description="launch Kinect v2 cameras (requires libfreenect2)"/>
+  <arg name="launch_kinect" default="$(var launch_driver)" description="launch front Kinect v2 camera (hotplug-aware)"/>
+  <arg name="launch_rear_kinect" default="false" description="launch rear Kinect v2 camera (requires separate USB 3.0 controller)"/>
 
   <group>
     <!-- LiDAR Driver -->
@@ -13,20 +14,44 @@
       <arg name="pointcloud_container_name" value="$(var pointcloud_container_name)"/>
     </include>
 
-    <!-- IMU (stub — replace with real driver when hardware is available) -->
+    <!-- IMU (relays /imu_raw or synthesizes kinematic IMU from velocity_status) -->
     <include file="$(find-pkg-share etrike_sensor_kit_launch)/launch/imu.launch.xml">
       <arg name="launch_driver" value="$(var launch_driver)"/>
     </include>
 
-    <!-- Vehicle Velocity Converter (feeds distortion_corrector twist input) -->
+    <!-- Vehicle Velocity Converter (feeds distortion_corrector & gyro_odometer twist input) -->
     <include file="$(find-pkg-share autoware_vehicle_velocity_converter)/launch/vehicle_velocity_converter.launch.xml">
       <arg name="input_vehicle_velocity_topic" value="/vehicle/status/velocity_status"/>
       <arg name="output_twist_with_covariance" value="/sensing/vehicle_velocity_converter/twist_with_covariance"/>
     </include>
 
-    <!-- Kinect v2 cameras (disabled by default) -->
-    <include file="$(find-pkg-share etrike_kinect2)/launch/dual_kinect.launch.py"
-             if="$(var launch_kinect)">
-    </include>
+    <!-- Front Kinect v2 camera + Autoware camera0 topic relays for perception -->
+    <group if="$(var launch_kinect)">
+      <include file="$(find-pkg-share etrike_kinect2)/launch/single_kinect.launch.py">
+        <arg name="camera" value="front"/>
+      </include>
+      <node pkg="topic_tools" exec="relay" name="kinect_front_to_camera0_rect_relay" output="screen">
+        <param name="input_topic" value="/kinect_front/color/image_raw"/>
+        <param name="output_topic" value="/sensing/camera/camera0/image_rect_color"/>
+        <param name="lazy" value="true"/>
+      </node>
+      <node pkg="topic_tools" exec="relay" name="kinect_front_to_camera0_raw_relay" output="screen">
+        <param name="input_topic" value="/kinect_front/color/image_raw"/>
+        <param name="output_topic" value="/sensing/camera/camera0/image_raw"/>
+        <param name="lazy" value="true"/>
+      </node>
+      <node pkg="topic_tools" exec="relay" name="kinect_front_to_camera0_info_relay" output="screen">
+        <param name="input_topic" value="/kinect_front/color/camera_info"/>
+        <param name="output_topic" value="/sensing/camera/camera0/camera_info"/>
+        <param name="lazy" value="true"/>
+      </node>
+    </group>
+
+    <!-- Rear Kinect v2 camera (disabled by default due to single tegra-xusb controller bandwidth) -->
+    <group if="$(var launch_rear_kinect)">
+      <include file="$(find-pkg-share etrike_kinect2)/launch/single_kinect.launch.py">
+        <arg name="camera" value="rear"/>
+      </include>
+    </group>
   </group>
 </launch>

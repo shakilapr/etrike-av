@@ -35,6 +35,11 @@ class CanFrame:
 class BaseCanTransport:
     """Abstract interface for CAN transports."""
 
+    interface: str = "unknown"
+    is_connected: bool = False
+    is_simulated: bool = False
+    last_error: Optional[str] = None
+
     async def start(self) -> None:
         raise NotImplementedError
 
@@ -46,41 +51,74 @@ class BaseCanTransport:
 
 
 class SocketCanTransport(BaseCanTransport):
-    """Native Linux SocketCAN transport using Python's standard library socket module."""
+    """Native Linux SocketCAN transport with automatic interface reconnect."""
 
     def __init__(self, channel: str = "can2") -> None:
         self.channel = channel
+        self.interface = channel
         self.sock: Optional[Any] = None
         self._running = False
+        self.is_connected = False
+        self.is_simulated = False
+        self.last_error: Optional[str] = None
 
-    async def start(self) -> None:
+    def _try_bind(self) -> bool:
         import socket
         if not hasattr(socket, "AF_CAN"):
-            raise RuntimeError("SocketCAN is only supported on Linux.")
+            self.last_error = "SocketCAN (AF_CAN) is only supported on Linux"
+            self.is_connected = False
+            return False
 
+        self._close_sock()
         try:
-            self.sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
-            self.sock.bind((self.channel,))
-            self.sock.setblocking(False)
-            self._running = True
+            sock = socket.socket(socket.AF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
+            sock.bind((self.channel,))
+            sock.setblocking(False)
+            self.sock = sock
+            self.is_connected = True
+            self.last_error = None
             print(f"[Transport] Bound successfully to SocketCAN interface '{self.channel}'.")
+            return True
         except OSError as err:
             self.sock = None
-            self._running = False
-            raise RuntimeError(f"SocketCAN interface '{self.channel}' unavailable: {err}") from err
+            self.is_connected = False
+            err_msg = f"SocketCAN interface '{self.channel}' unavailable: {err}"
+            if self.last_error != err_msg:
+                print(f"[Transport] {err_msg} (will retry automatically)")
+            self.last_error = err_msg
+            return False
 
+    def _close_sock(self) -> None:
+        if self.sock is not None:
+            try:
+                self.sock.close()
+            except Exception:
+                pass
+            self.sock = None
+        self.is_connected = False
+
+    async def start(self) -> None:
+        self._running = True
+        self._try_bind()
 
     async def stop(self) -> None:
         self._running = False
-        if self.sock:
-            self.sock.close()
-            self.sock = None
+        self._close_sock()
 
     async def frames(self) -> AsyncGenerator[CanFrame, None]:
         loop = asyncio.get_running_loop()
-        while self._running and self.sock:
+        while self._running:
+            if self.sock is None:
+                if not self._try_bind():
+                    await asyncio.sleep(1.5)
+                    continue
+
             try:
                 raw_data = await loop.sock_recv(self.sock, 16)
+                if not raw_data:
+                    self._close_sock()
+                    await asyncio.sleep(0.5)
+                    continue
                 if len(raw_data) < 16:
                     continue
                 can_id, can_dlc = struct.unpack("<IB3x", raw_data[:8])
@@ -90,22 +128,33 @@ class SocketCanTransport(BaseCanTransport):
                 yield CanFrame(can_id=clean_id, data=frame_data, is_extended=is_extended)
             except asyncio.CancelledError:
                 break
-            except Exception:
-                await asyncio.sleep(0.01)
+            except OSError as err:
+                self.last_error = f"SocketCAN read error on '{self.channel}': {err}"
+                self._close_sock()
+                await asyncio.sleep(1.0)
+            except Exception as err:
+                self.last_error = str(err)
+                await asyncio.sleep(0.1)
 
 
 class SimulatedCanTransport(BaseCanTransport):
-    """Generates realistic E-Trike CAN traffic according to protocol contracts."""
+    """Generates realistic E-Trike CAN traffic according to protocol contracts (explicit --sim only)."""
 
     def __init__(self) -> None:
+        self.interface = "sim"
+        self.is_connected = True
+        self.is_simulated = True
+        self.last_error = None
         self._running = False
         self._step = 0
 
     async def start(self) -> None:
         self._running = True
+        self.is_connected = True
 
     async def stop(self) -> None:
         self._running = False
+        self.is_connected = False
 
     async def frames(self) -> AsyncGenerator[CanFrame, None]:
         t0 = time.time()
@@ -200,23 +249,28 @@ class SimulatedCanTransport(BaseCanTransport):
                 d210[1] = 0  # Safety OK
                 msgs_to_send.append(CanFrame(0x210, bytes(d210)))
 
-            # 7. 0x310 STEER_DIAG (10Hz - RX)
+            # 7. 0x310 STEER_DIAG (10Hz - RX, factor 0.1, offset -3000.0 deg -> +30000 raw)
             if self._step % 10 == 0:
                 d310 = bytearray(8)
-                raw_ang = int((steer_deg * 10.0) + 3000) & 0xFFFF
+                raw_ang = int((steer_deg * 10.0) + 30000) & 0xFFFF
                 d310[0] = (raw_ang >> 8) & 0xFF
                 d310[1] = raw_ang & 0xFF
-                d310[2] = 0
-                d310[5] = 0x01
+                d310[2] = 0     # fault = 0
+                d310[3] = 0x00  # motor_current = 1.20 A (120 * 0.01)
+                d310[4] = 120
+                d310[5] = 0x01  # ecu_temp = 35.0 C (350 * 0.1)
                 d310[6] = 0x5E
                 msgs_to_send.append(CanFrame(0x310, bytes(d310)))
 
-            # 8. 0x311 BRAKE_DIAG (10Hz - RX)
+            # 8. 0x311 BRAKE_DIAG (10Hz - RX, factor 0.05 kPa/lsb)
             if self._step % 10 == 0:
                 d311 = bytearray(8)
-                p_raw = int(brake_press_kpa / 50.0) & 0xFFFF
+                p_raw = int(brake_press_kpa / 0.05) & 0xFFFF
                 d311[0] = (p_raw >> 8) & 0xFF
                 d311[1] = p_raw & 0xFF
+                d311[2] = 0     # fault = 0
+                d311[5] = 0x01  # ecu_temp = 32.0 C (320 * 0.1)
+                d311[6] = 0x40
                 msgs_to_send.append(CanFrame(0x311, bytes(d311)))
 
             # 9. 0x501 RT_NODE_STATUS (10Hz - RX)
@@ -242,68 +296,38 @@ class SimulatedCanTransport(BaseCanTransport):
             await asyncio.sleep(0.01)
 
 
-class AutoDetectTransport(BaseCanTransport):
-    """Wraps hardware transport and transparently falls back to simulation if interface is unavailable."""
+class OfflineCanTransport(BaseCanTransport):
+    """Idle transport when hardware CAN is unavailable on non-Linux hosts and --sim was not requested."""
 
-    def __init__(self, interface: str = "can2") -> None:
+    def __init__(self, interface: str = "can2", reason: str = "SocketCAN not available on this OS") -> None:
         self.interface = interface
-        self._delegate: BaseCanTransport = SocketCanTransport(channel=interface)
+        self.is_connected = False
         self.is_simulated = False
+        self.last_error = reason
+        self._running = False
 
     async def start(self) -> None:
-        try:
-            await self._delegate.start()
-        except Exception as err:
-            print(f"[Transport] Hardware interface '{self.interface}' unavailable ({err}).")
-            print("[Transport] Seamlessly activating realistic simulated vehicle telemetry stream.")
-            self._delegate = SimulatedCanTransport()
-            self.is_simulated = True
-            await self._delegate.start()
+        self._running = True
+        print(f"[Transport] '{self.interface}' offline ({self.last_error}). Pass --sim for simulated CAN traffic.")
 
     async def stop(self) -> None:
-        await self._delegate.stop()
+        self._running = False
 
     async def frames(self) -> AsyncGenerator[CanFrame, None]:
-        async for frame in self._delegate.frames():
-            yield frame
+        while self._running:
+            await asyncio.sleep(1.0)
+            if False:
+                yield CanFrame(0, b"")
 
 
 def create_transport(interface: str = "can2", sim: bool = False) -> BaseCanTransport:
     if sim:
+        print("[Transport] Starting in explicit --sim mode.")
         return SimulatedCanTransport()
 
     if platform.system() == "Linux":
-        return AutoDetectTransport(interface=interface)
+        return SocketCanTransport(channel=interface)
 
-    try:
-        import can
-        class PythonCanTransport(BaseCanTransport):
-            def __init__(self, chan: str) -> None:
-                self.channel = chan
-                self.bus: Optional[Any] = None
-                self._running = False
+    return OfflineCanTransport(interface=interface, reason=f"SocketCAN not supported on {platform.system()}")
 
-            async def start(self) -> None:
-                self.bus = can.Bus(channel=self.channel, interface="virtual")
-                self._running = True
-
-            async def stop(self) -> None:
-                self._running = False
-                if self.bus:
-                    self.bus.shutdown()
-                    self.bus = None
-
-            async def frames(self) -> AsyncGenerator[CanFrame, None]:
-                loop = asyncio.get_running_loop()
-                while self._running and self.bus:
-                    msg = await loop.run_in_executor(None, self.bus.recv, 0.1)
-                    if msg:
-                        yield CanFrame(can_id=msg.arbitration_id, data=msg.data, is_extended=msg.is_extended_id)
-
-        return PythonCanTransport(chan=interface)
-    except Exception:
-        pass
-
-    print(f"[Transport] Hardware interface '{interface}' not available. Running in SIMULATION mode.")
-    return SimulatedCanTransport()
 

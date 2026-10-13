@@ -79,7 +79,7 @@ def generate_launch_description() -> LaunchDescription:
         name="hesai_ros_wrapper_node",
         namespace="sensing/lidar/top",
         output="screen",
-        remappings=[("aw_points_ex", "pointcloud_raw_ex")],
+        remappings=[("pandar_points", "pointcloud_raw_ex")],
         parameters=[
             {
                 **DRIVER_PARAMS,

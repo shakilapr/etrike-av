@@ -36,11 +36,11 @@ process.on('unhandledRejection', (reason) => {
 
 let mainWindow = null;
 let pythonProcess = null;
-const BACKEND_PORT = 8000;
+const BACKEND_PORT = Number(process.env.AV_DASHBOARD_PORT || 8080);
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 
 
-// Check if Python backend is already running on port 8000
+// Check if Python backend is already running on port 8080
 function checkBackendHealth() {
   return new Promise((resolve) => {
     const req = http.get(`${BACKEND_URL}/api/v1/status`, (res) => {
@@ -80,7 +80,7 @@ async function ensureBackendRunning() {
   const pythonCmd = getPythonCommand();
   console.log(`[Electron] Spawning Python backend via '${pythonCmd}' from ${workspaceRoot}...`);
 
-  pythonProcess = spawn(pythonCmd, ['-m', 'tools.can_watcher.backend.server', '--sim', '--port', String(BACKEND_PORT)], {
+  pythonProcess = spawn(pythonCmd, ['-m', 'tools.av_dashboard.backend.server', '--sim', '--port', String(BACKEND_PORT)], {
     cwd: workspaceRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PYTHONPATH: workspaceRoot },

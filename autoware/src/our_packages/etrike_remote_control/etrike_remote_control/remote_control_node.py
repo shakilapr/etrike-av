@@ -26,8 +26,7 @@ try:
     from rclpy.timer import Timer
 
     try:
-        from rclpy.lifecycle import LifecycleNode, LifecyclePublisher
-        from rclpy.lifecycle.node import TransitionCallbackReturn
+        from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
         HAS_LIFECYCLE_LIB = True
     except ImportError:
         HAS_LIFECYCLE_LIB = False
