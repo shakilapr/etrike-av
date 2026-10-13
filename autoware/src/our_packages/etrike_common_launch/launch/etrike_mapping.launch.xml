@@ -10,7 +10,11 @@
     <arg name="input_cloud" value="$(var input_cloud)"/>
     <arg name="use_sim_time" value="$(var use_sim_time)"/>
     <arg name="robot_frame_id" value="base_link"/>
-    <arg name="publish_static_tf" value="false"/> <!-- TF is already published from the bag (tf_static) -->
+    <arg name="publish_static_tf" value="true"/>
+    <arg name="static_tf_x" value="0.575"/>
+    <arg name="static_tf_y" value="0.0"/>
+    <arg name="static_tf_z" value="1.7464"/>
+    <arg name="lidar_frame" value="lidar_link"/>
     <arg name="save_dir" value="$(var save_dir)"/>
     <arg name="use_rviz" value="true"/>
   </include>

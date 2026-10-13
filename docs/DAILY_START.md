@@ -10,14 +10,16 @@ Here is your simple everyday checklist to get up and running on the AV Project.
 
 ---
 
-## ⚡ Daily Command Quick Reference (Bench Simulator & Dashboards)
+## ⚡ Daily Command Quick Reference (Hybrid Bench & Dashboards)
 
 | Action | Terminal Command (Run on Jetson host) |
 |---|---|
-| **1. Open Autoware Universe** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --bench` |
-| **2a. Open CAN Watch** | `bash ~/av_project/scripts/open_can_watch.sh` *(or `open_can_watcher_display.sh can2`)* |
-| **2b. Open AV Dashboard** | `bash ~/av_project/scripts/open_av_dashboard.sh` *(or `open_av_dashboard_display.sh can2`)* |
-| **3. Close All** | `bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --stop` |
+| **1. Open Full Stack (Hybrid Bench)** | `bash ~/av_project/scripts/open-etrike.sh` |
+| **2. Check System Status** | `bash ~/av_project/scripts/open-etrike.sh --status` |
+| **3. Close All** | `bash ~/av_project/scripts/open-etrike.sh --stop` |
+| **4. Open Remote Control HMI** | `bash ~/av_project/scripts/open_remote_control.sh` |
+| **5. Pure Bench Sim (No Sensors)** | `bash ~/av_project/scripts/open-etrike.sh --bench` |
+| **6. Live Road Stack** | `bash ~/av_project/scripts/open-etrike.sh --live` |
 
 - **Open Autoware Universe:** Starts the container, brings up the `can2` interface (CANalyst-II), launches Autoware planning simulator + RViz on the Jetson monitor, and starts `autoware_vehicle_bridge` in sim mode so commanded steering angles and velocities transmit directly to the CAN bus.
 - **Open CAN Watch:** Opens the real-time CAN bus bit matrix and telemetry analyzer on the Jetson monitor (`DISPLAY=:1`) and at `http://172.16.25.67:8000`.
