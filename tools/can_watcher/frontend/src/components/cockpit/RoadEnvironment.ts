@@ -78,7 +78,7 @@ export class RoadEnvironment {
     this.laneDashes.instanceMatrix.needsUpdate = true;
     this.group.add(this.laneDashes);
 
-    // 4. Autonomous Planned Path Ribbon (Tesla FSD Style)
+    // 4. Autonomous Planned Path Ribbon (Vehicle Trajectory Corridor)
     // Dynamic curved ribbon extending ahead of the tuktuk
     const segments = 32;
     this.pathGeometry = new THREE.PlaneGeometry(1.4, 32, 1, segments);
@@ -123,7 +123,7 @@ export class RoadEnvironment {
     }
     this.laneDashes.instanceMatrix.needsUpdate = true;
 
-    // 2. Update Autonomy Path Ribbon Curvature (Tesla FSD Style)
+    // 2. Update Autonomy Path Ribbon Curvature (Ackermann Trajectory Corridor)
     // Curved trajectory equation: x(z) = -0.5 * kappa * z^2
     const L = 2.0; // Wheelbase
     const steerRad = (steerDeg * Math.PI) / 180;

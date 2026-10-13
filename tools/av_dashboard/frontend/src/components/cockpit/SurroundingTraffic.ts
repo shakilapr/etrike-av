@@ -51,6 +51,8 @@ export class SurroundingTraffic {
   private coneOrangeMat: THREE.MeshStandardMaterial;
   private coneWhiteMat: THREE.MeshStandardMaterial;
   private coneBaseMat: THREE.MeshStandardMaterial;
+  private obstacleMat: THREE.MeshStandardMaterial;
+  private obstacleRingMat: THREE.MeshBasicMaterial;
 
   private headlightMat: THREE.MeshBasicMaterial;
   private taillightMat: THREE.MeshBasicMaterial;
@@ -83,7 +85,7 @@ export class SurroundingTraffic {
   constructor() {
     this.group = new THREE.Group();
 
-    // 1. Shared Materials (Tesla Autopilot / FSD Aesthetic)
+    // 1. Shared Materials (Automotive Digital Cockpit Palette)
     this.pedMat = new THREE.MeshStandardMaterial({
       color: 0xd4d4d8,
       roughness: 0.32,
@@ -103,7 +105,7 @@ export class SurroundingTraffic {
     });
 
     this.carPaintMat = new THREE.MeshStandardMaterial({
-      color: 0x94a3b8, // Tesla satin grey/silver
+      color: 0x94a3b8, // Satin metallic slate/silver
       roughness: 0.25,
       metalness: 0.55,
     });
@@ -136,6 +138,13 @@ export class SurroundingTraffic {
       roughness: 0.8,
       metalness: 0.1,
     });
+
+    this.obstacleMat = new THREE.MeshStandardMaterial({
+      color: 0x475569, // Neutral slate gray mass
+      roughness: 0.45,
+      metalness: 0.25,
+    });
+    this.obstacleRingMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8 });
 
     this.headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.taillightMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
@@ -173,7 +182,7 @@ export class SurroundingTraffic {
   }
 
   /**
-   * Builds an articulated Tesla-style humanoid pedestrian with swinging walk cycle limbs.
+   * Builds an articulated humanoid pedestrian model with swinging walk cycle limbs.
    */
   private createPedestrianMesh(): { mesh: THREE.Group; limbs: ActorLimbs } {
     const ped = new THREE.Group();
@@ -264,7 +273,7 @@ export class SurroundingTraffic {
   }
 
   /**
-   * Builds an authentic Tesla safety road cone (Traffic Cone).
+   * Builds a high-visibility highway safety traffic cone.
    */
   private createConeMesh(): THREE.Group {
     const cone = new THREE.Group();
@@ -295,7 +304,36 @@ export class SurroundingTraffic {
   }
 
   /**
-   * Builds a sleek Tesla Model 3/Y style aerodynamic sedan.
+   * Builds a clean, neutral, low-poly physical obstacle shape (representing inanimate lab objects, furniture, boxes).
+   */
+  private createObstacleMesh(): THREE.Group {
+    const group = new THREE.Group();
+    // Neutral rounded cylinder marker representing generic physical mass
+    const geo = new THREE.CylinderGeometry(0.34, 0.36, 0.75, 18);
+    const body = new THREE.Mesh(geo, this.obstacleMat);
+    body.position.set(0, 0.375, 0);
+    body.name = 'obstacle_body';
+    group.add(body);
+
+    // Subtle crown ring for automotive depth
+    const ringGeo = new THREE.TorusGeometry(0.34, 0.02, 8, 24);
+    ringGeo.rotateX(Math.PI / 2);
+    const ring = new THREE.Mesh(ringGeo, this.obstacleRingMat);
+    ring.position.set(0, 0.75, 0);
+    ring.name = 'obstacle_ring';
+    group.add(ring);
+
+    // Ground contact shadow
+    const shadowGeo = new THREE.CircleGeometry(0.4, 16);
+    shadowGeo.rotateX(-Math.PI / 2);
+    const shadow = new THREE.Mesh(shadowGeo, this.shadowMat);
+    shadow.position.set(0, 0.01, 0);
+    group.add(shadow);
+    return group;
+  }
+
+  /**
+   * Builds an aerodynamic passenger car sedan mesh.
    */
   private createCarMesh(): THREE.Group {
     const car = new THREE.Group();
@@ -457,35 +495,56 @@ export class SurroundingTraffic {
   }
 
   /**
-   * Minimalist floating badge for actor classification & distance.
+   * Minimalist automotive HUD distance pill (e.g. "2.8 m").
    */
-  private getLabelMaterial(label: string, colorHex: number): THREE.SpriteMaterial {
-    const existing = this.labelMaterials.get(label);
-    if (existing) return existing;
-
+  private createDistanceBadge(): THREE.Sprite {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 64;
+    canvas.width = 160;
+    canvas.height = 48;
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const cssColor = `#${colorHex.toString(16).padStart(6, '0')}`;
-      ctx.fillStyle = 'rgba(8, 8, 8, 0.85)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = cssColor;
-      ctx.lineWidth = 4;
-      ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-      ctx.fillStyle = cssColor;
-      ctx.font = 'bold 32px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, canvas.width / 2, canvas.height / 2 + 2);
-    }
-
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearFilter;
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-    this.labelMaterials.set(label, material);
-    return material;
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(0.75, 0.24, 1);
+    sprite.position.y = 2.1;
+    sprite.userData = { canvas, ctx, texture, lastText: '', lastHazard: null };
+    return sprite;
+  }
+
+  private updateDistanceBadge(sprite: THREE.Sprite, text: string, isHazard: boolean) {
+    const data = sprite.userData;
+    if (!data || !data.ctx) return;
+    if (data.lastText === text && data.lastHazard === isHazard) return;
+    data.lastText = text;
+    data.lastHazard = isHazard;
+
+    const ctx = data.ctx as CanvasRenderingContext2D;
+    ctx.clearRect(0, 0, 160, 48);
+
+    ctx.fillStyle = isHazard ? 'rgba(239, 68, 68, 0.90)' : 'rgba(15, 23, 42, 0.82)';
+    ctx.beginPath();
+    const r = 18;
+    ctx.moveTo(r, 6);
+    ctx.lineTo(160 - r, 6);
+    ctx.arcTo(160 - 6, 6, 160 - 6, 42, r);
+    ctx.arcTo(160 - 6, 42, 6, 42, r);
+    ctx.arcTo(6, 42, 6, 6, r);
+    ctx.arcTo(6, 6, 160 - r, 6, r);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = isHazard ? '#f87171' : 'rgba(148, 163, 184, 0.65)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 80, 24);
+
+    (data.texture as THREE.CanvasTexture).needsUpdate = true;
   }
 
   private buildActor(obj: PerceptionObject, seedIndex: number): Actor {
@@ -502,20 +561,18 @@ export class SurroundingTraffic {
       BUS: this.createTruckMesh(),
       BICYCLE: this.createCyclistMesh(),
       MOTORCYCLE: this.createCyclistMesh(),
-      BOX: this.createConeMesh(),
-      UNKNOWN: this.createConeMesh(),
+      BOX: this.createObstacleMesh(),
+      UNKNOWN: this.createObstacleMesh(),
     };
 
     for (const mesh of Object.values(meshes)) {
       group.add(mesh);
     }
 
-    const colorHex = CLASS_COLORS[obj.label] ?? CLASS_COLORS.UNKNOWN;
-    const labelSprite = new THREE.Sprite(this.getLabelMaterial(obj.label, colorHex));
-    labelSprite.position.y = 2.2;
-    labelSprite.scale.set(1.4, 0.35, 1);
-    group.add(labelSprite);
-    meshes['__label'] = labelSprite;
+    const distBadge = this.createDistanceBadge();
+    distBadge.visible = false;
+    group.add(distBadge);
+    meshes['__dist'] = distBadge;
 
     this.group.add(group);
     return {
@@ -535,10 +592,9 @@ export class SurroundingTraffic {
     if (obj.label === 'CAR') return 'CAR';
     if (obj.label === 'TRUCK' || obj.label === 'BUS') return 'TRUCK';
     if (obj.label === 'BICYCLE' || obj.label === 'MOTORCYCLE') return 'BICYCLE';
-    if (obj.label === 'BOX' || obj.label === 'UNKNOWN' || (obj.label as string) === 'CONE') return 'CONE';
-    const isSmall = Math.max(obj.dx || 0, obj.dy || 0, obj.dz || 0) <= 0.85;
-    if (isSmall) return 'CONE';
-    return 'CONE';
+    if ((obj.label as string) === 'CONE') return 'CONE';
+    if (obj.label === 'BOX') return 'BOX';
+    return 'UNKNOWN';
   }
 
   private applyClassGeometry(actor: Actor, obj: PerceptionObject) {
@@ -549,14 +605,7 @@ export class SurroundingTraffic {
       mesh.visible = key === targetModel;
     }
 
-    if (actor.currentLabel !== obj.label) {
-      actor.currentLabel = obj.label;
-      const labelSprite = actor.meshes['__label'] as THREE.Sprite | undefined;
-      if (labelSprite) {
-        const colorHex = CLASS_COLORS[obj.label] ?? CLASS_COLORS.UNKNOWN;
-        labelSprite.material = this.getLabelMaterial(obj.label, colorHex);
-      }
-    }
+    actor.currentLabel = obj.label;
 
     const active = actor.meshes[targetModel];
     if (!active) return;
@@ -572,6 +621,11 @@ export class SurroundingTraffic {
     } else if (targetModel === 'CONE') {
       const coneScale = Math.min(Math.max((width + length) / 1.0, 0.8), 1.4);
       active.scale.set(coneScale, coneScale, coneScale);
+    } else if (targetModel === 'UNKNOWN' || targetModel === 'BOX') {
+      const wScale = Math.min(Math.max(width / 0.7, 0.6), 2.5);
+      const lScale = Math.min(Math.max(length / 0.7, 0.6), 2.5);
+      const hScale = Math.min(Math.max(height / 0.75, 0.6), 2.0);
+      active.scale.set(wScale, hScale, lScale);
     } else if (targetModel === 'CAR') {
       active.scale.set(Math.max(width / 1.85, 0.8), Math.max(height / 1.45, 0.8), Math.max(length / 4.3, 0.8));
     }
@@ -588,12 +642,15 @@ export class SurroundingTraffic {
           mesh.material.dispose();
         }
       }
+      if (child.userData && child.userData.texture) {
+        (child.userData.texture as THREE.Texture).dispose();
+      }
     });
   }
 
   /**
    * Main per-frame update loop.
-   * Renders real-world Autoware perception objects with authentic Tesla FSD animations.
+   * Renders real-world perception objects with smooth 60 FPS motion and articulated gait cycles.
    */
   public update(
     _egoSpeedKmh: number,
@@ -627,6 +684,22 @@ export class SurroundingTraffic {
       });
     }
 
+    // Identify closest lead hazard ahead in vehicle path (-Z is forward)
+    let closestDist = Infinity;
+    let leadKey = '';
+    for (const [key, actor] of this.actors) {
+      if (!actor.group.visible) continue;
+      const x = actor.group.position.x;
+      const z = actor.group.position.z;
+      if (z < -0.3 && z > -12.0 && Math.abs(x) < 1.6) {
+        const d = Math.sqrt(x * x + z * z);
+        if (d < closestDist) {
+          closestDist = d;
+          leadKey = key;
+        }
+      }
+    }
+
     // Smooth position interpolation and animate walk cycles
     const posLerp = 1 - Math.exp(-step * 12);
     const yawLerp = 1 - Math.exp(-step * 10);
@@ -644,6 +717,21 @@ export class SurroundingTraffic {
       const rawDiff = actor.targetYaw - actor.group.rotation.y + Math.PI;
       const delta = (((rawDiff % TWO_PI) + TWO_PI) % TWO_PI) - Math.PI;
       actor.group.rotation.y += delta * yawLerp;
+
+      // Update lead hazard badge and proximity highlight
+      const distBadge = actor.meshes['__dist'] as THREE.Sprite | undefined;
+      const isLead = key === leadKey && closestDist < 8.0;
+      if (distBadge) {
+        if (isLead) {
+          distBadge.visible = true;
+          const isCritical = closestDist < 3.5;
+          distBadge.position.y = actor.meshes['PEDESTRIAN']?.visible ? 2.1 : 1.35;
+          const dStr = `${closestDist.toFixed(1)} m`;
+          this.updateDistanceBadge(distBadge, dStr, isCritical);
+        } else {
+          distBadge.visible = false;
+        }
+      }
 
       // Dynamic humanoid walking animation
       if (actor.limbs && actor.meshes['PEDESTRIAN']?.visible) {

@@ -21,7 +21,7 @@ export class RoadEnvironment {
     // 1. Surrounding Dark Ground / Terrain Plane (Extends beyond road)
     const groundGeo = new THREE.PlaneGeometry(160, this.roadLength, 1, 1);
     groundGeo.rotateX(-Math.PI / 2);
-    const groundMat = new THREE.MeshBasicMaterial({ color: 0x030303 });
+    const groundMat = new THREE.MeshBasicMaterial({ color: 0x090a0f });
     this.groundPlaneMesh = new THREE.Mesh(groundGeo, groundMat);
     this.groundPlaneMesh.position.set(0, -0.02, -40);
     this.group.add(this.groundPlaneMesh);
@@ -29,7 +29,7 @@ export class RoadEnvironment {
     // 2. Asphalt Road Plane
     const roadGeo = new THREE.PlaneGeometry(this.roadWidth, this.roadLength, 1, 1);
     roadGeo.rotateX(-Math.PI / 2);
-    const roadMat = new THREE.MeshBasicMaterial({ color: 0x0c0c0c });
+    const roadMat = new THREE.MeshBasicMaterial({ color: 0x14151b });
     this.roadMesh = new THREE.Mesh(roadGeo, roadMat);
     this.roadMesh.position.set(0, -0.01, -40);
     this.group.add(this.roadMesh);
@@ -55,9 +55,9 @@ export class RoadEnvironment {
 
     const boundaryGeo = new THREE.BufferGeometry().setFromPoints(boundaryPoints);
     const boundaryMat = new THREE.LineBasicMaterial({
-      color: 0x27272a,
+      color: 0x3f3f46,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
     });
     this.boundaryLines = new THREE.LineSegments(boundaryGeo, boundaryMat);
     this.group.add(this.boundaryLines);
@@ -66,7 +66,7 @@ export class RoadEnvironment {
     const dashGeo = new THREE.PlaneGeometry(0.2, 2.5);
     dashGeo.rotateX(-Math.PI / 2);
     const dashMat = new THREE.MeshBasicMaterial({
-      color: 0xe4e4e7,
+      color: 0x94a3b8,
       transparent: true,
       opacity: 0.9,
     });
@@ -88,7 +88,7 @@ export class RoadEnvironment {
     this.laneDashes.instanceMatrix.needsUpdate = true;
     this.group.add(this.laneDashes);
 
-    // 5. Autonomous Planned Path Ribbon (Tesla FSD Style)
+    // 5. Autonomous Planned Path Ribbon (Vehicle Trajectory Corridor)
     const segments = 32;
     this.pathGeometry = new THREE.PlaneGeometry(1.4, 32, 1, segments);
     this.pathGeometry.rotateX(-Math.PI / 2);

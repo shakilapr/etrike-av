@@ -15,10 +15,10 @@ export const DriveCockpit3D: React.FC = () => {
     const container = containerRef.current;
     if (!container) return;
 
-    // 1. Scene & Fog (Pure engineering black horizon fade)
+    // 1. Scene & Fog (Deep slate black horizon fade)
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000);
-    scene.fog = new THREE.FogExp2(0x000000, 0.015);
+    scene.background = new THREE.Color(0x090a0f);
+    scene.fog = new THREE.FogExp2(0x090a0f, 0.016);
 
     // 2. Camera
     const width = container.clientWidth || window.innerWidth;
@@ -150,21 +150,34 @@ export const DriveCockpit3D: React.FC = () => {
           camera.position.set(0, 1.25, 0.0);
           camera.lookAt(0, 1.0, -25);
         } else {
-          // Chase Cam: smoothly follow behind the vehicle
+          // Chase Cam: smoothly follow behind vehicle with dynamic hazard framing
+          let leadAheadDist = Infinity;
+          if (poseOk && state.perceptionObjects && state.perceptionObjects.length > 0) {
+            for (const po of state.perceptionObjects) {
+              if (po.z < -0.3 && po.z > -6.0 && Math.abs(po.x) < 1.6) {
+                const d = Math.sqrt(po.x * po.x + po.z * po.z);
+                if (d < leadAheadDist) leadAheadDist = d;
+              }
+            }
+          }
+
+          const hasCloseLead = leadAheadDist < 4.0;
           const targetCamX = 0;
-          const targetCamY = 2.5;
-          const targetCamZ = 5.2;
+          const targetCamY = hasCloseLead ? 2.85 : 2.5;
+          const targetCamZ = hasCloseLead ? 5.6 : 5.2;
+          const targetLookY = hasCloseLead ? 0.9 : 0.75;
+          const targetLookZ = hasCloseLead ? -6.0 : -8.0;
 
           if (isNaN(camera.position.x)) camera.position.x = 0;
           if (isNaN(camera.position.y)) camera.position.y = targetCamY;
           if (isNaN(camera.position.z)) camera.position.z = targetCamZ;
 
-          const factor = Math.min(dt * 6, 1.0);
+          const factor = Math.min(dt * 5, 1.0);
           camera.position.x += (targetCamX - camera.position.x) * factor;
           camera.position.y += (targetCamY - camera.position.y) * factor;
           camera.position.z += (targetCamZ - camera.position.z) * factor;
 
-          camera.lookAt(0, 0.75, -8);
+          camera.lookAt(0, targetLookY, targetLookZ);
         }
       }
 

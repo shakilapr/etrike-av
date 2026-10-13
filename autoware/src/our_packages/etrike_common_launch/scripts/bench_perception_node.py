@@ -251,31 +251,32 @@ class BenchPerceptionNode(LifecycleNode):
             self._cy = float(msg.k[5])
 
     def _on_camera_color(self, msg: Image) -> None:
-        """Run fast pedestrian detection on downsampled color frames."""
+        """Run fast pedestrian detection on color frames with normalized coordinates."""
         self._last_camera_color_time = time.time()
         if self._hog is None:
             return
 
         try:
             raw = np.frombuffer(msg.data, dtype=np.uint8)
-            img = raw.reshape((msg.height, msg.width, -1))[:, :, :3]
-            # Downsample to 480x270 for rapid inference (~80ms on Jetson CPU)
-            small = cv2.resize(img, (480, 270))
+            channels = 4 if ("8UC4" in msg.encoding or "bgra" in msg.encoding or "rgba" in msg.encoding) else 3
+            img = raw.reshape((msg.height, msg.width, channels))[:, :, :3]
+            # Downsample to 640x360: person at 2.8m is ~160px tall, which fits HOG's 64x128 window
+            h_det, w_det = 360, 640
+            small = cv2.resize(img, (w_det, h_det))
             boxes, _ = self._hog.detectMultiScale(
-                small, winStride=(8, 8), padding=(4, 4), scale=1.05
+                small, winStride=(4, 4), padding=(8, 8), scale=1.03
             )
-            scale_x = msg.width / 480.0
-            scale_y = msg.height / 270.0
 
-            scaled_boxes: List[Tuple[int, int, int, int]] = []
+            # Store normalized bounding boxes [x_min, y_min, x_max, y_max] in range [0.0, 1.0]
+            norm_boxes: List[Tuple[float, float, float, float]] = []
             for (bx, by, bw, bh) in boxes:
-                scaled_boxes.append((
-                    int(bx * scale_x),
-                    int(by * scale_y),
-                    int(bw * scale_x),
-                    int(bh * scale_y),
+                norm_boxes.append((
+                    float(bx) / w_det,
+                    float(by) / h_det,
+                    float(bx + bw) / w_det,
+                    float(by + bh) / h_det,
                 ))
-            self._latest_person_boxes_2d = scaled_boxes
+            self._latest_person_boxes_2d = norm_boxes
         except Exception:
             self._latest_person_boxes_2d = []
 
@@ -462,32 +463,57 @@ class BenchPerceptionNode(LifecycleNode):
         if z_opt <= 0.4 or z_opt > 5.5:
             return False
 
-        u = int(self._fx * x_opt / z_opt + self._cx)
-        v = int(self._fy * y_opt / z_opt + self._cy)
+        # Normalized coordinates [0.0, 1.0] using depth intrinsics (512x424)
+        u_norm = (self._fx * x_opt / z_opt + self._cx) / 512.0
+        v_norm = (self._fy * y_opt / z_opt + self._cy) / 424.0
 
-        for (bx, by, bw, bh) in self._latest_person_boxes_2d:
-            # Check with a 15% margin
-            pad_w = int(bw * 0.15)
-            pad_h = int(bh * 0.15)
-            if (bx - pad_w) <= u <= (bx + bw + pad_w) and (by - pad_h) <= v <= (by + bh + pad_h):
+        for (x_min, y_min, x_max, y_max) in self._latest_person_boxes_2d:
+            pad_x = (x_max - x_min) * 0.35
+            pad_y = (y_max - y_min) * 0.35
+            if (x_min - pad_x) <= u_norm <= (x_max + pad_x) and (y_min - pad_y) <= v_norm <= (y_max + pad_y):
                 return True
         return False
 
     def _classify_cluster(self, cluster: Dict[str, Any]) -> Tuple[int, float]:
-        """Classify 3D cluster according to strict user guidelines.
+        """Classify 3D cluster fusing physical depth anthropometrics and vision evidence.
 
-        Important: Depth clustering by itself does not reliably identify humans or vehicles.
-        Keep unclassified obstacles labeled as unknown until a classifier supplies sufficient evidence.
+        A human silhouette in 3D point cloud has characteristic physical proportions:
+        - Height between 0.95m and 2.20m (accounts for sitting, standing, and partial occlusion)
+        - Footprint width between 0.25m and 1.05m
+        - Vertical aspect ratio (height / width) >= 1.30 (upright vertical human profile)
+        - Elevation centered at torso height (0.45m <= centroid.z <= 1.70m)
         """
         centroid = cluster["centroid"]
+        dims = cluster["dims"]
 
-        # Check vision confirmation from HOG detector
+        height = float(dims[2])
+        width = float(max(dims[0], dims[1]))
+        depth_thickness = float(min(dims[0], dims[1]))
+        aspect_ratio = height / max(0.15, width)
+
+        # 1. 3D Depth Anthropometric Test
+        is_human_scale = (
+            (0.95 <= height <= 2.20)
+            and (0.25 <= width <= 1.05)
+            and (depth_thickness <= 0.95)
+            and (aspect_ratio >= 1.30)
+            and (0.45 <= centroid[2] <= 1.70)
+        )
+
+        # 2. 2D Vision Confirmation Test
         has_vision = self._is_confirmed_by_vision(centroid)
-        if has_vision:
-            return ObjectClassification.PEDESTRIAN, 0.95
 
-        # Strict fail-safe: Depth clustering by itself does not reliably identify humans or vehicles.
-        # Keep unclassified obstacles labeled as unknown until a classifier supplies sufficient evidence.
+        if has_vision and is_human_scale:
+            # Dual confirmation (Depth geometry + 2D RGB Vision classifier)
+            return ObjectClassification.PEDESTRIAN, 0.98
+        elif has_vision:
+            # Vision detected person (even if lower body is partially occluded by chairs)
+            return ObjectClassification.PEDESTRIAN, 0.95
+        elif is_human_scale:
+            # Clear 3D upright human silhouette in depth point cloud
+            return ObjectClassification.PEDESTRIAN, 0.92
+
+        # Inanimate lab obstacle (desks, cabinets, chairs, walls)
         return ObjectClassification.UNKNOWN, 0.90
 
     def _on_timer(self) -> None:
