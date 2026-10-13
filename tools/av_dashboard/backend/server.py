@@ -69,6 +69,7 @@ def _ros_snapshot() -> Dict[str, Any]:
             "bridge_available": ros_data["bridge_available"],
             "subscribed": ros_data["subscribed"],
             "last_error": ros_data["last_error"],
+            "bench_perception": ros_data.get("bench_perception", {}),
         },
         "perception_objects": ros_data["objects"],
         "planned_trajectory": ros_data["trajectory"],

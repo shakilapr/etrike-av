@@ -279,30 +279,36 @@ export class TuktukVehicle {
     brakeKpa: number,
     dt: number
   ) {
-    const speedMs = (speedKmh * 1000) / 3600;
+    const sKmh = typeof speedKmh === 'number' && !isNaN(speedKmh) ? speedKmh : 0;
+    const sDeg = typeof steerDeg === 'number' && !isNaN(steerDeg) ? steerDeg : 0;
+    const yMrad = typeof yawRateMrad === 'number' && !isNaN(yawRateMrad) ? yawRateMrad : 0;
+    const bKpa = typeof brakeKpa === 'number' && !isNaN(brakeKpa) ? brakeKpa : 0;
+    const delta = typeof dt === 'number' && !isNaN(dt) && dt > 0 ? dt : 0.016;
+
+    const speedMs = (sKmh * 1000) / 3600;
 
     // 1. Wheel spin rotation based on forward distance
-    const angularDelta = (speedMs * dt) / this.wheelRadius;
+    const angularDelta = (speedMs * delta) / this.wheelRadius;
     this.wheelRotation -= angularDelta;
     this.frontWheelMesh.rotation.x = this.wheelRotation;
     this.rearLeftWheelMesh.rotation.x = this.wheelRotation;
     this.rearRightWheelMesh.rotation.x = this.wheelRotation;
 
     // 2. Front wheel steering angle (smooth interpolation)
-    const targetSteerRad = -(steerDeg * Math.PI) / 180;
-    this.currentSteerAngle += (targetSteerRad - this.currentSteerAngle) * Math.min(dt * 15, 1);
+    const targetSteerRad = -(sDeg * Math.PI) / 180;
+    this.currentSteerAngle += (targetSteerRad - this.currentSteerAngle) * Math.min(delta * 15, 1);
     this.frontWheelPivot.rotation.y = this.currentSteerAngle;
 
     // 3. Chassis Roll dynamics (three-wheeler banks into lateral acceleration)
-    const lateralAcc = speedMs * (yawRateMrad / 1000);
+    const lateralAcc = speedMs * (yMrad / 1000);
     const targetRoll = Math.max(Math.min(-lateralAcc * 0.04, 0.08), -0.08);
-    this.currentRoll += (targetRoll - this.currentRoll) * Math.min(dt * 10, 1);
+    this.currentRoll += (targetRoll - this.currentRoll) * Math.min(delta * 10, 1);
     this.chassisGroup.rotation.z = this.currentRoll;
 
     // 4. Chassis Pitch dynamics (brake dive & acceleration squat)
-    const isBraking = brakeKpa > 20;
-    const targetPitch = isBraking ? Math.min((brakeKpa / 5000) * 0.04, 0.05) : 0;
-    this.currentPitch += (targetPitch - this.currentPitch) * Math.min(dt * 12, 1);
+    const isBraking = bKpa > 20;
+    const targetPitch = isBraking ? Math.min((bKpa / 5000) * 0.04, 0.05) : 0;
+    this.currentPitch += (targetPitch - this.currentPitch) * Math.min(delta * 12, 1);
     this.chassisGroup.rotation.x = this.currentPitch;
 
     // 5. Brake Lights intensity

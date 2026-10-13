@@ -13,15 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Real-time 1 LiDAR + 1 Camera Bench Perception Node.
+"""Real-time Standalone 1 Camera + 1 LiDAR Bench Perception Node.
 
-Fuses physical Hesai XT32M2X 3D LiDAR point clouds and single Kinect v2 RGB-D
-camera frames in the vehicle `base_link` frame to detect nearby people, cyclists,
-motorcycles, and vehicles around the stationary E-Trike in Bench Mode.
+Provides independent real-world object perception in the vehicle `base_link` frame
+using physical Kinect v2 RGB-D Camera and Hesai XT32M2X 3D LiDAR.
+
+Supports three operating modes with graceful failover:
+  1. CAMERA_ONLY: Kinect v2 depth backprojection + OpenCV HOG person detection (when LiDAR is offline)
+  2. LIDAR_ONLY: Hesai XT32M2X 360° point cloud clustering (when Camera is offline)
+  3. FUSED: 3D point cloud fusion and camera vision confirmation (when both are online)
+  4. UNAVAILABLE: Both offline -> emits 0 objects (fail-closed, no synthetic hallucinations)
 
 Publishes:
-  - /perception/object_recognition/detection/objects (autoware_perception_msgs/msg/DetectedObjects)
-  - /perception/object_recognition/detection/clustering/objects (autoware_perception_msgs/msg/DetectedObjects)
+  - /perception/object_recognition/detection/objects (autoware_perception_msgs/msg/DetectedObjects, RELIABLE)
+  - /perception/object_recognition/detection/clustering/objects (autoware_perception_msgs/msg/DetectedObjects, RELIABLE)
+  - /bench_perception/status (std_msgs/msg/String JSON diagnostic telemetry)
 
 Conforms to AGENTS.md rules:
   - LifecycleNode (unconfigured -> inactive -> active)
@@ -31,11 +37,12 @@ Conforms to AGENTS.md rules:
 
 from __future__ import annotations
 
+import json
 import math
 import time
-import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
+import cv2
 import numpy as np
 
 import rclpy
@@ -50,14 +57,13 @@ from autoware_perception_msgs.msg import (
     ObjectClassification,
     Shape,
 )
-from geometry_msgs.msg import Point, Pose, Quaternion, Vector3
-from sensor_msgs.msg import Image, PointCloud2
-from std_msgs.msg import Header
-from unique_identifier_msgs.msg import UUID
+from geometry_msgs.msg import Point, Quaternion, Vector3
+from sensor_msgs.msg import CameraInfo, Image, PointCloud2
+from std_msgs.msg import Header, String
 
 
 def yaw_to_quaternion(yaw: float) -> Quaternion:
-    """Convert yaw angle (rad) around Z to a Quaternion."""
+    """Convert yaw angle (rad) around Z to a geometry_msgs Quaternion."""
     q = Quaternion()
     q.x = 0.0
     q.y = 0.0
@@ -72,41 +78,69 @@ class BenchPerceptionNode(LifecycleNode):
     def __init__(self, node_name: str = "bench_perception_node") -> None:
         super().__init__(node_name)
 
-        # Parameters
+        # Tunable parameters
         self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("sensor_timeout_sec", 1.0)
-        self.declare_parameter("min_cluster_points", 8)
+        self.declare_parameter("min_cluster_points", 12)
         self.declare_parameter("voxel_grid_size_m", 0.28)
         self.declare_parameter("roi_x_min", -8.0)
         self.declare_parameter("roi_x_max", 25.0)
         self.declare_parameter("roi_y_min", -12.0)
         self.declare_parameter("roi_y_max", 12.0)
-        self.declare_parameter("roi_z_min", -0.25)
+        self.declare_parameter("roi_z_min", 0.05)
         self.declare_parameter("roi_z_max", 2.20)
+        self.declare_parameter("enable_hog_person_detector", True)
+
+        # Camera mount extrinsics relative to base_link (x=1.2m fwd, y=0.0m, z=1.0m up)
+        self._cam_x = 1.20
+        self._cam_y = 0.00
+        self._cam_z = 1.00
+
+        # Camera depth intrinsics (default Kinect v2 512x424)
+        self._fx = 364.99
+        self._fy = 364.99
+        self._cx = 258.18
+        self._cy = 206.16
 
         # Publishers
         self._pub_objects: Optional[LifecyclePublisher] = None
         self._pub_clusters: Optional[LifecyclePublisher] = None
+        self._pub_status: Optional[LifecyclePublisher] = None
 
-        # Subscriptions
+        # Subscriptions & Timer
         self._sub_lidar: Optional[Any] = None
         self._sub_camera_color: Optional[Any] = None
         self._sub_camera_depth: Optional[Any] = None
+        self._sub_camera_info: Optional[Any] = None
         self._timer: Optional[Any] = None
 
-        # State buffers
-        self._latest_points: Optional[np.ndarray] = None
+        # Sensor data buffers
+        self._latest_lidar_points: Optional[np.ndarray] = None
         self._last_lidar_time: float = 0.0
-        self._has_camera: bool = False
-        self._last_camera_time: float = 0.0
 
-        # Object tracking history across frames (id -> (x, y, z, vx, vy, last_time))
-        self._track_history: Dict[int, Dict[str, Any]] = {}
-        self._next_track_id: int = 1
+        self._latest_camera_points: Optional[np.ndarray] = None
+        self._last_camera_depth_time: float = 0.0
+
+        self._last_camera_color_time: float = 0.0
+        self._latest_person_boxes_2d: List[Tuple[int, int, int, int]] = []
+        self._hog: Optional[cv2.HOGDescriptor] = None
+
+        # Tracking & performance telemetry
+        self._last_loop_ms: float = 0.0
+        self._current_mode: str = "UNAVAILABLE"
 
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
-        self.get_logger().info("Configuring BenchPerceptionNode (1 LiDAR + 1 Camera)...")
+        self.get_logger().info("Configuring BenchPerceptionNode (Standalone Camera + LiDAR)...")
 
+        # RELIABLE QoS profile for outgoing perception objects (compatible with all subscribers)
+        qos_pub = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=5,
+        )
+
+        # BEST_EFFORT QoS profile for incoming high-bandwidth sensor streams
         qos_sensor = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
@@ -117,23 +151,28 @@ class BenchPerceptionNode(LifecycleNode):
         self._pub_objects = self.create_lifecycle_publisher(
             DetectedObjects,
             "/perception/object_recognition/detection/objects",
-            qos_sensor,
+            qos_pub,
         )
         self._pub_clusters = self.create_lifecycle_publisher(
             DetectedObjects,
             "/perception/object_recognition/detection/clustering/objects",
-            qos_sensor,
+            qos_pub,
+        )
+        self._pub_status = self.create_lifecycle_publisher(
+            String,
+            "/bench_perception/status",
+            qos_pub,
         )
 
-        # 1. LiDAR Subscriptions (accept before_sync in base_link, fallback to raw_ex)
+        # 1. LiDAR PointCloud Subscription
         self._sub_lidar = self.create_subscription(
             PointCloud2,
-            "/sensing/lidar/top/pointcloud_before_sync",
+            "/sensing/lidar/top/pointcloud_raw_ex",
             self._on_lidar_pointcloud,
             qos_sensor,
         )
 
-        # 2. Single Camera Subscriptions
+        # 2. Camera Subscriptions
         self._sub_camera_color = self.create_subscription(
             Image,
             "/kinect_front/color/image_raw",
@@ -146,8 +185,19 @@ class BenchPerceptionNode(LifecycleNode):
             self._on_camera_depth,
             qos_sensor,
         )
+        self._sub_camera_info = self.create_subscription(
+            CameraInfo,
+            "/kinect_front/depth/camera_info",
+            self._on_camera_info,
+            qos_sensor,
+        )
 
-        self.get_logger().info("Configured publishers and subscriptions.")
+        # Initialize HOG pedestrian classifier
+        if self.get_parameter("enable_hog_person_detector").value:
+            self._hog = cv2.HOGDescriptor()
+            self._hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
+        self.get_logger().info("Publishers, subscriptions, and vision classifiers configured.")
         return TransitionCallbackReturn.SUCCESS
 
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -156,6 +206,8 @@ class BenchPerceptionNode(LifecycleNode):
             self._pub_objects.on_activate(state)
         if self._pub_clusters:
             self._pub_clusters.on_activate(state)
+        if self._pub_status:
+            self._pub_status.on_activate(state)
 
         rate_hz = float(self.get_parameter("publish_rate_hz").value)
         timer_period = 1.0 / max(1.0, rate_hz)
@@ -172,20 +224,101 @@ class BenchPerceptionNode(LifecycleNode):
             self._pub_objects.on_deactivate(state)
         if self._pub_clusters:
             self._pub_clusters.on_deactivate(state)
+        if self._pub_status:
+            self._pub_status.on_deactivate(state)
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info("Cleaning up BenchPerceptionNode...")
         self._pub_objects = None
         self._pub_clusters = None
+        self._pub_status = None
         self._sub_lidar = None
         self._sub_camera_color = None
         self._sub_camera_depth = None
-        self._latest_points = None
+        self._sub_camera_info = None
+        self._latest_lidar_points = None
+        self._latest_camera_points = None
+        self._hog = None
         return TransitionCallbackReturn.SUCCESS
 
+    def _on_camera_info(self, msg: CameraInfo) -> None:
+        """Update focal length and principal point from factory camera info."""
+        if msg.k[0] > 10.0 and msg.k[4] > 10.0:
+            self._fx = float(msg.k[0])
+            self._fy = float(msg.k[4])
+            self._cx = float(msg.k[2])
+            self._cy = float(msg.k[5])
+
+    def _on_camera_color(self, msg: Image) -> None:
+        """Run fast pedestrian detection on downsampled color frames."""
+        self._last_camera_color_time = time.time()
+        if self._hog is None:
+            return
+
+        try:
+            raw = np.frombuffer(msg.data, dtype=np.uint8)
+            img = raw.reshape((msg.height, msg.width, -1))[:, :, :3]
+            # Downsample to 480x270 for rapid inference (~80ms on Jetson CPU)
+            small = cv2.resize(img, (480, 270))
+            boxes, _ = self._hog.detectMultiScale(
+                small, winStride=(8, 8), padding=(4, 4), scale=1.05
+            )
+            scale_x = msg.width / 480.0
+            scale_y = msg.height / 270.0
+
+            scaled_boxes: List[Tuple[int, int, int, int]] = []
+            for (bx, by, bw, bh) in boxes:
+                scaled_boxes.append((
+                    int(bx * scale_x),
+                    int(by * scale_y),
+                    int(bw * scale_x),
+                    int(bh * scale_y),
+                ))
+            self._latest_person_boxes_2d = scaled_boxes
+        except Exception:
+            self._latest_person_boxes_2d = []
+
+    def _on_camera_depth(self, msg: Image) -> None:
+        """Vectorized depth backprojection to 3D base_link points (executes in ~1.1ms)."""
+        if msg.width == 0 or msg.height == 0:
+            return
+
+        self._last_camera_depth_time = time.time()
+        try:
+            depth = np.frombuffer(msg.data, dtype=np.float32).reshape((msg.height, msg.width))
+            # Subsample by 4 (128x106 resolution) for 10 Hz real-time efficiency
+            step = 4
+            d_sub = depth[::step, ::step]
+            u = np.arange(0, msg.width, step)
+            v = np.arange(0, msg.height, step)
+            uu, vv = np.meshgrid(u, v)
+
+            # Valid depth range for Kinect v2 (0.5m to 4.5m)
+            valid_mask = (d_sub >= 0.50) & (d_sub <= 4.50) & np.isfinite(d_sub)
+            z_opt = d_sub[valid_mask]
+            if len(z_opt) == 0:
+                self._latest_camera_points = None
+                return
+
+            x_opt = (uu[valid_mask] - self._cx) * z_opt / self._fx
+            y_opt = (vv[valid_mask] - self._cy) * z_opt / self._fy
+
+            # Transform from Kinect optical frame to vehicle base_link:
+            #   X_base = Z_opt + mount_x (1.2m)
+            #   Y_base = -X_opt (optical +X is right, base +Y is left)
+            #   Z_base = -Y_opt + mount_z (1.0m) (optical +Y is down, base +Z is up)
+            x_base = z_opt + self._cam_x
+            y_base = -x_opt
+            z_base = -y_opt + self._cam_z
+
+            self._latest_camera_points = np.stack([x_base, y_base, z_base], axis=1)
+        except Exception as e:
+            self.get_logger().warn(f"Depth backprojection error: {e}")
+            self._latest_camera_points = None
+
     def _on_lidar_pointcloud(self, msg: PointCloud2) -> None:
-        """Parse incoming LiDAR PointCloud2 into an Nx3 float32 array in base_link."""
+        """Parse incoming LiDAR PointCloud2 into Nx3 float32 array in base_link."""
         if msg.width * msg.height == 0 or len(msg.data) == 0:
             return
 
@@ -198,12 +331,10 @@ class BenchPerceptionNode(LifecycleNode):
         if num_points == 0:
             return
 
-        # Reshape to extract x, y, z (assumed float32 at byte offsets 0, 4, 8)
         reshaped = raw_bytes[: num_points * point_step].reshape(num_points, point_step)
         xyz_bytes = np.ascontiguousarray(reshaped[:, :12])
         pts = xyz_bytes.view(dtype=np.float32).reshape(-1, 3)
 
-        # Filter NaNs / Infs
         valid_mask = np.isfinite(pts).all(axis=1)
         valid_pts = pts[valid_mask]
         if len(valid_pts) == 0:
@@ -216,16 +347,8 @@ class BenchPerceptionNode(LifecycleNode):
             valid_pts[:, 0] += 0.575
             valid_pts[:, 2] += 1.7464
 
-        self._latest_points = valid_pts
+        self._latest_lidar_points = valid_pts
         self._last_lidar_time = time.time()
-
-    def _on_camera_color(self, msg: Image) -> None:
-        self._has_camera = True
-        self._last_camera_time = time.time()
-
-    def _on_camera_depth(self, msg: Image) -> None:
-        self._has_camera = True
-        self._last_camera_time = time.time()
 
     def _crop_points(self, pts: np.ndarray) -> np.ndarray:
         """Filter points within bench ROI and crop out ego vehicle chassis."""
@@ -250,91 +373,71 @@ class BenchPerceptionNode(LifecycleNode):
             return filtered
 
         # 2. Ego Vehicle Bounding Box Self-Crop (E-Trike body)
-        # Length: [-0.5, 2.7]m, Width: [-0.75, 0.75]m, Height: [-0.2, 1.8]m
         ego_mask = (
             (filtered[:, 0] >= -0.50)
             & (filtered[:, 0] <= 2.70)
             & (filtered[:, 1] >= -0.75)
             & (filtered[:, 1] <= 0.75)
             & (filtered[:, 2] >= -0.20)
-            & (filtered[:, 2] <= 1.80)
+            & (filtered[:, 2] <= 1.85)
         )
         return filtered[~ego_mask]
 
-    def _cluster_points(self, pts: np.ndarray) -> List[Dict[str, Any]]:
-        """Fast grid-based connected component clustering in NumPy."""
-        if len(pts) < int(self.get_parameter("min_cluster_points").value):
+    def _cluster_points_spatial_hash(self, pts: np.ndarray) -> List[Dict[str, Any]]:
+        """O(N) Spatial Hash Clustering using grid bins with 8-neighbor connectivity."""
+        min_pts = int(self.get_parameter("min_cluster_points").value)
+        if len(pts) < min_pts:
             return []
 
         cell_size = float(self.get_parameter("voxel_grid_size_m").value)
-        min_pts = int(self.get_parameter("min_cluster_points").value)
 
-        # 2D horizontal grid hashing (X, Y)
+        # 2D horizontal hash bins (gx, gy)
         gx = np.floor(pts[:, 0] / cell_size).astype(np.int32)
         gy = np.floor(pts[:, 1] / cell_size).astype(np.int32)
 
-        coords = np.stack([gx, gy], axis=1)
-        unique_cells, inverse_indices, counts = np.unique(
-            coords, axis=0, return_inverse=True, return_counts=True
-        )
+        grid: Dict[Tuple[int, int], List[int]] = {}
+        for idx in range(len(pts)):
+            cell_key = (int(gx[idx]), int(gy[idx]))
+            grid.setdefault(cell_key, []).append(idx)
 
-        # Discard sparse cells (< 2 points)
-        dense_mask = counts[inverse_indices] >= 2
-        dense_pts = pts[dense_mask]
-        dense_coords = coords[dense_mask]
-
-        if len(dense_pts) < min_pts:
-            return []
-
-        # Simple neighbor grouping using coordinate difference
-        unique_dense, cell_to_cluster = np.unique(dense_coords, axis=0, return_inverse=True)
-
-        clusters_dict: Dict[int, List[np.ndarray]] = {}
-        for pt, c_idx in zip(dense_pts, cell_to_cluster):
-            clusters_dict.setdefault(c_idx, []).append(pt)
-
-        # Merge adjacent cells into connected clusters
+        visited: Set[Tuple[int, int]] = set()
         clusters: List[Dict[str, Any]] = []
-        visited = set()
-        cell_array = unique_dense
 
-        for i in range(len(cell_array)):
-            if i in visited:
+        # Connected component expansion
+        for cell_key in grid:
+            if cell_key in visited:
                 continue
-            # BFS / flood-fill for neighboring cells (distance <= 1 grid cell)
-            queue = [i]
-            visited.add(i)
-            cluster_cells = [i]
+
+            cluster_indices: List[int] = []
+            queue = [cell_key]
+            visited.add(cell_key)
 
             while queue:
-                curr = queue.pop(0)
-                cx, cy = cell_array[curr]
-                for j in range(len(cell_array)):
-                    if j not in visited:
-                        ox, oy = cell_array[j]
-                        if abs(cx - ox) <= 1 and abs(cy - oy) <= 1:
-                            visited.add(j)
-                            queue.append(j)
-                            cluster_cells.append(j)
+                cx, cy = queue.pop()
+                cluster_indices.extend(grid[(cx, cy)])
 
-            # Gather all points for this merged cluster
-            c_points_list: List[np.ndarray] = []
-            for cell_id in cluster_cells:
-                if cell_id in clusters_dict:
-                    c_points_list.extend(clusters_dict[cell_id])
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        neighbor = (cx + dx, cy + dy)
+                        if neighbor in grid and neighbor not in visited:
+                            visited.add(neighbor)
+                            queue.append(neighbor)
 
-            if len(c_points_list) >= min_pts:
-                c_pts = np.array(c_points_list)
+            if len(cluster_indices) >= min_pts:
+                c_pts = pts[cluster_indices]
                 min_xyz = np.min(c_pts, axis=0)
                 max_xyz = np.max(c_pts, axis=0)
                 centroid = np.mean(c_pts, axis=0)
                 dims = max_xyz - min_xyz
 
-                # Compute heading from principal axis
+                # Principal yaw heading
                 cov = np.cov(c_pts[:, :2], rowvar=False)
-                eigvals, eigvecs = np.linalg.eigh(cov)
-                major_vec = eigvecs[:, 1]
-                yaw = math.atan2(major_vec[1], major_vec[0])
+                if cov.ndim == 2:
+                    eigvals, eigvecs = np.linalg.eigh(cov)
+                    major_vec = eigvecs[:, 1]
+                    yaw = math.atan2(major_vec[1], major_vec[0])
+                else:
+                    yaw = 0.0
 
                 clusters.append({
                     "points": c_pts,
@@ -346,83 +449,98 @@ class BenchPerceptionNode(LifecycleNode):
 
         return clusters
 
-    def _is_in_front_camera_fov(self, centroid: np.ndarray) -> bool:
-        """Check if 3D cluster is within the single front Kinect camera FOV."""
-        # Kinect front link in base_link: x=0.35, y=0.0, z=0.25 (mounted forward)
-        # Camera FOV: ~70 deg horizontal (+/- 35 deg), range 0.5m to 5.0m
-        rel_x = centroid[0] - 0.35
-        rel_y = centroid[1]
-        rel_z = centroid[2] - 0.25
-
-        if rel_x < 0.5 or rel_x > 5.5:
+    def _is_confirmed_by_vision(self, centroid: np.ndarray) -> bool:
+        """Check if 3D cluster projects into any detected HOG pedestrian bounding box."""
+        if not self._latest_person_boxes_2d:
             return False
 
-        angle_h = math.atan2(abs(rel_y), rel_x)
-        return angle_h < math.radians(35.0)
+        # Project 3D centroid from base_link to Kinect optical frame
+        x_opt = -(centroid[1] - self._cam_y)
+        y_opt = -(centroid[2] - self._cam_z)
+        z_opt = centroid[0] - self._cam_x
+
+        if z_opt <= 0.4 or z_opt > 5.5:
+            return False
+
+        u = int(self._fx * x_opt / z_opt + self._cx)
+        v = int(self._fy * y_opt / z_opt + self._cy)
+
+        for (bx, by, bw, bh) in self._latest_person_boxes_2d:
+            # Check with a 15% margin
+            pad_w = int(bw * 0.15)
+            pad_h = int(bh * 0.15)
+            if (bx - pad_w) <= u <= (bx + bw + pad_w) and (by - pad_h) <= v <= (by + bh + pad_h):
+                return True
+        return False
 
     def _classify_cluster(self, cluster: Dict[str, Any]) -> Tuple[int, float]:
-        """Classify 3D cluster by aspect ratio and single-camera confirmation."""
-        dx, dy, dz = cluster["dims"]
-        # Footprint is max horizontal diameter
-        footprint = max(dx, dy)
-        height = dz
+        """Classify 3D cluster according to strict user guidelines.
+
+        Important: Depth clustering by itself does not reliably identify humans or vehicles.
+        Keep unclassified obstacles labeled as unknown until a classifier supplies sufficient evidence.
+        """
         centroid = cluster["centroid"]
 
-        # Check single Kinect camera confirmation
-        in_camera = self._has_camera and self._is_in_front_camera_fov(centroid)
+        # Check vision confirmation from HOG detector
+        has_vision = self._is_confirmed_by_vision(centroid)
+        if has_vision:
+            return ObjectClassification.PEDESTRIAN, 0.95
 
-        # 1. PEDESTRIAN: slender upright object
-        if (
-            (0.20 <= footprint <= 1.05 and 0.80 <= height <= 2.20)
-            or (in_camera and footprint <= 1.20 and height >= 0.70)
-        ):
-            return ObjectClassification.PEDESTRIAN, 0.95 if in_camera else 0.85
-
-        # 2. BICYCLE / MOTORCYCLE: medium elongated, lower profile
-        if 0.90 <= footprint <= 2.30 and 0.30 <= min(dx, dy) <= 1.10 and 0.70 <= height <= 1.80:
-            return ObjectClassification.BICYCLE, 0.80
-
-        # 3. TRUCK / BUS: large vehicle
-        if footprint > 5.5 or dz > 2.30 or min(dx, dy) > 2.30:
-            return ObjectClassification.TRUCK, 0.85
-
-        # 4. CAR: standard passenger vehicle
-        if 2.20 <= footprint <= 5.50 and min(dx, dy) >= 1.10 and 0.90 <= height <= 2.30:
-            return ObjectClassification.CAR, 0.85
-
-        # Default / Small obstacle
-        return ObjectClassification.UNKNOWN, 0.70
+        # Strict fail-safe: Depth clustering by itself does not reliably identify humans or vehicles.
+        # Keep unclassified obstacles labeled as unknown until a classifier supplies sufficient evidence.
+        return ObjectClassification.UNKNOWN, 0.90
 
     def _on_timer(self) -> None:
-        """Periodic 10 Hz detection loop."""
+        """Periodic real-time detection & failover loop (10 Hz)."""
         if not self._pub_objects or not self._pub_objects.is_activated:
             return
 
+        t_start = time.time()
         now = time.time()
         timeout = float(self.get_parameter("sensor_timeout_sec").value)
 
-        # Fail-closed: if LiDAR stream has timed out, publish empty detected objects
-        if self._latest_points is None or (now - self._last_lidar_time) > timeout:
+        has_lidar = (self._latest_lidar_points is not None) and ((now - self._last_lidar_time) <= timeout)
+        has_camera = (self._latest_camera_points is not None) and ((now - self._last_camera_depth_time) <= timeout)
+
+        # Determine Operating Mode & Point Cloud Source
+        active_points: Optional[np.ndarray] = None
+        if has_camera and has_lidar:
+            self._current_mode = "FUSED"
+            # Combine LiDAR and Camera points in base_link
+            active_points = np.vstack([self._latest_lidar_points, self._latest_camera_points])
+        elif has_camera:
+            self._current_mode = "CAMERA_ONLY"
+            active_points = self._latest_camera_points
+        elif has_lidar:
+            self._current_mode = "LIDAR_ONLY"
+            active_points = self._latest_lidar_points
+        else:
+            self._current_mode = "UNAVAILABLE"
+            active_points = None
+
+        # Fail-closed: If both sensors are offline, publish 0 objects
+        if active_points is None or len(active_points) == 0:
             empty_msg = DetectedObjects()
             empty_msg.header = Header(stamp=self.get_clock().now().to_msg(), frame_id="base_link")
             self._pub_objects.publish(empty_msg)
+            if self._pub_clusters and self._pub_clusters.is_activated:
+                self._pub_clusters.publish(empty_msg)
+
+            self._publish_status(0, (time.time() - t_start) * 1000.0)
             return
 
-        # Check camera freshness
-        self._has_camera = (now - self._last_camera_time) <= timeout
+        # 1. Spatial cropping
+        cropped = self._crop_points(active_points)
 
-        # 1. Crop points within bench ROI and exclude ego trike
-        cropped = self._crop_points(self._latest_points)
-
-        # 2. Cluster points into 3D objects
-        clusters = self._cluster_points(cropped)
+        # 2. O(N) Spatial Hash Clustering
+        clusters = self._cluster_points_spatial_hash(cropped)
 
         # 3. Build Autoware DetectedObjects message
         stamp = self.get_clock().now().to_msg()
         out_msg = DetectedObjects()
         out_msg.header = Header(stamp=stamp, frame_id="base_link")
 
-        for c in clusters:
+        for idx, c in enumerate(clusters):
             label, prob = self._classify_cluster(c)
             centroid = c["centroid"]
             dx, dy, dz = c["dims"]
@@ -437,7 +555,7 @@ class BenchPerceptionNode(LifecycleNode):
             cls_msg.probability = prob
             obj.classification = [cls_msg]
 
-            # Kinematics (in base_link)
+            # Kinematics in base_link
             kin = DetectedObjectKinematics()
             kin.pose_with_covariance.pose.position = Point(
                 x=float(centroid[0]), y=float(centroid[1]), z=float(centroid[2])
@@ -448,7 +566,7 @@ class BenchPerceptionNode(LifecycleNode):
             kin.has_twist_covariance = False
             obj.kinematics = kin
 
-            # Shape
+            # Bounding Box Shape
             sh = Shape()
             sh.type = Shape.BOUNDING_BOX
             sh.dimensions = Vector3(
@@ -464,12 +582,35 @@ class BenchPerceptionNode(LifecycleNode):
         if self._pub_clusters and self._pub_clusters.is_activated:
             self._pub_clusters.publish(out_msg)
 
+        loop_ms = (time.time() - t_start) * 1000.0
+        self._last_loop_ms = loop_ms
+        self._publish_status(len(out_msg.objects), loop_ms)
+
+    def _publish_status(self, object_count: int, latency_ms: float) -> None:
+        """Publish real-time diagnostic status JSON."""
+        if not self._pub_status or not self._pub_status.is_activated:
+            return
+
+        status_data = {
+            "mode": self._current_mode,
+            "object_count": object_count,
+            "latency_ms": round(latency_ms, 2),
+            "camera_online": (time.time() - self._last_camera_depth_time) <= 1.0,
+            "lidar_online": (time.time() - self._last_lidar_time) <= 1.0,
+            "camera_connected": (time.time() - self._last_camera_depth_time) <= 1.0,
+            "lidar_connected": (time.time() - self._last_lidar_time) <= 1.0,
+            "timestamp": time.time(),
+        }
+        msg = String()
+        msg.data = json.dumps(status_data)
+        self._pub_status.publish(msg)
+
 
 def main(args: Optional[List[str]] = None) -> None:
     rclpy.init(args=args)
     node = BenchPerceptionNode()
 
-    # Auto-configure and activate lifecycle transitions
+    # Trigger lifecycle configure and activate
     node.trigger_configure()
     node.trigger_activate()
 

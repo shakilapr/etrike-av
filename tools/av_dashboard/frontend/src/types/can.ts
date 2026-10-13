@@ -120,5 +120,15 @@ export interface RosStatus {
   bridge_available?: boolean;
   subscribed?: Record<string, boolean>;
   last_error?: string | null;
+  bench_perception?: {
+    mode?: string;
+    object_count?: number;
+    latency_ms?: number;
+    camera_online?: boolean;
+    lidar_online?: boolean;
+    camera_connected?: boolean;
+    lidar_connected?: boolean;
+    timestamp?: number;
+  };
 }
 

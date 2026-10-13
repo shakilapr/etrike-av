@@ -531,13 +531,14 @@ export class SurroundingTraffic {
   }
 
   private resolveActiveModel(obj: PerceptionObject): string {
-    const isSmall = Math.max(obj.dx || 0, obj.dy || 0, obj.dz || 0) <= 0.85;
     if (obj.label === 'PEDESTRIAN') return 'PEDESTRIAN';
     if (obj.label === 'CAR') return 'CAR';
     if (obj.label === 'TRUCK' || obj.label === 'BUS') return 'TRUCK';
     if (obj.label === 'BICYCLE' || obj.label === 'MOTORCYCLE') return 'BICYCLE';
-    if ((obj.label as string) === 'CONE' || isSmall) return 'CONE';
-    return 'CAR';
+    if (obj.label === 'BOX' || obj.label === 'UNKNOWN' || (obj.label as string) === 'CONE') return 'CONE';
+    const isSmall = Math.max(obj.dx || 0, obj.dy || 0, obj.dz || 0) <= 0.85;
+    if (isSmall) return 'CONE';
+    return 'CONE';
   }
 
   private applyClassGeometry(actor: Actor, obj: PerceptionObject) {
@@ -552,8 +553,8 @@ export class SurroundingTraffic {
       actor.currentLabel = obj.label;
       const labelSprite = actor.meshes['__label'] as THREE.Sprite | undefined;
       if (labelSprite) {
-        const colorHex = CLASS_COLORS[targetModel] ?? CLASS_COLORS.UNKNOWN;
-        labelSprite.material = this.getLabelMaterial(targetModel, colorHex);
+        const colorHex = CLASS_COLORS[obj.label] ?? CLASS_COLORS.UNKNOWN;
+        labelSprite.material = this.getLabelMaterial(obj.label, colorHex);
       }
     }
 

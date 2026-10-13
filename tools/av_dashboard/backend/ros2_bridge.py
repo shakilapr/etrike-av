@@ -121,6 +121,19 @@ class Ros2Bridge:
         self._veh_hazard: bool = False
         self._veh_status_time: float = 0.0
 
+        # Standalone Camera + LiDAR bench perception telemetry
+        self._bench_perception_status: Dict[str, Any] = {
+            "mode": "UNAVAILABLE",
+            "object_count": 0,
+            "latency_ms": 0.0,
+            "camera_online": False,
+            "lidar_online": False,
+            "camera_connected": False,
+            "lidar_connected": False,
+            "timestamp": 0.0,
+        }
+        self._bench_perception_time: float = 0.0
+
     def start(self) -> None:
         """Start the ROS 2 node in a background daemon thread."""
         try:
@@ -263,6 +276,21 @@ class Ros2Bridge:
             except Exception as e:
                 self._mark_subscribed("detection", False)
                 print(f"[ROS 2 Bridge] DetectedObjects subscription failed: {e}")
+
+            # 2b. Standalone Bench Perception Status (CAMERA_ONLY / LIDAR_ONLY / FUSED)
+            try:
+                from std_msgs.msg import String
+                node.create_subscription(
+                    String,
+                    "/bench_perception/status",
+                    self._on_bench_perception_status,
+                    qos_sensor,
+                )
+                self._mark_subscribed("bench_perception_status", True)
+                print("[ROS 2 Bridge] Subscribed to /bench_perception/status")
+            except Exception as e:
+                self._mark_subscribed("bench_perception_status", False)
+                print(f"[ROS 2 Bridge] Bench perception status subscription failed: {e}")
 
             # 3. Planned Trajectory from Planning (Multiple candidate topics)
             try:
@@ -648,6 +676,18 @@ class Ros2Bridge:
             return
         self._process_objects_batch(msg.objects, msg.header.frame_id, "detection", is_predicted=False)
 
+    def _on_bench_perception_status(self, msg: Any) -> None:
+        """Handle incoming diagnostic telemetry from bench_perception_node."""
+        try:
+            import json
+            data = json.loads(msg.data)
+            with self._lock:
+                self._bench_perception_status = data
+                self._bench_perception_time = time.time()
+                self._topic_counts["bench_perception"] = self._topic_counts.get("bench_perception", 0) + 1
+        except Exception:
+            pass
+
     def _on_trajectory(self, msg: Any) -> None:
         """Handle incoming planned trajectory points from Autoware."""
         now = time.time()
@@ -747,6 +787,10 @@ class Ros2Bridge:
             traj_fresh = self._last_trajectory_time > 0.0 and (now - self._last_trajectory_time) < 2.5
             veh_fresh = self._veh_status_time > 0.0 and (now - self._veh_status_time) < SOURCE_STALE_SEC
 
+            # Check if Standalone Bench Perception is actively publishing
+            bench_active = (now - self._bench_perception_time) < SOURCE_STALE_SEC
+            bench_mode = self._bench_perception_status.get("mode", "UNAVAILABLE") if bench_active else None
+
             # Merge real-time sensor detection (e.g. from 1 LiDAR + 1 Camera bench perception in base_link)
             # with upstream tracking / prediction objects
             det_fresh = ("detection" in fresh_sources)
@@ -760,7 +804,29 @@ class Ros2Bridge:
                     primary_source = s_name
                     break
 
-            if primary_source and det_objects:
+            if bench_active:
+                # Standalone Bench Perception is actively providing real physical sensor perception
+                if bench_mode == "UNAVAILABLE":
+                    # Fail-closed: both physical sensors disconnected.
+                    # Zero fabricated objects, no synthetic hallucinations!
+                    objects = []
+                    source = "bench_unavailable"
+                    frame_id = "base_link"
+                    pose_ok = True
+                else:
+                    # Physical sensors active (CAMERA_ONLY, LIDAR_ONLY, or FUSED)
+                    # Use physical det_objects exclusively in base_link; never mix in synthetic simulation objects!
+                    objects = det_objects if det_fresh else []
+                    source = f"bench_{bench_mode.lower()}"
+                    frame_id = "base_link"
+                    pose_ok = True
+            elif det_fresh and self._source_frame.get("detection") == "base_link":
+                # Real physical sensor detections in vehicle frame without bench status
+                objects = det_objects
+                source = "physical_sensors"
+                frame_id = "base_link"
+                pose_ok = True
+            elif primary_source and det_objects:
                 # Merge tracking and detection, deduplicating close centroids (< 1.2m)
                 merged_objects: List[Dict[str, Any]] = list(self._sources[primary_source])
                 for d_obj in det_objects:
@@ -828,6 +894,16 @@ class Ros2Bridge:
                     },
                 },
                 "class_counts": self._class_counts(objects),
+                "bench_perception": dict(self._bench_perception_status) if bench_active else {
+                    "mode": "OFFLINE",
+                    "object_count": 0,
+                    "latency_ms": 0.0,
+                    "camera_online": False,
+                    "lidar_online": False,
+                    "camera_connected": False,
+                    "lidar_connected": False,
+                    "timestamp": 0.0,
+                },
                 "bridge_available": self.is_available,
                 "subscribed": dict(self._subscribed),
                 "topic_counts": dict(self._topic_counts),

@@ -143,6 +143,16 @@ export const CockpitHud: React.FC = () => {
   if (!rosStatus.bridge_available) {
     rosStatusText = 'AUTOWARE BRIDGE UNAVAILABLE • rclpy NOT LOADED';
     rosDot = 'bg-neutral-600';
+  } else if (rosStatus.source?.startsWith('bench_')) {
+    const rawMode = rosStatus.source.replace('bench_', '').toUpperCase();
+    if (rawMode === 'UNAVAILABLE') {
+      rosStatusText = 'BENCH PERCEPTION • SENSORS UNAVAILABLE (DISCONNECTED)';
+      rosDot = 'bg-rose-500 animate-pulse';
+    } else {
+      const modeLabel = rawMode === 'CAMERA_ONLY' ? 'CAMERA ONLY' : rawMode === 'LIDAR_ONLY' ? 'LIDAR ONLY' : 'CAMERA + LIDAR FUSED';
+      rosStatusText = `BENCH PERCEPTION [${modeLabel}] • ${rosStatus.object_count ?? rosStatus.tracked_count} OBJECTS (${rosStatus.hz} Hz)`;
+      rosDot = 'bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,1)]';
+    }
   } else if (!rosStatus.active) {
     rosStatusText = 'AUTOWARE UNIVERSE OFFLINE • WAITING FOR TOPICS';
     rosDot = 'bg-neutral-600';

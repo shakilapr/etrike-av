@@ -165,9 +165,16 @@ else
     BROWSER_CMD="x-www-browser"
 fi
 
+USER_DATA_DIR="$HOME/.config/chromium_av"
+if [ -d "$HOME/snap/chromium" ]; then
+    USER_DATA_DIR="$HOME/snap/chromium/common/av_dashboard"
+fi
+mkdir -p "$USER_DATA_DIR" 2>/dev/null || true
+
 echo "Opening $URL in $BROWSER_CMD on $DISPLAY..."
 nohup "$BROWSER_CMD" \
     --app="$URL" \
+    --user-data-dir="$USER_DATA_DIR" \
     --start-maximized \
     --no-first-run \
     --no-default-browser-check \
@@ -175,7 +182,6 @@ nohup "$BROWSER_CMD" \
     --enable-gpu-rasterization \
     --enable-zero-copy \
     --enable-webgl \
-    --enable-unsafe-swiftshader \
     --disable-gpu-sandbox \
     --test-type \
     < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &

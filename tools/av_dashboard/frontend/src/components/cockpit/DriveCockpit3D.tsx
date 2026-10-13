@@ -90,7 +90,8 @@ export const DriveCockpit3D: React.FC = () => {
     const animate = (currentTime: number) => {
       animationFrameId = requestAnimationFrame(animate);
 
-      const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
+      const rawDt = (currentTime - lastTime) / 1000;
+      const dt = typeof rawDt === 'number' && !isNaN(rawDt) && rawDt > 0 ? Math.min(rawDt, 0.1) : 0.016;
       lastTime = currentTime;
 
       const state = useCanStore.getState();
@@ -154,9 +155,14 @@ export const DriveCockpit3D: React.FC = () => {
           const targetCamY = 2.5;
           const targetCamZ = 5.2;
 
-          camera.position.x += (targetCamX - camera.position.x) * (dt * 6);
-          camera.position.y += (targetCamY - camera.position.y) * (dt * 6);
-          camera.position.z += (targetCamZ - camera.position.z) * (dt * 6);
+          if (isNaN(camera.position.x)) camera.position.x = 0;
+          if (isNaN(camera.position.y)) camera.position.y = targetCamY;
+          if (isNaN(camera.position.z)) camera.position.z = targetCamZ;
+
+          const factor = Math.min(dt * 6, 1.0);
+          camera.position.x += (targetCamX - camera.position.x) * factor;
+          camera.position.y += (targetCamY - camera.position.y) * factor;
+          camera.position.z += (targetCamZ - camera.position.z) * factor;
 
           camera.lookAt(0, 0.75, -8);
         }
