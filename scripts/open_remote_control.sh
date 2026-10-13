@@ -84,19 +84,34 @@ else
     echo "  Container started."
 fi
 
-# 4. Stop any conflicting simulator / bridge instances inside container
-echo "--> Cleaning any conflicting ROS nodes inside container..."
+# 4. Clean up any conflicting GUI or simulator instances
+echo "--> Checking existing ROS nodes inside container..."
+BRIDGE_ALREADY_RUNNING=false
+if docker exec "$CONTAINER" pgrep -f "vehicle_bridge_node" >/dev/null 2>&1; then
+    BRIDGE_ALREADY_RUNNING=true
+    echo "  [INFO] Detected existing vehicle_bridge_node already running. Will attach GUI to it."
+fi
+
+# Stop previous cockpit GUI or conflicting simulators
 docker exec "$CONTAINER" bash -c "
-    pkill -f 'planning_simulator' 2>/dev/null || true
-    pkill -f 'rviz2' 2>/dev/null || true
-    pkill -f 'vehicle_bridge' 2>/dev/null || true
-    pkill -f 'etrike_remote_control' 2>/dev/null || true
+    pkill -9 -f 'remote_control_gui' 2>/dev/null || true
+    pkill -9 -f 'planning_simulator' 2>/dev/null || true
+    pkill -9 -f 'rviz2' 2>/dev/null || true
 " || true
 
-sleep 1
+sleep 0.5
 
-# 5. Launch Vehicle Bridge and Remote Cockpit GUI
-echo "--> Launching bench remote control stack (vehicle_bridge + remote_control_gui)..."
+# 5. Launch Remote Cockpit GUI (and vehicle bridge only if not already running)
+if [ "$BRIDGE_ALREADY_RUNNING" = "true" ]; then
+    echo "--> Launching GUI-only attached to active vehicle bridge..."
+    LAUNCH_TARGET="remote_control.launch.py"
+    EXTRA_ARGS=""
+else
+    echo "--> Launching bench remote control stack (vehicle_bridge + remote_control_gui)..."
+    LAUNCH_TARGET="bench_remote_control.launch.py"
+    EXTRA_ARGS="can_interface:=$CAN_IFACE sim_mode:=$SIM_MODE"
+fi
+
 docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$DISPLAY
     export XAUTHORITY=$XAUTHORITY
@@ -104,9 +119,7 @@ docker exec -d "$CONTAINER" bash -c "
     if [ -f /workspace/autoware/install/setup.bash ]; then
         source /workspace/autoware/install/setup.bash
     fi
-    ros2 launch etrike_remote_control bench_remote_control.launch.py \
-        can_interface:=$CAN_IFACE \
-        sim_mode:=$SIM_MODE > /tmp/etrike_remote_cockpit.log 2>&1
+    ros2 launch etrike_remote_control $LAUNCH_TARGET $EXTRA_ARGS > /tmp/etrike_remote_cockpit.log 2>&1
 "
 
 echo "Waiting for cockpit to initialize..."
