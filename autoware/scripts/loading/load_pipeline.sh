@@ -74,12 +74,17 @@ detect_x11() {
       fi
     done
   fi
-  XAUTH="/run/user/$(id -u)/gdm/Xauthority"
-  if [ ! -f "$XAUTH" ] && [ -f "/run/user/1000/gdm/Xauthority" ]; then
-    XAUTH="/run/user/1000/gdm/Xauthority"
-  fi
-  if [ ! -f "$XAUTH" ] && [ -f "$HOME/.Xauthority" ]; then
-    XAUTH="$HOME/.Xauthority"
+  XAUTH="${XAUTHORITY:-}"
+  if [ -z "$XAUTH" ] || [ ! -f "$XAUTH" ]; then
+    if [ -f "/run/user/$(id -u)/gdm/Xauthority" ]; then
+      XAUTH="/run/user/$(id -u)/gdm/Xauthority"
+    elif [ -f "/run/user/1000/gdm/Xauthority" ]; then
+      XAUTH="/run/user/1000/gdm/Xauthority"
+    elif [ -f "$HOME/.Xauthority" ]; then
+      XAUTH="$HOME/.Xauthority"
+    elif [ -f "/home/med1/.Xauthority" ]; then
+      XAUTH="/home/med1/.Xauthority"
+    fi
   fi
 }
 
@@ -176,7 +181,13 @@ start_universe() {
       vehicle_model:=$VEHICLE_MODEL \
       sensor_model:=$SENSOR_MODEL \
       rviz:=true > /tmp/universe.log 2>&1"
-  echo "  launched (log inside container: /tmp/universe.log). Wait ~40s for RViz; then in RViz: pose -> goal -> engage."
+  sleep 3
+  if docker exec "$CONTAINER" pgrep -f "rviz2" >/dev/null 2>&1 || docker exec "$CONTAINER" pgrep -f "planning_simulator" >/dev/null 2>&1; then
+    echo "  [OK] Autoware Universe is initializing (log: /tmp/universe.log). Wait ~30s for RViz."
+  else
+    echo "  [WARN] Autoware Universe processes did not stay alive. Last log output:"
+    docker exec "$CONTAINER" tail -n 25 /tmp/universe.log 2>/dev/null || true
+  fi
 }
 
 start_live_autoware() {
