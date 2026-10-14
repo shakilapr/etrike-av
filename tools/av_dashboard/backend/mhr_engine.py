@@ -63,11 +63,12 @@ class MhrTopology:
 class MhrEngine:
     """Thread-safe MHR TorchScript wrapper with graceful degradation."""
 
-    def __init__(self, model_path: Optional[Path] = None) -> None:
+    def __init__(self, model_path: Optional[Path] = None, ground_snap: bool = True) -> None:
         self._lock = threading.RLock()
         self._model: Any = None
         self._available = False
         self._reason = "not initialised"
+        self._ground_snap = bool(ground_snap)
 
         self._pose_names: List[str] = []
         self._pose_limits: np.ndarray = np.zeros((0, 2), np.float32)
@@ -183,6 +184,18 @@ class MhrEngine:
             )
         vertices_m = vertices[0].detach().cpu().numpy().astype(np.float32) * CM_TO_M
         joints_m = skeleton[0, :, :3].detach().cpu().numpy().astype(np.float32) * CM_TO_M
+
+        # Ground snapping: translate the actor so the lowest vertex sits on y=0.
+        # Keeps pedestrians planted on the road regardless of the model's root_ty.
+        if self._ground_snap and vertices_m.size:
+            min_y = float(vertices_m[:, 1].min())
+            if abs(min_y) > 1e-4:
+                vertices_m = vertices_m.copy()
+                vertices_m[:, 1] -= min_y
+                if joints_m.size:
+                    joints_m = joints_m.copy()
+                    joints_m[:, 1] -= min_y
+
         elapsed_ms = (time.perf_counter() - started) * 1000.0
 
         self._revision += 1

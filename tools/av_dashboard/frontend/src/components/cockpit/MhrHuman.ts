@@ -27,10 +27,8 @@ export interface MhrPlacement {
 
 interface ActorMesh {
   group: THREE.Group;
-  mesh: THREE.Mesh;
   geometry: THREE.BufferGeometry;
   positionAttr: THREE.BufferAttribute;
-  floatScratch: Float32Array;
 }
 
 export class MhrHuman {
@@ -39,6 +37,7 @@ export class MhrHuman {
   private topology: Uint32Array | null = null;
   private topologyRequested = false;
   private available = false;
+  private lastRevision = -1;
   private actorMeshes = new Map<string, ActorMesh>();
   private material: THREE.MeshStandardMaterial;
 
@@ -92,11 +91,17 @@ export class MhrHuman {
       return new Set();
     }
 
+    // Only re-upload vertex buffers + recompute normals when the backend has
+    // produced a new evaluation; placement still tracks the actor every frame.
+    const revision = typeof payload.revision === 'number' ? payload.revision : -1;
+    const geometryDirty = revision !== this.lastRevision;
+    if (geometryDirty) this.lastRevision = revision;
+
     const seen = new Set<string>();
     for (const actor of payload.actors) {
       const place = placement(actor.id);
       if (!place || !place.visible) continue;
-      const entry = this.upsertActor(actor.id, actor.vertices);
+      const entry = this.upsertActor(actor.id, actor.vertices, geometryDirty);
       if (!entry) continue;
       seen.add(actor.id);
       entry.group.position.copy(place.position);
@@ -116,12 +121,13 @@ export class MhrHuman {
     }
   }
 
-  private upsertActor(id: string, verticesB64: string): ActorMesh | null {
+  private upsertActor(id: string, verticesB64: string, geometryDirty: boolean): ActorMesh | null {
+    let entry = this.actorMeshes.get(id);
+    if (entry && !geometryDirty) return entry;
+
     const values = decodeBase64Float32(verticesB64);
     if (!values || values.length < 3 || values.length % 3 !== 0) return null;
     const vertexCount = values.length / 3;
-
-    let entry = this.actorMeshes.get(id);
 
     // (Re)create when the vertex count changed (LOD/identity change).
     if (entry && entry.positionAttr.count !== vertexCount) {
@@ -176,10 +182,8 @@ export class MhrHuman {
 
     return {
       group,
-      mesh,
       geometry,
       positionAttr,
-      floatScratch: positionAttr.array as Float32Array,
     };
   }
 
