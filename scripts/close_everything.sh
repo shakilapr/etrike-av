@@ -32,11 +32,16 @@ if [ ! -d "$WORKSPACE_ROOT/scripts" ] && [ -d "$HOME/av_project/scripts" ]; then
 fi
 
 CONTAINER="autoware_test"
-CONTAINER_ACTION="restart" # default: restart container so shm/zombies are flushed and ready
+CONTAINER_ACTION="keep" # default: keep container ready & idle for fast, reliable mode switching
+RESET_CAN=false         # default: keep CAN link healthy across mode switches unless --reset-can is passed
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --restart-container)
+            CONTAINER_ACTION="restart"
+            shift
+            ;;
         --stop-container)
             CONTAINER_ACTION="stop"
             shift
@@ -49,15 +54,20 @@ while [[ $# -gt 0 ]]; do
             CONTAINER_ACTION="keep"
             shift
             ;;
+        --reset-can|--down-can)
+            RESET_CAN=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--keep-container | --stop-container | --rm-container]"
+            echo "Usage: $0 [--keep-container | --restart-container | --stop-container | --rm-container] [--reset-can]"
             echo ""
             echo "Options:"
-            echo "  (default)          Gracefully stop all nodes, servers, CAN, and restart container clean"
-            echo "  --stop-container   Stop all services and stop the docker container ($CONTAINER)"
-            echo "  --rm-container     Stop all services and forcefully remove the docker container"
-            echo "  --keep-container   Stop all services inside container without restarting it"
-            echo "  --help, -h         Display this help message"
+            echo "  (default)            Gracefully stop all nodes, free ports, clean DDS shm, keep container & CAN ready"
+            echo "  --restart-container  Force full Docker container restart (reclaims CUDA/GPU RAM)"
+            echo "  --stop-container     Stop all services and stop the docker container ($CONTAINER)"
+            echo "  --rm-container       Stop all services and forcefully remove the docker container"
+            echo "  --reset-can          Tear down SocketCAN interfaces (can2, canable0) and bridge daemons"
+            echo "  --help, -h           Display this help message"
             exit 0
             ;;
         *)
@@ -70,7 +80,7 @@ done
 
 echo "======================================================================"
 echo " [STOP] Closing Everything across E-Trike Stack (Host & Docker)"
-echo " Container mode: $CONTAINER_ACTION"
+echo " Container mode: $CONTAINER_ACTION | Reset CAN: $RESET_CAN"
 echo "======================================================================"
 
 # ------------------------------------------------------------------------------
@@ -83,11 +93,16 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         pkill -INT -f 'vehicle_bridge' 2>/dev/null || true
         pkill -INT -f 'etrike_remote_control' 2>/dev/null || true
         pkill -INT -f 'remote_control_node' 2>/dev/null || true
+        pkill -INT -f 'remote_control_gui' 2>/dev/null || true
+        pkill -INT -f 'yolo_perception_node' 2>/dev/null || true
+        pkill -INT -f 'bench_perception_node' 2>/dev/null || true
         pkill -INT -f 'rosbag2' 2>/dev/null || true
     " 2>/dev/null || true
 fi
 pkill -INT -f "etrike_remote_control" 2>/dev/null || true
 pkill -INT -f "vehicle_bridge" 2>/dev/null || true
+pkill -INT -f "yolo_perception_node" 2>/dev/null || true
+pkill -INT -f "bench_perception_node" 2>/dev/null || true
 
 sleep 0.8
 
@@ -98,11 +113,24 @@ echo "--> 2. Stopping all processes inside Docker container ($CONTAINER)..."
 
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     docker exec "$CONTAINER" bash -c "
-        # Autoware & ROS 2 Core
+        # Autoware & ROS 2 Core (Universe, Planning, Control, Sim)
         pkill -9 -f 'ros2' 2>/dev/null || true
         pkill -9 -f 'rviz2' 2>/dev/null || true
         pkill -9 -f 'component_container' 2>/dev/null || true
         pkill -9 -f 'planning_simulator' 2>/dev/null || true
+        pkill -9 -f 'simple_planning_simulator' 2>/dev/null || true
+        pkill -9 -f 'autoware.launch' 2>/dev/null || true
+        pkill -9 -f 'autoware_launch' 2>/dev/null || true
+        pkill -9 -f 'control.launch' 2>/dev/null || true
+        pkill -9 -f 'planning.launch' 2>/dev/null || true
+        pkill -9 -f 'localization.launch' 2>/dev/null || true
+        pkill -9 -f 'sensing.launch' 2>/dev/null || true
+        pkill -9 -f 'vehicle_cmd_gate' 2>/dev/null || true
+        pkill -9 -f 'trajectory_follower' 2>/dev/null || true
+        pkill -9 -f 'behavior_path_planner' 2>/dev/null || true
+        pkill -9 -f 'behavior_velocity_planner' 2>/dev/null || true
+        pkill -9 -f 'obstacle_stop_planner' 2>/dev/null || true
+        pkill -9 -f 'motion_velocity_smoother' 2>/dev/null || true
         pkill -9 -f 'robot_state_publisher' 2>/dev/null || true
         pkill -9 -f 'topic_tools' 2>/dev/null || true
 
@@ -116,16 +144,24 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         pkill -9 -f 'remote_control_node' 2>/dev/null || true
         pkill -9 -f 'etrike_stability_guard' 2>/dev/null || true
         pkill -9 -f 'autoware_teleop' 2>/dev/null || true
+        pkill -9 -f 'open_remote_control' 2>/dev/null || true
 
-        # Sensors & Bench Perception
+        # Sensors & Bench Perception & YOLO Perception
         pkill -9 -f 'kinect2_node' 2>/dev/null || true
         pkill -9 -f 'kinect2_bridge' 2>/dev/null || true
         pkill -9 -f 'single_kinect' 2>/dev/null || true
         pkill -9 -f 'hesai_ros_wrapper_node' 2>/dev/null || true
         pkill -9 -f 'hesai_lidar' 2>/dev/null || true
         pkill -9 -f 'bench_perception_node' 2>/dev/null || true
+        pkill -9 -f 'yolo_perception_node' 2>/dev/null || true
+        pkill -9 -f 'etrike_yolo_perception' 2>/dev/null || true
         pkill -9 -f 'run_bench_perception' 2>/dev/null || true
         pkill -9 -f 'hybrid_bench_sensing' 2>/dev/null || true
+        pkill -9 -f 'start_live_bench_perception' 2>/dev/null || true
+        pkill -9 -f 'start_bench_node_container' 2>/dev/null || true
+        pkill -9 -f 'test_bench_lifecycle' 2>/dev/null || true
+        pkill -9 -f 'test_yolo_live' 2>/dev/null || true
+        pkill -9 -f 'verify_trt_inference' 2>/dev/null || true
 
         # SLAM, Mapping, Bags
         pkill -9 -f 'lidarslam' 2>/dev/null || true
@@ -170,38 +206,56 @@ pkill -9 -f "chromium-browser" 2>/dev/null || true
 pkill -9 -f "electron" 2>/dev/null || true
 pkill -9 -f "rviz2" 2>/dev/null || true
 pkill -9 -f "remote_control_gui" 2>/dev/null || true
+pkill -9 -f "remote_control_node" 2>/dev/null || true
 pkill -9 -f "loop_mapping" 2>/dev/null || true
 pkill -9 -f "record_slam" 2>/dev/null || true
 
-# Host ROS2/bridge leftovers
+# Host ROS2/bridge/perception leftovers
 pkill -9 -f "ros2" 2>/dev/null || true
 pkill -9 -f "vehicle_bridge" 2>/dev/null || true
 pkill -9 -f "etrike_remote_control" 2>/dev/null || true
+pkill -9 -f "bench_perception_node" 2>/dev/null || true
+pkill -9 -f "yolo_perception_node" 2>/dev/null || true
+pkill -9 -f "etrike_yolo_perception" 2>/dev/null || true
+pkill -9 -f "planning_simulator" 2>/dev/null || true
+pkill -9 -f "trajectory_follower" 2>/dev/null || true
+pkill -9 -f "vehicle_cmd_gate" 2>/dev/null || true
 
 echo "  [OK] Host servers and UI windows stopped."
 
-# ------------------------------------------------------------------------------
-# STEP 4: Bring Down CAN Adapters and Daemons
-# ------------------------------------------------------------------------------
-echo "--> 4. Bringing down CAN interfaces and bridge daemons..."
-
-# CANalyst-II bridge daemon teardown
-if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
-    bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" down "can2" >/dev/null 2>&1 || true
+# Clean orphaned ROS 2 DDS shared memory segments (safe targeted cleanup)
+echo "--> Cleaning orphaned ROS 2 DDS shared memory mutexes..."
+if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    docker exec "$CONTAINER" bash -c "rm -rf /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* /dev/shm/cyclonedds_* 2>/dev/null || true" 2>/dev/null || true
 fi
+rm -rf /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* /dev/shm/cyclonedds_* 2>/dev/null || true
 
-# SocketCAN interfaces
-for iface in can2 canable0 can0 can1 vcan0; do
-    if ip link show "$iface" >/dev/null 2>&1; then
-        sudo ip link set "$iface" down 2>/dev/null || true
+# ------------------------------------------------------------------------------
+# STEP 4: CAN Adapter Lifecycle Handling
+# ------------------------------------------------------------------------------
+if [ "$RESET_CAN" = "true" ]; then
+    echo "--> 4. Bringing down CAN interfaces and bridge daemons (--reset-can requested)..."
+
+    # CANalyst-II bridge daemon teardown
+    if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
+        bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" down "can2" >/dev/null 2>&1 || true
     fi
-done
 
-# Kill SLCAN daemons if present
-pkill -9 -f "slcand" 2>/dev/null || true
-pkill -9 -f "slcan_attach" 2>/dev/null || true
+    # SocketCAN interfaces
+    for iface in can2 canable0 can0 can1 vcan0; do
+        if ip link show "$iface" >/dev/null 2>&1; then
+            sudo ip link set "$iface" down 2>/dev/null || true
+        fi
+    done
 
-echo "  [OK] CAN interfaces brought down."
+    # Kill SLCAN daemons if present
+    pkill -9 -f "slcand" 2>/dev/null || true
+    pkill -9 -f "slcan_attach" 2>/dev/null || true
+
+    echo "  [OK] CAN interfaces brought down."
+else
+    echo "--> 4. Preserving active CAN interface (SocketCAN link kept ready for next stack)."
+fi
 
 # ------------------------------------------------------------------------------
 # STEP 5: Container Lifecycle Handling

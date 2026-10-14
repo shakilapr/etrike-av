@@ -140,3 +140,61 @@ bash scripts/close_everything.sh --rm-container
 ```
 *Windows:* `pwsh scripts/close_everything.ps1 -RmContainer`
 * **Closes**: Force-closes everything and completely deletes the container instance.
+
+---
+
+## 6. Troubleshooting: "Remote Can't Send Commands" & Node/Topic Conflicts
+
+### Why Commands Get Dropped or Ignored
+If the Remote Cockpit GUI is running but wheel steering and throttle do not respond, check the following:
+
+#### 1. Dual Publisher Conflict on `/control/command/control_cmd`
+* **Cause**: Autoware Universe (`planning_simulator`, `vehicle_cmd_gate`, `trajectory_follower`) and `etrike_remote_control_gui` cannot run together because both publish to `/control/command/control_cmd`.
+* **Guard**: Launch scripts now include strict pre-flight guards that prevent accidental simultaneous execution.
+* **Fix**: Always close the active stack cleanly before launching the other:
+  ```bash
+  bash scripts/close_everything.sh
+  ```
+  Then launch your target stack:
+  - For Remote Control: `bash scripts/open_remote_control.sh can2 true`
+  - For Autoware Universe: `bash scripts/open-etrike.sh --bench`
+
+#### 2. Vehicle Bridge Gating (`sim_mode` Required for Bench)
+* **Cause**: In `autoware_vehicle_bridge`, commands are **silently dropped** in `on_control()` unless `sim_mode:=true` or all real-vehicle hardware gates pass:
+  * Hardware gates require live CAN heartbeats: `rt_heartbeat_` (<1500ms), `sys_status_` (<500ms), `motion_report_` (<100ms), and autonomous mode confirmation from the ECU.
+* **Fix**: For bench/remote testing without real vehicle ECUs, always launch the bridge with `sim_mode:=true`:
+  ```bash
+  ros2 launch etrike_remote_control bench_remote_control.launch.py can_interface:=can2 sim_mode:=true
+  ```
+
+#### 3. Dual Bridge Conflict (`direct_bridge` vs `autoware_vehicle_bridge`)
+* **Cause**: Both nodes subscribe to `/control/command/control_cmd` and bind to the CAN interface.
+* **Fix**: Ensure only one bridge is running:
+  ```bash
+  docker exec autoware_test bash -c "pkill -9 -f 'direct_bridge' || true"
+  ```
+
+#### 4. Diagnosing Active Publishers & Conflicts
+Run inside the `autoware_test` container or over SSH:
+```bash
+# Check who is publishing to control_cmd (should only be 1 publisher)
+ros2 topic info /control/command/control_cmd -v
+
+# List all active nodes
+ros2 node list
+
+# Check if vehicle_bridge is actively receiving control commands
+ros2 topic hz /control/command/control_cmd
+```
+
+#### 5. Jetson SSH Connection Issues
+* **Find Jetson IP**: If `172.16.25.67` or `172.16.25.56` times out or is refused, check the IP on the Jetson display:
+  ```bash
+  hostname -I
+  ```
+* **Verify SSH daemon & Docker container**:
+  ```bash
+  sudo systemctl status ssh
+  docker ps
+  ```
+

@@ -174,13 +174,16 @@ start_container() {
 start_universe() {
   say "Autoware Universe (planning simulator + RViz) on the monitor"
   ensure_x11_access
-  # Enforce mutual exclusion: stop any active remote cockpit / manual teleop nodes
-  docker exec "$CONTAINER" bash -c "
-    pkill -9 -f 'remote_control_node' 2>/dev/null || true
-    pkill -9 -f 'remote_control_gui' 2>/dev/null || true
-    pkill -9 -f 'bench_remote_control' 2>/dev/null || true
-  " 2>/dev/null || true
-  pkill -9 -f "remote_control_gui" 2>/dev/null || true
+
+  # Pre-Flight Guard: Check for conflicting Remote Control GUI
+  if docker exec "$CONTAINER" pgrep -f "remote_control_gui" >/dev/null 2>&1; then
+    echo "======================================================================"
+    echo " [GUARD] Remote Control GUI is currently running!"
+    echo " Running Autoware Universe in parallel causes actuator command conflicts."
+    echo " Please stop Remote Control first: bash scripts/close_everything.sh"
+    echo "======================================================================"
+    return 1 2>/dev/null || exit 1
+  fi
 
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
@@ -209,13 +212,16 @@ start_live_autoware() {
   say "Autoware Universe LIVE (Hesai LiDAR + Kinect v2 + CenterPoint Perception + NDT Localization + RViz)"
   ensure_x11_access
   detect_can
-  # Enforce mutual exclusion: stop any active remote cockpit / manual teleop nodes
-  docker exec "$CONTAINER" bash -c "
-    pkill -9 -f 'remote_control_node' 2>/dev/null || true
-    pkill -9 -f 'remote_control_gui' 2>/dev/null || true
-    pkill -9 -f 'bench_remote_control' 2>/dev/null || true
-  " 2>/dev/null || true
-  pkill -9 -f "remote_control_gui" 2>/dev/null || true
+
+  # Pre-Flight Guard: Check for conflicting Remote Control GUI
+  if docker exec "$CONTAINER" pgrep -f "remote_control_gui" >/dev/null 2>&1; then
+    echo "======================================================================"
+    echo " [GUARD] Remote Control GUI is currently running!"
+    echo " Running Autoware Universe in parallel causes actuator command conflicts."
+    echo " Please stop Remote Control first: bash scripts/close_everything.sh"
+    echo "======================================================================"
+    return 1 2>/dev/null || exit 1
+  fi
 
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;

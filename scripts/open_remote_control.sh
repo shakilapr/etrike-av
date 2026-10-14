@@ -35,7 +35,7 @@ echo " Sim Mode      : $SIM_MODE (Direct bench actuation)"
 echo " Workspace     : $WORKSPACE_ROOT"
 echo "======================================================================"
 
-# 1. Setup X11 display permissions
+# 1. Setup X11 display permissions (discover local physical display authority, ignoring SSH forwarding)
 export DISPLAY="${DISPLAY:-:1}"
 if [ ! -e "/tmp/.X11-unix/X${DISPLAY#:}" ]; then
     for d in 1 0; do
@@ -45,32 +45,43 @@ if [ ! -e "/tmp/.X11-unix/X${DISPLAY#:}" ]; then
         fi
     done
 fi
-if [ -z "$XAUTHORITY" ]; then
-    if [ -f "/run/user/$(id -u)/gdm/Xauthority" ]; then
-        export XAUTHORITY="/run/user/$(id -u)/gdm/Xauthority"
-    elif [ -f "/run/user/1000/gdm/Xauthority" ]; then
-        export XAUTHORITY="/run/user/1000/gdm/Xauthority"
-    elif [ -f "$HOME/.Xauthority" ]; then
-        export XAUTHORITY="$HOME/.Xauthority"
-    elif [ -f "/home/med1/.Xauthority" ]; then
-        export XAUTHORITY="/home/med1/.Xauthority"
+
+LOCAL_XAUTH=""
+for auth_candidate in \
+    "/run/user/$(id -u)/gdm/Xauthority" \
+    "/run/user/1000/gdm/Xauthority" \
+    "$HOME/.Xauthority" \
+    "/home/med1/.Xauthority"; do
+    if [ -f "$auth_candidate" ]; then
+        LOCAL_XAUTH="$auth_candidate"
+        break
     fi
+done
+
+if [ -n "$LOCAL_XAUTH" ]; then
+    export XAUTHORITY="$LOCAL_XAUTH"
 fi
-xhost +local:docker >/dev/null 2>&1 || true
-xhost +SI:localuser:root >/dev/null 2>&1 || true
+
+DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" xhost +local:docker >/dev/null 2>&1 || true
+DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" xhost +SI:localuser:root >/dev/null 2>&1 || true
 
 # 2. Setup CAN Interface
-echo "--> Initializing CAN adapter ($CAN_IFACE)..."
+echo "--> Verifying CAN adapter ($CAN_IFACE)..."
 if [ "$CAN_IFACE" = "can2" ]; then
-    if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
+    # If can2 is already UP and daemon is active, reuse it immediately (avoids USB re-enumeration stalls)
+    if ip link show can2 2>/dev/null | grep -q "UP" && pgrep -f "canalyst_socketcan_daemon.py.*can2" >/dev/null 2>&1; then
+        echo "  [OK] can2 interface is already UP and bridge daemon is active."
+    elif [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
         bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" up "$CAN_IFACE" "$CAN_BITRATE"
     else
         echo "  [WARN] setup_canalyst.sh not found, assuming $CAN_IFACE already up."
     fi
 else
-    if ip link show "$CAN_IFACE" >/dev/null 2>&1; then
+    if ip link show "$CAN_IFACE" 2>/dev/null | grep -q "UP"; then
+        echo "  [OK] $CAN_IFACE is already UP."
+    elif ip link show "$CAN_IFACE" >/dev/null 2>&1; then
         sudo ip link set "$CAN_IFACE" down >/dev/null 2>&1 || true
-        sudo ip link set "$CAN_IFACE" type can bitrate "$CAN_BITRATE"
+        sudo ip link set "$CAN_IFACE" type can bitrate "$CAN_BITRATE" 2>/dev/null || true
         sudo ip link set "$CAN_IFACE" up
         echo "  [OK] $CAN_IFACE is UP."
     else
@@ -97,30 +108,33 @@ else
     echo "  Container started."
 fi
 
-# Provision host X11 authority into container so Qt GUI can connect reliably
+# Provision host local X11 authority into container so Qt GUI connects reliably
 if [ -n "$XAUTHORITY" ] && [ -f "$XAUTHORITY" ]; then
     docker cp "$XAUTHORITY" "$CONTAINER":/tmp/.docker.xauth >/dev/null 2>&1 || true
     docker exec "$CONTAINER" chmod 644 /tmp/.docker.xauth >/dev/null 2>&1 || true
 fi
 
-# 4. Clean up any conflicting GUI or simulator instances
+# 4. Pre-Flight Guard: Check for conflicting autonomy stack
 echo "--> Checking existing ROS nodes inside container..."
+if docker exec "$CONTAINER" pgrep -f "planning_simulator" >/dev/null 2>&1 || \
+   docker exec "$CONTAINER" pgrep -f "trajectory_follower" >/dev/null 2>&1; then
+    echo "======================================================================"
+    echo " [GUARD] Autoware Universe autonomy stack is currently running!"
+    echo " Running Remote Control in parallel causes actuator command conflicts."
+    echo " Please stop Autoware first: bash scripts/close_everything.sh"
+    echo "======================================================================"
+    exit 1
+fi
+
 BRIDGE_ALREADY_RUNNING=false
 if docker exec "$CONTAINER" pgrep -f "vehicle_bridge_node" >/dev/null 2>&1; then
     BRIDGE_ALREADY_RUNNING=true
     echo "  [INFO] Detected existing vehicle_bridge_node already running. Will attach GUI to it."
 fi
 
-# Stop previous cockpit GUI and any active Autoware autonomy control nodes
-# (planning_simulator, autoware.launch, vehicle_cmd_gate, trajectory_follower)
-# to enforce mutual exclusion on /control_cmd, while keeping RViz2 alive.
+# Stop previous cockpit GUI instance if already running
 docker exec "$CONTAINER" bash -c "
     pkill -9 -f 'remote_control_gui' 2>/dev/null || true
-    pkill -9 -f 'planning_simulator' 2>/dev/null || true
-    pkill -9 -f 'autoware.launch' 2>/dev/null || true
-    pkill -9 -f 'vehicle_cmd_gate' 2>/dev/null || true
-    pkill -9 -f 'trajectory_follower' 2>/dev/null || true
-    pkill -9 -f 'control.launch' 2>/dev/null || true
 " || true
 
 sleep 0.5
