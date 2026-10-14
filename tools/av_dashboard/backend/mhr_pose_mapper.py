@@ -228,6 +228,11 @@ class MhrPoseMapper:
 
         return bool(self._param_index)
 
+    def channels(self) -> Dict[str, List[int]]:
+        """Discovered joint-channel -> MHR parameter index mapping (for diagnostics)."""
+
+        return {channel: list(indices) for channel, indices in self._param_index.items()}
+
     def map_pose(self, pose: Dict[str, object]) -> np.ndarray:
         """Return an MHR parameter vector for one ``human_poses`` entry."""
 

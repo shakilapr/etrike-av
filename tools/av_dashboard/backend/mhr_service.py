@@ -69,6 +69,7 @@ class MhrService:
         info = self._engine.describe()
         info["reason"] = self.reason
         info["mapper_calibrated"] = bool(self._mapper and self._mapper.is_calibrated())
+        info["mapper_channels"] = self._mapper.channels() if self._mapper else {}
         info["max_actors"] = self._max_actors
         return info
 
