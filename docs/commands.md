@@ -73,6 +73,16 @@ bash /av_project/scripts/open-etrike.sh --universe
 * *SSH (med1):* `ssh med1 "bash /av_project/scripts/open-etrike.sh --universe"`
 * **Opens**: RViz map simulation only. Hardware remains off.
 
+### Engage Autonomous Motion (Start / Resume Driving)
+```bash
+bash /av_project/scripts/engage_autoware.sh
+```
+* *SSH (med2):* `ssh med2 "bash /av_project/scripts/engage_autoware.sh"`
+* *SSH (med1):* `ssh med1 "bash /av_project/scripts/engage_autoware.sh"`
+* **Action**: Transitions Autoware to AUTONOMOUS mode, clears safety interlocks, and engages the vehicle command gate to start driving along the planned route.
+* **Stop / Disengage**: `bash /av_project/scripts/engage_autoware.sh --disengage`
+* **Status Check**: `bash /av_project/scripts/engage_autoware.sh --status`
+
 ---
 
 ## 3. The Dashboard

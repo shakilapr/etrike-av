@@ -133,7 +133,7 @@ if docker exec "$CONTAINER" pgrep -f "vehicle_bridge_node" >/dev/null 2>&1; then
 fi
 
 # Stop previous cockpit GUI instance if already running
-docker exec "$CONTAINER" bash -c "
+docker exec -u root "$CONTAINER" bash -c "
     pkill -9 -f 'remote_control_gui' 2>/dev/null || true
 " || true
 

@@ -185,6 +185,12 @@ start_universe() {
     return 1 2>/dev/null || exit 1
   fi
 
+  # Pre-Flight Sanitization: Terminate lingering Autoware/ROS nodes inside container to avoid duplicates
+  docker exec -u root "$CONTAINER" bash -c "
+    pkill -9 -f 'ros2|rviz2|planning_simulator|autoware|robot_state_publisher' 2>/dev/null || true
+  " 2>/dev/null || true
+  sleep 1
+
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
     if [ -f /tmp/.docker.xauth ]; then export XAUTHORITY=/tmp/.docker.xauth; else export XAUTHORITY=$XAUTH; fi;
@@ -222,6 +228,12 @@ start_live_autoware() {
     echo "======================================================================"
     return 1 2>/dev/null || exit 1
   fi
+
+  # Pre-Flight Sanitization: Terminate lingering Autoware/ROS nodes inside container to avoid duplicates
+  docker exec -u root "$CONTAINER" bash -c "
+    pkill -9 -f 'ros2|rviz2|planning_simulator|autoware|robot_state_publisher' 2>/dev/null || true
+  " 2>/dev/null || true
+  sleep 1
 
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
@@ -308,7 +320,7 @@ start_bridge() {
   detect_can
   say "Vehicle bridge (sim_mode=$sim_flag) on $CAN_IFACE"
   # Terminate any previously running bridge instance to prevent duplicate CAN bus binding
-  docker exec "$CONTAINER" bash -c "
+  docker exec -u root "$CONTAINER" bash -c "
     pkill -9 -f 'vehicle_bridge' 2>/dev/null || true
   " 2>/dev/null || true
   sleep 0.5
