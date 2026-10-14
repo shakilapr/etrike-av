@@ -90,6 +90,7 @@ class BenchPerceptionNode(LifecycleNode):
         self.declare_parameter("roi_z_min", 0.05)
         self.declare_parameter("roi_z_max", 2.20)
         self.declare_parameter("enable_hog_person_detector", True)
+        self.declare_parameter("enable_camera_depth_clustering", False)
         # Dedicated isolated topics to prevent interfering with Autoware simulation/planning
         self.declare_parameter("output_objects_topic", "/bench_perception/objects")
         self.declare_parameter("output_clusters_topic", "/bench_perception/clusters")
@@ -553,20 +554,24 @@ class BenchPerceptionNode(LifecycleNode):
         has_lidar = (self._latest_lidar_points is not None) and ((now - self._last_lidar_time) <= timeout)
         has_camera = (self._latest_camera_points is not None) and ((now - self._last_camera_depth_time) <= timeout)
 
+        enable_depth_clustering = bool(self.get_parameter("enable_camera_depth_clustering").value)
+
         # Determine Operating Mode & Point Cloud Source
         active_points: Optional[np.ndarray] = None
         if has_camera and has_lidar:
             self._current_mode = "FUSED"
-            # Combine LiDAR and Camera points in base_link
-            active_points = np.vstack([self._latest_lidar_points, self._latest_camera_points])
-        elif has_camera:
-            self._current_mode = "CAMERA_ONLY"
-            active_points = self._latest_camera_points
+            if enable_depth_clustering and self._latest_camera_points is not None:
+                active_points = np.vstack([self._latest_lidar_points, self._latest_camera_points])
+            else:
+                active_points = self._latest_lidar_points
         elif has_lidar:
             self._current_mode = "LIDAR_ONLY"
             active_points = self._latest_lidar_points
+        elif has_camera and enable_depth_clustering:
+            self._current_mode = "CAMERA_ONLY"
+            active_points = self._latest_camera_points
         else:
-            self._current_mode = "UNAVAILABLE"
+            self._current_mode = "CAMERA_ONLY" if has_camera else "UNAVAILABLE"
             active_points = None
 
         # Fail-closed: If both sensors are offline, publish 0 objects

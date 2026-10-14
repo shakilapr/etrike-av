@@ -110,15 +110,29 @@ export interface KeypointCoord {
   y: number;
 }
 
+export interface KeypointCoord3D {
+  x: number;
+  y: number;
+  z: number;
+  rel_x: number;
+  rel_y: number;
+  rel_z: number;
+  depth_m?: number;
+  measured: boolean;
+}
+
 export interface HumanPoseItem {
   id: string;
   x_base: number;
   y_base: number;
   z_base: number;
+  yaw?: number;
+  est_z?: number;
   posture: 'SEATED' | 'STANDING' | string;
   is_seated: boolean;
   confidence: number;
   keypoints?: Record<string, KeypointCoord>;
+  keypoints_3d?: Record<string, KeypointCoord3D>;
 }
 
 export interface HumanPosesPayload {

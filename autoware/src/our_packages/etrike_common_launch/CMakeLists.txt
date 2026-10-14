@@ -14,6 +14,8 @@ endif()
 
 install(PROGRAMS
   scripts/bench_perception_node.py
+  scripts/hesai_synthetic_publisher.py
+  scripts/hesai_pointxyzirc_adapter.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

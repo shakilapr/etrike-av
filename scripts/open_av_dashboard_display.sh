@@ -164,7 +164,6 @@ if [ "$NEED_START" -eq 1 ]; then
     fi
 fi
 
-# 3. Launch UI on the physical monitor
 if command -v chromium >/dev/null 2>&1; then
     BROWSER_CMD="chromium"
 elif command -v chromium-browser >/dev/null 2>&1; then
@@ -173,25 +172,34 @@ elif command -v google-chrome >/dev/null 2>&1; then
     BROWSER_CMD="google-chrome"
 elif command -v firefox >/dev/null 2>&1; then
     BROWSER_CMD="firefox"
+elif command -v epiphany-browser >/dev/null 2>&1; then
+    BROWSER_CMD="epiphany-browser"
+elif command -v epiphany >/dev/null 2>&1; then
+    BROWSER_CMD="epiphany"
 else
     BROWSER_CMD="x-www-browser"
 fi
 
-
 echo "Opening $URL in $BROWSER_CMD on $DISPLAY..."
-nohup "$BROWSER_CMD" \
-    --app="$URL" \
-    --start-maximized \
-    --no-first-run \
-    --no-default-browser-check \
-    --ignore-gpu-blocklist \
-    --enable-gpu-rasterization \
-    --enable-zero-copy \
-    --enable-webgl \
-    --enable-unsafe-swiftshader \
-    --disable-gpu-sandbox \
-    --test-type \
-    < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &
+if [ "$BROWSER_CMD" = "epiphany-browser" ] || [ "$BROWSER_CMD" = "epiphany" ]; then
+    nohup "$BROWSER_CMD" -a "$URL" < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &
+elif [ "$BROWSER_CMD" = "firefox" ]; then
+    nohup "$BROWSER_CMD" --kiosk "$URL" < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &
+else
+    nohup "$BROWSER_CMD" \
+        --app="$URL" \
+        --start-maximized \
+        --no-first-run \
+        --no-default-browser-check \
+        --ignore-gpu-blocklist \
+        --enable-gpu-rasterization \
+        --enable-zero-copy \
+        --enable-webgl \
+        --enable-unsafe-swiftshader \
+        --disable-gpu-sandbox \
+        --test-type \
+        < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &
+fi
 
 echo "  [OK] AV Dashboard launched on Jetson monitor!"
 echo "  URL: $URL (Accessible also across network: http://172.16.25.67:${PORT})"

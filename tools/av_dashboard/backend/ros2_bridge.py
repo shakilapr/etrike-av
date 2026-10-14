@@ -26,6 +26,8 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from .lidar_streamer import LidarStreamer
+
 # Classification enum mapping from Autoware ObjectClassification.msg
 LABEL_MAP: Dict[int, str] = {
     0: "UNKNOWN",
@@ -148,6 +150,8 @@ class Ros2Bridge:
         # Camera debug stream
         self._latest_jpeg: Optional[bytes] = None
         self._latest_jpeg_time: float = 0.0
+        # Dedicated real LiDAR pointcloud streamer
+        self.lidar_streamer: LidarStreamer = LidarStreamer()
 
     def start(self) -> None:
         """Start the ROS 2 node in a background daemon thread."""
@@ -827,7 +831,7 @@ class Ros2Bridge:
         self._process_clustering_batch(msg.objects, msg.header.frame_id)
 
     def _on_lidar_pointcloud(self, msg: Any) -> None:
-        """Heartbeat monitor for incoming LiDAR pointclouds."""
+        """Heartbeat monitor and real point cloud processor for incoming LiDAR pointclouds."""
         now = time.time()
         with self._lock:
             self._last_lidar_raw_time = now
@@ -835,6 +839,7 @@ class Ros2Bridge:
             while self._lidar_timestamps and (now - self._lidar_timestamps[0]) > 1.0:
                 self._lidar_timestamps.pop(0)
             self._topic_counts["lidar_pointcloud"] = self._topic_counts.get("lidar_pointcloud", 0) + 1
+        self.lidar_streamer.process_pointcloud(msg)
 
     def _on_bench_perception_status(self, msg: Any) -> None:
         """Handle incoming diagnostic telemetry from bench_perception_node."""

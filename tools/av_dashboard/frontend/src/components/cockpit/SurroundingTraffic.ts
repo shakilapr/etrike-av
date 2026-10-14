@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { PerceptionObject, HumanPosesPayload, MhrHumanPayload } from '../../types/can';
+import { PerceptionObject, HumanPosesPayload, HumanPoseItem, MhrHumanPayload } from '../../types/can';
 import { MhrHuman } from './MhrHuman';
 
 interface ActorLimbs {
@@ -78,6 +78,7 @@ interface Actor {
   smplMesh?: THREE.Object3D;
   smplBones?: Record<string, THREE.Bone>;
   proceduralMesh?: THREE.Object3D;
+  lastPoseItem?: HumanPoseItem;
 }
 
 const CLASS_COLORS: Record<string, number> = {
@@ -1170,20 +1171,119 @@ export class SurroundingTraffic {
             }
           }
           if (matchedPose) {
+            actor.lastPoseItem = matchedPose;
             actor.isSeated = Boolean(matchedPose.is_seated);
             actor.postureText = matchedPose.posture || (actor.isSeated ? 'SEATED' : 'STANDING');
             if (typeof (matchedPose as any).yaw === 'number') {
               actor.targetYaw = (matchedPose as any).yaw;
             }
+            const k3d = matchedPose.keypoints_3d;
             const kpts = matchedPose.keypoints;
-            if (kpts && kpts.left_shoulder && kpts.right_shoulder) {
+
+            if (k3d && k3d.left_shoulder && k3d.right_shoulder) {
+              // =========================================================================
+              // TRUE 3D METRIC KINEMATICS (From Registered Depth & Base_Link 3D Vectors)
+              // =========================================================================
+              actor.hasLivePose = true;
+              const yaw = actor.targetYaw;
+              const cosY = Math.cos(yaw);
+              const sinY = Math.sin(yaw);
+
+              // Helper: Transform vehicle base_link 3D vector (+X fwd, +Y left, +Z up)
+              // into pedestrian local body frame:
+              //   fwd (chest normal): along base_link [cos(yaw), sin(yaw), 0]
+              //   lat (leftward): along base_link [-sin(yaw), cos(yaw), 0]
+              //   up: along base_link [0, 0, 1]
+              const toBodyFrame = (dx_b: number, dy_b: number, dz_b: number) => {
+                const fwd = dx_b * cosY + dy_b * sinY;
+                const lat = -dx_b * sinY + dy_b * cosY;
+                const up = dz_b;
+                return { fwd, lat, up };
+              };
+
+              // 1. Left Arm 3D Kinematics
+              if (k3d.left_elbow) {
+                const upper_dx = k3d.left_elbow.x - k3d.left_shoulder.x;
+                const upper_dy = k3d.left_elbow.y - k3d.left_shoulder.y;
+                const upper_dz = k3d.left_elbow.z - k3d.left_shoulder.z;
+                const upper = toBodyFrame(upper_dx, upper_dy, upper_dz);
+
+                // Arm Pitch: forward reach (fwd > 0) vs backward reach (fwd < 0)
+                const armPitchL = Math.atan2(upper.fwd, Math.max(0.06, -upper.up));
+                actor.poseTarget.pitchL = THREE.MathUtils.clamp(armPitchL, -0.6, 1.6);
+
+                // Arm Roll: lateral abduction (leftward swing for left arm)
+                const armRollL = Math.atan2(upper.lat, Math.max(0.06, -upper.up));
+                actor.poseTarget.rollL = THREE.MathUtils.clamp(armRollL, -0.4, 1.8);
+
+                // 3D Elbow Flexion via vector dot product
+                if (k3d.left_wrist) {
+                  const fore_dx = k3d.left_wrist.x - k3d.left_elbow.x;
+                  const fore_dy = k3d.left_wrist.y - k3d.left_elbow.y;
+                  const fore_dz = k3d.left_wrist.z - k3d.left_elbow.z;
+                  const dot = upper_dx * fore_dx + upper_dy * fore_dy + upper_dz * fore_dz;
+                  const magUpper = Math.hypot(upper_dx, upper_dy, upper_dz);
+                  const magFore = Math.hypot(fore_dx, fore_dy, fore_dz);
+                  if (magUpper > 0.05 && magFore > 0.05) {
+                    const cosElbow = THREE.MathUtils.clamp(dot / (magUpper * magFore), -1, 1);
+                    actor.poseTarget.elbowL = Math.acos(cosElbow);
+                  }
+                }
+              }
+
+              // 2. Right Arm 3D Kinematics
+              if (k3d.right_elbow) {
+                const upper_dx = k3d.right_elbow.x - k3d.right_shoulder.x;
+                const upper_dy = k3d.right_elbow.y - k3d.right_shoulder.y;
+                const upper_dz = k3d.right_elbow.z - k3d.right_shoulder.z;
+                const upper = toBodyFrame(upper_dx, upper_dy, upper_dz);
+
+                // Right arm pitch: forward reach
+                const armPitchR = Math.atan2(upper.fwd, Math.max(0.06, -upper.up));
+                actor.poseTarget.pitchR = THREE.MathUtils.clamp(armPitchR, -0.6, 1.6);
+
+                // Right arm roll: lateral abduction (rightward swing is -lat)
+                const armRollR = Math.atan2(-upper.lat, Math.max(0.06, -upper.up));
+                actor.poseTarget.rollR = THREE.MathUtils.clamp(armRollR, -0.4, 1.8);
+
+                // 3D Elbow Flexion
+                if (k3d.right_wrist) {
+                  const fore_dx = k3d.right_wrist.x - k3d.right_elbow.x;
+                  const fore_dy = k3d.right_wrist.y - k3d.right_elbow.y;
+                  const fore_dz = k3d.right_wrist.z - k3d.right_elbow.z;
+                  const dotR = upper_dx * fore_dx + upper_dy * fore_dy + upper_dz * fore_dz;
+                  const magUpperR = Math.hypot(upper_dx, upper_dy, upper_dz);
+                  const magForeR = Math.hypot(fore_dx, fore_dy, fore_dz);
+                  if (magUpperR > 0.05 && magForeR > 0.05) {
+                    const cosElbowR = THREE.MathUtils.clamp(dotR / (magUpperR * magForeR), -1, 1);
+                    actor.poseTarget.elbowR = Math.acos(cosElbowR);
+                  }
+                }
+              }
+
+              // 3. Torso Roll from 3D shoulder height delta in base_link
+              const sh_dz = k3d.left_shoulder.z - k3d.right_shoulder.z;
+              const sh_dxy = Math.hypot(k3d.left_shoulder.x - k3d.right_shoulder.x, k3d.left_shoulder.y - k3d.right_shoulder.y);
+              actor.poseTarget.torsoRoll = THREE.MathUtils.clamp(Math.atan2(sh_dz, Math.max(0.15, sh_dxy)), -0.25, 0.25);
+
+              // 4. Head Yaw from 3D Nose relative to shoulder center
+              if (k3d.nose) {
+                const midShX = (k3d.left_shoulder.x + k3d.right_shoulder.x) / 2;
+                const midShY = (k3d.left_shoulder.y + k3d.right_shoulder.y) / 2;
+                const noseBody = toBodyFrame(k3d.nose.x - midShX, k3d.nose.y - midShY, 0);
+                actor.poseTarget.headYaw = THREE.MathUtils.clamp(Math.atan2(noseBody.lat, Math.max(0.08, noseBody.fwd)), -0.65, 0.65);
+              }
+            } else if (kpts && kpts.left_shoulder && kpts.right_shoulder) {
+              // =========================================================================
+              // 2D IMAGE-PLANE SLOPE FALLBACK (If registered depth is unavailable)
+              // =========================================================================
               actor.hasLivePose = true;
 
               // Orientation-aware arm kinematics: account for whether human is facing towards or away from vehicle
               const isFacingCamera = (kpts.left_shoulder.x > kpts.right_shoulder.x);
               const armSign = isFacingCamera ? 1.0 : -1.0;
 
-              // Left Arm kinematics (resting lap/side vs deliberate gesture)
+              // Left Arm kinematics
               if (kpts.left_elbow) {
                 const dxl = (kpts.left_elbow.x - kpts.left_shoulder.x) * armSign;
                 const dyl = kpts.left_elbow.y - kpts.left_shoulder.y;
@@ -1192,6 +1292,7 @@ export class SurroundingTraffic {
                 if (isLeftRaised) {
                   const rawRollL = Math.atan2(dxl, Math.max(0.1, dyl));
                   actor.poseTarget.rollL = THREE.MathUtils.clamp(rawRollL * 0.7, -0.3, 1.6);
+                  actor.poseTarget.pitchL = 0.0;
                   if (kpts.left_wrist) {
                     const dxw = kpts.left_wrist.x - kpts.left_elbow.x;
                     const dyw = kpts.left_wrist.y - kpts.left_elbow.y;
@@ -1205,11 +1306,12 @@ export class SurroundingTraffic {
                   }
                 } else {
                   actor.poseTarget.rollL = 0.0;
+                  actor.poseTarget.pitchL = 0.0;
                   actor.poseTarget.elbowL = 0.0;
                 }
               }
 
-              // Right Arm kinematics (resting lap/side vs deliberate gesture)
+              // Right Arm kinematics
               if (kpts.right_elbow) {
                 const dxr = (kpts.right_elbow.x - kpts.right_shoulder.x) * armSign;
                 const dyr = kpts.right_elbow.y - kpts.right_shoulder.y;
@@ -1218,6 +1320,7 @@ export class SurroundingTraffic {
                 if (isRightRaised) {
                   const rawRollR = Math.atan2(-dxr, Math.max(0.1, dyr));
                   actor.poseTarget.rollR = THREE.MathUtils.clamp(rawRollR * 0.7, -0.3, 1.6);
+                  actor.poseTarget.pitchR = 0.0;
                   if (kpts.right_wrist) {
                     const dxwr = kpts.right_wrist.x - kpts.right_elbow.x;
                     const dywr = kpts.right_wrist.y - kpts.right_elbow.y;
@@ -1231,11 +1334,12 @@ export class SurroundingTraffic {
                   }
                 } else {
                   actor.poseTarget.rollR = 0.0;
+                  actor.poseTarget.pitchR = 0.0;
                   actor.poseTarget.elbowR = 0.0;
                 }
               }
 
-              // Torso roll (clamped to realistic seated posture bounds)
+              // Torso roll
               const dshX = kpts.left_shoulder.x - kpts.right_shoulder.x;
               const dshY = kpts.left_shoulder.y - kpts.right_shoulder.y;
               actor.poseTarget.torsoRoll = THREE.MathUtils.clamp(Math.atan2(dshY, Math.max(10, Math.abs(dshX))) * 0.4, -0.20, 0.20);
@@ -1312,8 +1416,10 @@ export class SurroundingTraffic {
         // Smooth RTMPose joint angles
         const rotLerp = 1 - Math.exp(-step * 14);
         actor.poseCurrent.rollL = THREE.MathUtils.lerp(actor.poseCurrent.rollL, actor.poseTarget.rollL, rotLerp);
+        actor.poseCurrent.pitchL = THREE.MathUtils.lerp(actor.poseCurrent.pitchL || 0, actor.poseTarget.pitchL || 0, rotLerp);
         actor.poseCurrent.elbowL = THREE.MathUtils.lerp(actor.poseCurrent.elbowL, actor.poseTarget.elbowL, rotLerp);
         actor.poseCurrent.rollR = THREE.MathUtils.lerp(actor.poseCurrent.rollR, actor.poseTarget.rollR, rotLerp);
+        actor.poseCurrent.pitchR = THREE.MathUtils.lerp(actor.poseCurrent.pitchR || 0, actor.poseTarget.pitchR || 0, rotLerp);
         actor.poseCurrent.elbowR = THREE.MathUtils.lerp(actor.poseCurrent.elbowR, actor.poseTarget.elbowR, rotLerp);
         actor.poseCurrent.torsoRoll = THREE.MathUtils.lerp(actor.poseCurrent.torsoRoll, actor.poseTarget.torsoRoll, rotLerp);
         actor.poseCurrent.headYaw = THREE.MathUtils.lerp(actor.poseCurrent.headYaw, actor.poseTarget.headYaw, rotLerp);
@@ -1360,11 +1466,11 @@ export class SurroundingTraffic {
           if (actor.hasLivePose) {
             if (b['m_avg_L_Shoulder']) {
               b['m_avg_L_Shoulder'].rotation.z = -1.25 + actor.poseCurrent.rollL;
-              b['m_avg_L_Shoulder'].rotation.x = seatedArmPitch;
+              b['m_avg_L_Shoulder'].rotation.x = seatedArmPitch + actor.poseCurrent.pitchL;
             }
             if (b['m_avg_R_Shoulder']) {
               b['m_avg_R_Shoulder'].rotation.z = 1.25 - actor.poseCurrent.rollR;
-              b['m_avg_R_Shoulder'].rotation.x = seatedArmPitch;
+              b['m_avg_R_Shoulder'].rotation.x = seatedArmPitch + actor.poseCurrent.pitchR;
             }
             if (b['m_avg_L_Elbow']) {
               b['m_avg_L_Elbow'].rotation.y = 0.25 + seatedElbowFlex + actor.poseCurrent.elbowL * 0.6;
@@ -1421,11 +1527,11 @@ export class SurroundingTraffic {
 
           if (actor.hasLivePose) {
             actor.limbs.armL.rotation.z = -actor.poseCurrent.rollL;
-            actor.limbs.armL.rotation.x = seatedArm;
+            actor.limbs.armL.rotation.x = seatedArm + actor.poseCurrent.pitchL;
             actor.limbs.elbowL.rotation.x = Math.max(seatedElbow, actor.poseCurrent.elbowL);
 
             actor.limbs.armR.rotation.z = actor.poseCurrent.rollR;
-            actor.limbs.armR.rotation.x = seatedArm;
+            actor.limbs.armR.rotation.x = seatedArm + actor.poseCurrent.pitchR;
             actor.limbs.elbowR.rotation.x = Math.max(seatedElbow, actor.poseCurrent.elbowR);
           } else {
             actor.limbs.armL.rotation.z = 0;
@@ -1445,23 +1551,42 @@ export class SurroundingTraffic {
           const headObj = actor.limbs.head || actor.limbs.hips;
 
           // 17 Kinematic Joint Points in World Coordinates
-          positions[0] = headObj.localToWorld(new THREE.Vector3(0, 0.06, -0.12)); // Nose
-          positions[1] = headObj.localToWorld(new THREE.Vector3(-0.035, 0.08, -0.10)); // EyeL
-          positions[2] = headObj.localToWorld(new THREE.Vector3(0.035, 0.08, -0.10)); // EyeR
-          positions[3] = headObj.localToWorld(new THREE.Vector3(-0.085, 0.06, -0.02)); // EarL
-          positions[4] = headObj.localToWorld(new THREE.Vector3(0.085, 0.06, -0.02)); // EarR
-          positions[5] = actor.limbs.armL.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderL
-          positions[6] = actor.limbs.armR.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderR
-          positions[7] = actor.limbs.elbowL.localToWorld(new THREE.Vector3(0, 0, 0)); // ElbowL
-          positions[8] = actor.limbs.elbowR.localToWorld(new THREE.Vector3(0, 0, 0)); // ElbowR
-          positions[9] = actor.limbs.elbowL.localToWorld(new THREE.Vector3(0, -0.22, 0)); // WristL
-          positions[10] = actor.limbs.elbowR.localToWorld(new THREE.Vector3(0, -0.22, 0)); // WristR
-          positions[11] = actor.limbs.legL.localToWorld(new THREE.Vector3(0, 0, 0)); // HipL
-          positions[12] = actor.limbs.legR.localToWorld(new THREE.Vector3(0, 0, 0)); // HipR
-          positions[13] = actor.limbs.kneeL.localToWorld(new THREE.Vector3(0, 0, 0)); // KneeL
-          positions[14] = actor.limbs.kneeR.localToWorld(new THREE.Vector3(0, 0, 0)); // KneeR
-          positions[15] = actor.limbs.kneeL.localToWorld(new THREE.Vector3(0, -0.35, 0)); // AnkleL
-          positions[16] = actor.limbs.kneeR.localToWorld(new THREE.Vector3(0, -0.35, 0)); // AnkleR
+          const k3d = actor.lastPoseItem?.keypoints_3d;
+          const k3dOrder = [
+            'nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
+            'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
+            'left_wrist', 'right_wrist', 'left_hip', 'right_hip',
+            'left_knee', 'right_knee', 'left_ankle', 'right_ankle'
+          ];
+
+          if (k3d) {
+            for (let k = 0; k < 17; k++) {
+              const kp3 = k3d[k3dOrder[k]];
+              if (kp3 && kp3.x !== undefined && kp3.y !== undefined && kp3.z !== undefined) {
+                // Convert vehicle base_link (+X fwd, +Y left, +Z up) to Three.js world (+X right, +Y up, -Z fwd)
+                positions[k] = new THREE.Vector3(-kp3.y, kp3.z, -kp3.x);
+              }
+            }
+          }
+
+          // Fill any missing joints with forward-kinematic fallback defaults
+          if (!positions[0]) positions[0] = headObj.localToWorld(new THREE.Vector3(0, 0.06, -0.12)); // Nose
+          if (!positions[1]) positions[1] = headObj.localToWorld(new THREE.Vector3(-0.035, 0.08, -0.10)); // EyeL
+          if (!positions[2]) positions[2] = headObj.localToWorld(new THREE.Vector3(0.035, 0.08, -0.10)); // EyeR
+          if (!positions[3]) positions[3] = headObj.localToWorld(new THREE.Vector3(-0.085, 0.06, -0.02)); // EarL
+          if (!positions[4]) positions[4] = headObj.localToWorld(new THREE.Vector3(0.085, 0.06, -0.02)); // EarR
+          if (!positions[5]) positions[5] = actor.limbs.armL.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderL
+          if (!positions[6]) positions[6] = actor.limbs.armR.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderR
+          if (!positions[7]) positions[7] = actor.limbs.elbowL.localToWorld(new THREE.Vector3(0, 0, 0)); // ElbowL
+          if (!positions[8]) positions[8] = actor.limbs.elbowR.localToWorld(new THREE.Vector3(0, 0, 0)); // ElbowR
+          if (!positions[9]) positions[9] = actor.limbs.elbowL.localToWorld(new THREE.Vector3(0, -0.22, 0)); // WristL
+          if (!positions[10]) positions[10] = actor.limbs.elbowR.localToWorld(new THREE.Vector3(0, -0.22, 0)); // WristR
+          if (!positions[11]) positions[11] = actor.limbs.legL.localToWorld(new THREE.Vector3(0, 0, 0)); // HipL
+          if (!positions[12]) positions[12] = actor.limbs.legR.localToWorld(new THREE.Vector3(0, 0, 0)); // HipR
+          if (!positions[13]) positions[13] = actor.limbs.kneeL.localToWorld(new THREE.Vector3(0, 0, 0)); // KneeL
+          if (!positions[14]) positions[14] = actor.limbs.kneeR.localToWorld(new THREE.Vector3(0, 0, 0)); // KneeR
+          if (!positions[15]) positions[15] = actor.limbs.kneeL.localToWorld(new THREE.Vector3(0, -0.35, 0)); // AnkleL
+          if (!positions[16]) positions[16] = actor.limbs.kneeR.localToWorld(new THREE.Vector3(0, -0.35, 0)); // AnkleR
 
           actor.skeletonGroup.updateMatrixWorld(true);
           const invMatrix = actor.skeletonGroup.matrixWorld.clone().invert();

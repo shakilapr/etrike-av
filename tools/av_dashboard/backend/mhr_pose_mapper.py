@@ -74,23 +74,40 @@ _JOINT_PREFIXES: Dict[str, str] = {
 
 
 def keypoints_to_array(keypoints: Dict[str, Dict[str, float]]) -> np.ndarray:
-    """Convert the node's ``{name: {x, y}}`` dict to a (17, 2) float array.
+    """Convert the node's keypoints dict to a (17, 3) or (17, 2) float array.
 
+    When 3D coordinates (rel_x, rel_y, rel_z) or (x, y, z) are provided,
+    constructs a (17, 3) metric array for true 3D spatial calculations.
     Missing keypoints are filled with NaN so downstream angle extraction can
     reject them.
     """
 
-    out = np.full((len(COCO_ORDER), 2), np.nan, dtype=np.float64)
+    is_3d = False
+    for entry in keypoints.values():
+        if isinstance(entry, dict) and ("rel_z" in entry or "z" in entry):
+            is_3d = True
+            break
+
+    dim = 3 if is_3d else 2
+    out = np.full((len(COCO_ORDER), dim), np.nan, dtype=np.float64)
     for idx, name in enumerate(COCO_ORDER):
         entry = keypoints.get(name)
         if not entry:
             continue
-        x = entry.get("x")
-        y = entry.get("y")
-        if x is None or y is None:
-            continue
-        out[idx, 0] = float(x)
-        out[idx, 1] = float(y)
+        if is_3d:
+            x = entry.get("rel_x", entry.get("x"))
+            y = entry.get("rel_y", entry.get("y"))
+            z = entry.get("rel_z", entry.get("z"))
+            if x is not None and y is not None and z is not None:
+                out[idx, 0] = float(x)
+                out[idx, 1] = float(y)
+                out[idx, 2] = float(z)
+        else:
+            x = entry.get("x")
+            y = entry.get("y")
+            if x is not None and y is not None:
+                out[idx, 0] = float(x)
+                out[idx, 1] = float(y)
     return out
 
 
@@ -240,7 +257,7 @@ class MhrPoseMapper:
         if not self._param_index:
             return vector
 
-        keypoints = pose.get("keypoints") or {}
+        keypoints = pose.get("keypoints_3d") or pose.get("keypoints") or {}
         if not isinstance(keypoints, dict):
             return vector
         kpts = keypoints_to_array(keypoints)  # type: ignore[arg-type]

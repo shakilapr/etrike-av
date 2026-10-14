@@ -627,6 +627,67 @@ class YoloPerceptionNode(LifecycleNode):
 
         return est_z, x_base, y_base, z_base
 
+    def _sample_point_depth_and_3d(
+        self,
+        u_col: float,
+        v_col: float,
+        ref_depth: float = 3.5,
+        patch_radius: int = 3,
+    ) -> Tuple[float, float, float, float, bool]:
+        """Project 2D color pixel into registered depth map, sample metric depth, and compute 3D base_link coordinates."""
+        tan_x = (u_col - self._cx_color) / max(1.0, self._fx_color)
+        tan_y = (v_col - self._cy_color) / max(1.0, self._fy_color)
+
+        z_joint = float(ref_depth)
+        is_measured = False
+
+        if self._last_depth_frame is not None and (time.time() - self._last_depth_time) < 2.0:
+            depth_h, depth_w = self._last_depth_frame.shape[:2]
+            u_depth = self._cx_depth + self._fx_depth * tan_x
+            v_depth = self._cy_depth + self._fy_depth * tan_y
+
+            x1 = max(0, int(round(u_depth - patch_radius)))
+            x2 = min(depth_w - 1, int(round(u_depth + patch_radius)))
+            y1 = max(0, int(round(v_depth - patch_radius)))
+            y2 = min(depth_h - 1, int(round(v_depth + patch_radius)))
+
+            if x2 >= x1 and y2 >= y1:
+                patch = self._last_depth_frame[y1 : y2 + 1, x1 : x2 + 1]
+                # Filter valid depths within sensor range and within +/- 0.70m of reference depth to avoid background clutter
+                valid = patch[
+                    np.isfinite(patch)
+                    & (patch >= self._depth_min_m)
+                    & (patch <= self._depth_max_m)
+                    & (np.abs(patch - ref_depth) < 0.70)
+                ]
+                if valid.size >= 2:
+                    z_joint = float(np.median(valid))
+                    is_measured = True
+                else:
+                    valid_loose = patch[
+                        np.isfinite(patch)
+                        & (patch >= self._depth_min_m)
+                        & (patch <= self._depth_max_m)
+                    ]
+                    if valid_loose.size >= 2:
+                        med = float(np.median(valid_loose))
+                        if abs(med - ref_depth) < 0.95:
+                            z_joint = med
+                            is_measured = True
+
+        x_optical = tan_x * z_joint
+        y_optical = tan_y * z_joint
+        z_optical = z_joint
+
+        cos_p = math.cos(self._camera_pitch_rad)
+        sin_p = math.sin(self._camera_pitch_rad)
+
+        x_base = float(self._camera_mount_x + (z_optical * cos_p - y_optical * sin_p))
+        y_base = float(self._camera_mount_y - x_optical)
+        z_base = float(self._camera_mount_z - (z_optical * sin_p + y_optical * cos_p))
+
+        return z_joint, x_base, y_base, z_base, is_measured
+
     def _on_color_image(self, msg: Image) -> None:
         """Run YOLO inference and emit DetectedObjects in vehicle base_link."""
         if not self._pub_objects or not self._pub_objects.is_activated:
@@ -994,6 +1055,35 @@ class YoloPerceptionNode(LifecycleNode):
                                     x=0.0, y=0.0, z=sy, w=cy
                                 )
 
+                                # Extract 3D Metric Keypoints in base_link using registered ToF depth
+                                keypoints_3d_dict: Dict[str, Dict[str, Any]] = {}
+                                for k_idx, k_name in enumerate(COCO_KEYPOINTS):
+                                    if k_idx < len(kpts_list):
+                                        k_u, k_v = kpts_list[k_idx]
+                                        (
+                                            zj_val,
+                                            xj_base,
+                                            yj_base,
+                                            zj_base,
+                                            is_meas,
+                                        ) = self._sample_point_depth_and_3d(
+                                            float(k_u), float(k_v), ref_depth=est_z, patch_radius=3
+                                        )
+                                        # Root-relative vector in vehicle base_link frame
+                                        rel_x = xj_base - x_base
+                                        rel_y = yj_base - y_base
+                                        rel_z = zj_base - z_base
+                                        keypoints_3d_dict[k_name] = {
+                                            "x": round(xj_base, 3),
+                                            "y": round(yj_base, 3),
+                                            "z": round(zj_base, 3),
+                                            "rel_x": round(rel_x, 3),
+                                            "rel_y": round(rel_y, 3),
+                                            "rel_z": round(rel_z, 3),
+                                            "depth_m": round(zj_val, 3),
+                                            "measured": bool(is_meas),
+                                        }
+
                                 # Draw skeleton on debug frame
                                 if annotated_bgr is not None:
                                     for (p1, p2) in SKELETON_EDGES:
@@ -1014,6 +1104,7 @@ class YoloPerceptionNode(LifecycleNode):
                                     "is_truncated": is_truncated,
                                     "confidence": round(conf, 2),
                                     "keypoints": keypoints_dict,
+                                    "keypoints_3d": keypoints_3d_dict,
                                 })
                             except Exception as ke:
                                 self.get_logger().warn(f"Skeleton pose calculation error: {ke}")

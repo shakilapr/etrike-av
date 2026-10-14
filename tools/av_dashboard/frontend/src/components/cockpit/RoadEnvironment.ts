@@ -21,7 +21,7 @@ export class RoadEnvironment {
     // 1. Surrounding Dark Ground / Terrain Plane (Extends beyond road)
     const groundGeo = new THREE.PlaneGeometry(160, this.roadLength, 1, 1);
     groundGeo.rotateX(-Math.PI / 2);
-    const groundMat = new THREE.MeshBasicMaterial({ color: 0x090a0f });
+    const groundMat = new THREE.MeshBasicMaterial({ color: 0x020412 });
     this.groundPlaneMesh = new THREE.Mesh(groundGeo, groundMat);
     this.groundPlaneMesh.position.set(0, -0.02, -40);
     this.group.add(this.groundPlaneMesh);
@@ -29,7 +29,7 @@ export class RoadEnvironment {
     // 2. Asphalt Road Plane
     const roadGeo = new THREE.PlaneGeometry(this.roadWidth, this.roadLength, 1, 1);
     roadGeo.rotateX(-Math.PI / 2);
-    const roadMat = new THREE.MeshBasicMaterial({ color: 0x14151b });
+    const roadMat = new THREE.MeshBasicMaterial({ color: 0x060b16 });
     this.roadMesh = new THREE.Mesh(roadGeo, roadMat);
     this.roadMesh.position.set(0, -0.01, -40);
     this.group.add(this.roadMesh);

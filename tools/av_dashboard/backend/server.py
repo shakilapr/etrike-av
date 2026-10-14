@@ -794,6 +794,38 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         active_websockets.discard(websocket)
 
 
+# High-speed binary WebSocket endpoint for real LiDAR pointcloud stream
+@app.websocket("/ws/v1/lidar")
+@app.websocket("/ws/lidar")
+async def websocket_lidar_endpoint(websocket: WebSocket) -> None:
+    """Stream real Hesai XT32 PointCloud2 frames as raw binary Float32 buffers."""
+    await websocket.accept()
+    last_sent_ts: float = 0.0
+    try:
+        while True:
+            if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
+                frame_bytes, count, ts = ros_bridge.lidar_streamer.get_latest_frame()
+                if frame_bytes and ts > last_sent_ts:
+                    last_sent_ts = ts
+                    await websocket.send_bytes(frame_bytes)
+            await asyncio.sleep(0.033)  # ~30 Hz cap
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        pass
+
+
+@app.get("/api/v1/lidar/status")
+async def get_lidar_status() -> JSONResponse:
+    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
+        _, count, ts = ros_bridge.lidar_streamer.get_latest_frame()
+        return JSONResponse({
+            "online": (time.time() - ts) < 2.0 if ts > 0 else False,
+            "point_count": count,
+            "timestamp": ts,
+            "total_frames": ros_bridge.lidar_streamer.total_frames,
+        })
+    return JSONResponse({"online": False, "point_count": 0, "timestamp": 0.0, "total_frames": 0})
+
+
 # Serve built React frontend if dist exists
 if FRONTEND_DIST.is_dir():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useCanStore } from '../../store/canStore';
@@ -6,19 +6,24 @@ import { TuktukVehicle } from './TuktukVehicle';
 import { RoadEnvironment } from './RoadEnvironment';
 import { SurroundingTraffic } from './SurroundingTraffic';
 import { CockpitHud } from './CockpitHud';
+import { LidarRangeRings } from './LidarRangeRings';
+import { LidarPointCloud } from './LidarPointCloud';
+import { useLidarStream } from './useLidarStream';
 
 export const DriveCockpit3D: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cameraMode = useCanStore((s) => s.cameraMode);
+  const [lidarCloudInstance, setLidarCloudInstance] = useState<LidarPointCloud | null>(null);
+  const lidarStream = useLidarStream(lidarCloudInstance);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // 1. Scene & Fog (Deep slate black horizon fade)
+    // 1. Scene & Fog (Deep midnight navy horizon fade matching real LiDAR aesthetic)
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x090a0f);
-    scene.fog = new THREE.FogExp2(0x090a0f, 0.016);
+    scene.background = new THREE.Color(0x020412);
+    scene.fog = new THREE.FogExp2(0x020412, 0.015);
 
     // 2. Camera
     const width = container.clientWidth || window.innerWidth;
@@ -73,9 +78,16 @@ export const DriveCockpit3D: React.FC = () => {
     const rimLight = new THREE.HemisphereLight(0x06b6d4, 0x18181b, 0.6);
     scene.add(rimLight);
 
-    // 6. Road Environment, Tuktuk Vehicle & Surrounding Traffic
+    // 6. Road Environment, Range Rings & Real Hesai XT32 Point Cloud
     const road = new RoadEnvironment();
     scene.add(road.group);
+
+    const rangeRings = new LidarRangeRings();
+    scene.add(rangeRings.group);
+
+    const lidarCloud = new LidarPointCloud();
+    scene.add(lidarCloud.group);
+    setLidarCloudInstance(lidarCloud);
 
     const tuktuk = new TuktukVehicle();
     scene.add(tuktuk.group);
@@ -210,6 +222,8 @@ export const DriveCockpit3D: React.FC = () => {
       resizeObserver.disconnect();
       orbitControls.dispose();
       renderer.dispose();
+      lidarCloud.dispose();
+      setLidarCloudInstance(null);
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
@@ -217,9 +231,29 @@ export const DriveCockpit3D: React.FC = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden select-none">
+    <div className="relative w-full h-full bg-[#020412] overflow-hidden select-none">
       {/* Three.js Canvas Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+
+      {/* Real Hesai XT32 LiDAR Status Badge */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#050b1a]/85 border border-[#1e293b] backdrop-blur px-3 py-1.5 rounded-md font-mono text-xs shadow-lg pointer-events-none">
+        <span
+          className={`w-2 h-2 rounded-full ${
+            lidarStream.connected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-neutral-500'
+          }`}
+        />
+        <span className="font-semibold text-neutral-200">XT32 LIDAR</span>
+        <span className="text-neutral-500">|</span>
+        <span className="text-cyan-400">
+          {lidarStream.pointCount > 0 ? `${lidarStream.pointCount.toLocaleString()} pts` : 'STANDBY'}
+        </span>
+        {lidarStream.hz > 0 && (
+          <>
+            <span className="text-neutral-500">@</span>
+            <span className="text-emerald-400">{lidarStream.hz} Hz</span>
+          </>
+        )}
+      </div>
 
       {/* Ergonomic Floating HUD Overlay */}
       <CockpitHud />

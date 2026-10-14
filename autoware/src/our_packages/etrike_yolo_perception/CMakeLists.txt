@@ -13,17 +13,21 @@ find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(autoware_perception_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # Install Python scripts
 install(PROGRAMS
   scripts/yolo_perception_node.py
+  scripts/fusion_mesh_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# Install launch & config directories
+# Install launch, config, models, and rviz directories
 install(DIRECTORY
   launch
   config
+  models
+  rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
