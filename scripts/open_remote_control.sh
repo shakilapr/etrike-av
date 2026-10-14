@@ -111,10 +111,16 @@ if docker exec "$CONTAINER" pgrep -f "vehicle_bridge_node" >/dev/null 2>&1; then
     echo "  [INFO] Detected existing vehicle_bridge_node already running. Will attach GUI to it."
 fi
 
-# Stop previous cockpit GUI (and stop planning_simulator if active to prevent dual /control_cmd publisher collision, while keeping RViz2 alive)
+# Stop previous cockpit GUI and any active Autoware autonomy control nodes
+# (planning_simulator, autoware.launch, vehicle_cmd_gate, trajectory_follower)
+# to enforce mutual exclusion on /control_cmd, while keeping RViz2 alive.
 docker exec "$CONTAINER" bash -c "
     pkill -9 -f 'remote_control_gui' 2>/dev/null || true
     pkill -9 -f 'planning_simulator' 2>/dev/null || true
+    pkill -9 -f 'autoware.launch' 2>/dev/null || true
+    pkill -9 -f 'vehicle_cmd_gate' 2>/dev/null || true
+    pkill -9 -f 'trajectory_follower' 2>/dev/null || true
+    pkill -9 -f 'control.launch' 2>/dev/null || true
 " || true
 
 sleep 0.5
