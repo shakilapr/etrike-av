@@ -27,6 +27,7 @@ import json
 import os
 import sys
 import time
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
@@ -46,7 +47,7 @@ from autoware_perception_msgs.msg import (
 )
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Point, Quaternion, Vector3
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Header, String
 import tensorrt as trt
 
@@ -173,7 +174,13 @@ class YoloPerceptionNode(LifecycleNode):
         self.declare_parameter("engine_path", "/workspace/data/ml_models/yolov8x_fp16.engine")
         self.declare_parameter("publish_mode", "bench")  # 'bench' (isolated) or 'vehicle'
         self.declare_parameter("input_image_topic", "/kinect_front/color/image_raw")
-        self.declare_parameter("input_depth_topic", "/kinect_front/depth/image_raw")
+        self.declare_parameter("input_depth_topic", "/kinect_front/depth_registered/image_raw")
+        self.declare_parameter("input_camera_info_topic", "/kinect_front/color/camera_info")
+        self.declare_parameter("input_depth_info_topic", "/kinect_front/depth/camera_info")
+        self.declare_parameter("camera_mount_x", 1.20)
+        self.declare_parameter("camera_mount_y", 0.00)
+        self.declare_parameter("camera_mount_z", 1.00)
+        self.declare_parameter("camera_pitch_deg", 0.0)
         self.declare_parameter("confidence_threshold", 0.35)
         self.declare_parameter("nms_threshold", 0.45)
         self.declare_parameter("sensor_timeout_sec", 1.2)
@@ -209,9 +216,28 @@ class YoloPerceptionNode(LifecycleNode):
         self._last_depth_time: float = 0.0
         self._last_infer_ms: float = 0.0
 
+        # Calibrated Kinect v2 Pinhole Intrinsics (updated dynamically via camera_info)
+        self._fx_color: float = 1081.37
+        self._fy_color: float = 1081.37
+        self._cx_color: float = 959.5
+        self._cy_color: float = 539.5
+
+        self._fx_depth: float = 364.99
+        self._fy_depth: float = 364.99
+        self._cx_depth: float = 258.18
+        self._cy_depth: float = 206.16
+
+        # Camera mounting geometry in vehicle base_link
+        self._camera_mount_x: float = 1.20
+        self._camera_mount_y: float = 0.00
+        self._camera_mount_z: float = 1.00
+        self._camera_pitch_rad: float = 0.0
+
         # Subscriptions & Publishers
         self._sub_color: Optional[Any] = None
         self._sub_depth: Optional[Any] = None
+        self._sub_color_info: Optional[Any] = None
+        self._sub_depth_info: Optional[Any] = None
         self._pub_objects: Optional[LifecyclePublisher] = None
         self._pub_debug_img: Optional[LifecyclePublisher] = None
         self._pub_status: Optional[LifecyclePublisher] = None
@@ -327,11 +353,22 @@ class YoloPerceptionNode(LifecycleNode):
             except Exception as e:
                 self.get_logger().warn(f"Could not initialize RTMPose-s engine: {e}")
 
+        # Mount geometry
+        self._camera_mount_x = float(self.get_parameter("camera_mount_x").value)
+        self._camera_mount_y = float(self.get_parameter("camera_mount_y").value)
+        self._camera_mount_z = float(self.get_parameter("camera_mount_z").value)
+        self._camera_pitch_rad = math.radians(float(self.get_parameter("camera_pitch_deg").value))
+
         # Subscriptions
         color_topic = str(self.get_parameter("input_image_topic").value)
         depth_topic = str(self.get_parameter("input_depth_topic").value)
+        color_info_topic = str(self.get_parameter("input_camera_info_topic").value)
+        depth_info_topic = str(self.get_parameter("input_depth_info_topic").value)
+
         self._sub_color = self.create_subscription(Image, color_topic, self._on_color_image, qos_sensor)
         self._sub_depth = self.create_subscription(Image, depth_topic, self._on_depth_image, qos_sensor)
+        self._sub_color_info = self.create_subscription(CameraInfo, color_info_topic, self._on_color_info, qos_sensor)
+        self._sub_depth_info = self.create_subscription(CameraInfo, depth_info_topic, self._on_depth_info, qos_sensor)
 
         self.get_logger().info("YoloPerceptionNode successfully configured.")
         return TransitionCallbackReturn.SUCCESS
@@ -412,15 +449,154 @@ class YoloPerceptionNode(LifecycleNode):
         self._pose_engine = None
         return super().on_cleanup(state)
 
+    def _on_color_info(self, msg: CameraInfo) -> None:
+        """Store color camera intrinsics."""
+        if len(msg.k) == 9 and msg.k[0] > 10.0:
+            self._fx_color = float(msg.k[0])
+            self._cx_color = float(msg.k[2])
+            self._fy_color = float(msg.k[4])
+            self._cy_color = float(msg.k[5])
+
+    def _on_depth_info(self, msg: CameraInfo) -> None:
+        """Store depth camera intrinsics."""
+        if len(msg.k) == 9 and msg.k[0] > 10.0:
+            self._fx_depth = float(msg.k[0])
+            self._cx_depth = float(msg.k[2])
+            self._fy_depth = float(msg.k[4])
+            self._cy_depth = float(msg.k[5])
+
     def _on_depth_image(self, msg: Image) -> None:
-        """Cache incoming depth frame for metric distance estimation."""
+        """Cache incoming depth frame (32FC1 meters or 16UC1 millimeters) for metric distance estimation."""
         if msg.width == 0 or msg.height == 0:
             return
         try:
-            self._last_depth_frame = np.frombuffer(msg.data, dtype=np.float32).reshape((msg.height, msg.width))
+            if msg.encoding == "16UC1":
+                # Convert mm (uint16) to meters (float32)
+                raw_u16 = np.frombuffer(msg.data, dtype=np.uint16).reshape((msg.height, msg.width))
+                self._last_depth_frame = raw_u16.astype(np.float32) * 0.001
+            elif msg.encoding == "32FC1":
+                self._last_depth_frame = np.frombuffer(msg.data, dtype=np.float32).reshape((msg.height, msg.width)).copy()
+            else:
+                cv_img = self._bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
+                if cv_img.dtype == np.uint16:
+                    self._last_depth_frame = cv_img.astype(np.float32) * 0.001
+                else:
+                    self._last_depth_frame = cv_img.astype(np.float32)
             self._last_depth_time = time.time()
         except Exception:
             self._last_depth_frame = None
+
+    def _estimate_distance_and_coords(
+        self,
+        bx: int,
+        by: int,
+        bw: int,
+        bh: int,
+        sternum_pt: Optional[Tuple[int, int]] = None,
+        is_pedestrian: bool = False,
+    ) -> Tuple[float, float, float, float]:
+        """
+        Estimate 3D metric distance and (x_base, y_base, z_base) coordinates
+        from Kinect ToF depth map using pinhole camera projection and torso ROI filtering.
+
+        Returns:
+            (est_z, x_base, y_base, z_base)
+        """
+        # Default fallback distance if no depth map is available
+        est_z = 3.5
+
+        if self._last_depth_frame is not None and (time.time() - self._last_depth_time) < 2.0:
+            depth_h, depth_w = self._last_depth_frame.shape[:2]
+
+            # 1. Determine sampling optical center in color coordinates
+            if sternum_pt is not None:
+                u_col, v_col = float(sternum_pt[0]), float(sternum_pt[1])
+            elif is_pedestrian:
+                # Upper chest / torso: central horizontal, 35% down from top of box
+                u_col = float(bx + bw / 2.0)
+                v_col = float(by + bh * 0.35)
+            else:
+                u_col = float(bx + bw / 2.0)
+                v_col = float(by + bh / 2.0)
+
+            # 2. Pinhole ray projection from Color optical center
+            tan_x = (u_col - self._cx_color) / max(1.0, self._fx_color)
+            tan_y = (v_col - self._cy_color) / max(1.0, self._fy_color)
+
+            # 3. Project ray into Depth map coordinates
+            u_depth = self._cx_depth + self._fx_depth * tan_x
+            v_depth = self._cy_depth + self._fy_depth * tan_y
+
+            # Projected bounding box scale in depth map
+            w_depth = max(8.0, float(bw) * (self._fx_depth / max(1.0, self._fx_color)))
+            h_depth = max(8.0, float(bh) * (self._fy_depth / max(1.0, self._fy_color)))
+
+            # 4. Form statistical ROI window in depth map
+            if sternum_pt is not None:
+                # Tight patch around detected sternum/chest
+                x1 = max(0, int(round(u_depth - 8.0)))
+                x2 = min(depth_w - 1, int(round(u_depth + 8.0)))
+                y1 = max(0, int(round(v_depth - 8.0)))
+                y2 = min(depth_h - 1, int(round(v_depth + 8.0)))
+            elif is_pedestrian:
+                # Central upper torso patch: 40% width, chest height
+                x1 = max(0, int(round(u_depth - 0.20 * w_depth)))
+                x2 = min(depth_w - 1, int(round(u_depth + 0.20 * w_depth)))
+                y1 = max(0, int(round(v_depth - 0.20 * h_depth)))
+                y2 = min(depth_h - 1, int(round(v_depth + 0.15 * h_depth)))
+            else:
+                x1 = max(0, int(round(u_depth - 0.25 * w_depth)))
+                x2 = min(depth_w - 1, int(round(u_depth + 0.25 * w_depth)))
+                y1 = max(0, int(round(v_depth - 0.25 * h_depth)))
+                y2 = min(depth_h - 1, int(round(v_depth + 0.25 * h_depth)))
+
+            if x2 > x1 and y2 > y1:
+                patch = self._last_depth_frame[y1 : y2 + 1, x1 : x2 + 1]
+                valid = patch[np.isfinite(patch) & (patch >= 0.45) & (patch <= 7.5)]
+
+                if valid.size < 4:
+                    # Fallback to wider 60% box patch
+                    x1_w = max(0, int(round(u_depth - 0.30 * w_depth)))
+                    x2_w = min(depth_w - 1, int(round(u_depth + 0.30 * w_depth)))
+                    y1_w = max(0, int(round(v_depth - 0.30 * h_depth)))
+                    y2_w = min(depth_h - 1, int(round(v_depth + 0.30 * h_depth)))
+                    if x2_w > x1_w and y2_w > y1_w:
+                        patch_w = self._last_depth_frame[y1_w : y2_w + 1, x1_w : x2_w + 1]
+                        valid = patch_w[np.isfinite(patch_w) & (patch_w >= 0.45) & (patch_w <= 7.5)]
+
+                if valid.size >= 3:
+                    # 25th percentile robustly isolates the front surface of human torso,
+                    # rejecting any background wall/chair reflections and ToF noise
+                    est_z = float(np.percentile(valid, 25.0))
+
+        # 5. Inverse Pinhole Projection from object center in color frame to 3D base_link
+        u_center = float(bx + bw / 2.0)
+        v_center = float(by + bh / 2.0)
+        ray_x = (u_center - self._cx_color) / max(1.0, self._fx_color)
+        ray_y = (v_center - self._cy_color) / max(1.0, self._fy_color)
+
+        x_optical = ray_x * est_z
+        y_optical = ray_y * est_z
+        z_optical = est_z
+
+        # Rigid transform from camera optical frame to vehicle base_link
+        # (Camera mounted at x=camera_mount_x, y=camera_mount_y, z=camera_mount_z)
+        # base_link: +X forward, +Y left, +Z up
+        # optical_link: +Z forward, +X right, +Y down
+        cos_p = math.cos(self._camera_pitch_rad)
+        sin_p = math.sin(self._camera_pitch_rad)
+
+        x_base = float(self._camera_mount_x + (z_optical * cos_p - y_optical * sin_p))
+        y_base = float(self._camera_mount_y - x_optical)
+
+        if is_pedestrian:
+            # Human center height at 0.85m ensures 1.7m actor feet are grounded (z=0.0)
+            z_base = 0.85
+        else:
+            z_base = float(self._camera_mount_z - (z_optical * sin_p + y_optical * cos_p))
+            z_base = float(np.clip(z_base, 0.5, 1.5))
+
+        return est_z, x_base, y_base, z_base
 
     def _on_color_image(self, msg: Image) -> None:
         """Run YOLO inference and emit DetectedObjects in vehicle base_link."""
@@ -562,22 +738,11 @@ class YoloPerceptionNode(LifecycleNode):
                     elif coco_label in ("truck", "bus"):
                         autoware_class = ObjectClassification.TRUCK
 
-                    # Estimate 3D distance from depth map if available
-                    est_z = 3.5  # default forward distance estimate
-                    if self._last_depth_frame is not None:
-                        # Sample center region of bounding box
-                        cx_int = max(0, min(self._last_depth_frame.shape[1] - 1, int(bx + bw / 2.0)))
-                        cy_int = max(0, min(self._last_depth_frame.shape[0] - 1, int(by + bh / 2.0)))
-                        depth_val = float(self._last_depth_frame[cy_int, cx_int])
-                        if 0.4 < depth_val < 8.0 and np.isfinite(depth_val):
-                            est_z = depth_val
-
-                    # Calculate metric base_link coordinates (camera mount: x=1.2m, y=0.0m, z=1.0m)
-                    # base_link: +X fwd, +Y left, +Z up
-                    x_norm = ((bx + bw / 2.0) - (w_orig / 2.0)) / (w_orig / 2.0)
-                    y_base = -float(x_norm * est_z * 0.5)
-                    x_base = float(est_z + 1.20)
-                    z_base = 0.90
+                    # Robust 3D distance and (x, y, z) localization from Kinect ToF depth map
+                    is_ped = (autoware_class == ObjectClassification.PEDESTRIAN)
+                    est_z, x_base, y_base, z_base = self._estimate_distance_and_coords(
+                        bx, by, bw, bh, is_pedestrian=is_ped
+                    )
 
                     det_obj = DetectedObject()
                     det_obj.existence_probability = conf
@@ -593,7 +758,7 @@ class YoloPerceptionNode(LifecycleNode):
 
                     shape = Shape()
                     shape.type = Shape.BOUNDING_BOX
-                    shape.dimensions = Vector3(x=0.8, y=0.8, z=1.7) if autoware_class == ObjectClassification.PEDESTRIAN else Vector3(x=1.8, y=1.5, z=1.5)
+                    shape.dimensions = Vector3(x=0.8, y=0.8, z=1.7) if is_ped else Vector3(x=1.8, y=1.5, z=1.5)
                     det_obj.shape = shape
                     if autoware_class != ObjectClassification.UNKNOWN:
                         out_msg.objects.append(det_obj)
@@ -603,7 +768,7 @@ class YoloPerceptionNode(LifecycleNode):
                     is_seated = False
                     keypoints_dict: Dict[str, Dict[str, float]] = {}
 
-                    if autoware_class == ObjectClassification.PEDESTRIAN and self._pose_context is not None and bw > 15 and bh > 20:
+                    if is_ped and self._pose_context is not None and bw > 15 and bh > 20:
                         try:
                             crop, inv_trans = crop_and_pad(bgr, (bx, by, bx + bw, by + bh), (192, 256))
                             crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB).astype(np.float32)
@@ -635,6 +800,21 @@ class YoloPerceptionNode(LifecycleNode):
                                 kpts_list.append((px_orig, py_orig))
                                 keypoints_dict[COCO_KEYPOINTS[k]] = {"x": round(float(px_orig), 1), "y": round(float(py_orig), 1)}
 
+                            # Refine distance & localization at detected sternum (midpoint of shoulders)
+                            if len(kpts_list) >= 7:
+                                ls_x, ls_y = kpts_list[5]
+                                rs_x, rs_y = kpts_list[6]
+                                if (bx - 20) <= ls_x <= (bx + bw + 20) and (bx - 20) <= rs_x <= (bx + bw + 20):
+                                    sternum_pt = (int((ls_x + rs_x) / 2.0), int((ls_y + rs_y) / 2.0))
+                                    est_z_ref, xb_ref, yb_ref, zb_ref = self._estimate_distance_and_coords(
+                                        bx, by, bw, bh, sternum_pt=sternum_pt, is_pedestrian=True
+                                    )
+                                    if 0.45 <= est_z_ref <= 7.5:
+                                        est_z, x_base, y_base, z_base = est_z_ref, xb_ref, yb_ref, zb_ref
+                                        det_obj.kinematics.pose_with_covariance.pose.position = Point(
+                                            x=x_base, y=y_base, z=z_base
+                                        )
+
                             # Seated analysis (vertical thigh span relative to box height)
                             hip_y = (kpts_list[11][1] + kpts_list[12][1]) / 2.0
                             knee_y = (kpts_list[13][1] + kpts_list[14][1]) / 2.0
@@ -656,6 +836,7 @@ class YoloPerceptionNode(LifecycleNode):
                             "x_base": round(x_base, 2),
                             "y_base": round(y_base, 2),
                             "z_base": round(z_base, 2),
+                            "est_z": round(est_z, 2),
                             "posture": posture_str,
                             "is_seated": is_seated,
                             "confidence": round(conf, 2),
@@ -664,10 +845,10 @@ class YoloPerceptionNode(LifecycleNode):
 
                     # Annotate debug visualization
                     if annotated_bgr is not None:
-                        color = (0, 255, 0) if autoware_class == ObjectClassification.PEDESTRIAN else (255, 165, 0)
+                        color = (0, 255, 0) if is_ped else (255, 165, 0)
                         cv2.rectangle(annotated_bgr, (bx, by), (bx + bw, by + bh), color, 2)
-                        tag = f"PERSON: {posture_str}" if autoware_class == ObjectClassification.PEDESTRIAN else coco_label.upper()
-                        caption = f"{tag} {conf*100:.0f}% ({est_z:.1f}m)"
+                        tag = f"PERSON: {posture_str}" if is_ped else coco_label.upper()
+                        caption = f"{tag} {conf*100:.0f}% ({est_z:.2f}m, y={y_base:+.2f}m)"
                         cv2.putText(annotated_bgr, caption, (bx, max(22, by - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
             self._pub_objects.publish(out_msg)
