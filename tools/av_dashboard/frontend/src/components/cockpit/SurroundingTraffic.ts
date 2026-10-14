@@ -878,6 +878,50 @@ export class SurroundingTraffic {
     (data.texture as THREE.CanvasTexture).needsUpdate = true;
   }
 
+  private createClusterMesh(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = 'LidarCluster';
+
+    // 1. Semi-transparent bounding box with glowing cyan edges
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const boxMat = new THREE.MeshStandardMaterial({
+      color: 0x06b6d4,
+      roughness: 0.25,
+      metalness: 0.75,
+      transparent: true,
+      opacity: 0.35,
+    });
+    const box = new THREE.Mesh(boxGeo, boxMat);
+    box.position.y = 0.5;
+    group.add(box);
+
+    // 2. Glowing wireframe bounding edges
+    const edgesGeo = new THREE.EdgesGeometry(boxGeo);
+    const edgesMat = new THREE.LineBasicMaterial({
+      color: 0x38bdf8,
+      linewidth: 2,
+    });
+    const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+    edges.position.y = 0.5;
+    group.add(edges);
+
+    // 3. Ground contact ring
+    const ringGeo = new THREE.RingGeometry(0.35, 0.55, 32);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x06b6d4,
+      transparent: true,
+      opacity: 0.55,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.y = 0.02;
+    group.add(ring);
+
+    return group;
+  }
+
   private buildActor(obj: PerceptionObject, seedIndex: number): Actor {
     const group = new THREE.Group();
 
@@ -894,6 +938,7 @@ export class SurroundingTraffic {
       BUS: this.createTruckMesh(),
       BICYCLE: this.createCyclistMesh(),
       MOTORCYCLE: this.createCyclistMesh(),
+      CLUSTER: this.createClusterMesh(),
     };
 
     for (const mesh of Object.values(meshes)) {
@@ -931,11 +976,13 @@ export class SurroundingTraffic {
   }
 
   private resolveActiveModel(obj: PerceptionObject): string | null {
-    if (obj.label === 'PEDESTRIAN') return 'PEDESTRIAN';
-    if (obj.label === 'CAR') return 'CAR';
-    if (obj.label === 'TRUCK' || obj.label === 'BUS') return 'TRUCK';
-    if (obj.label === 'BICYCLE' || obj.label === 'MOTORCYCLE') return 'BICYCLE';
-    if ((obj.label as string) === 'CONE') return 'CONE';
+    const lbl = String(obj.label);
+    if (lbl === 'PEDESTRIAN') return 'PEDESTRIAN';
+    if (lbl === 'CAR') return 'CAR';
+    if (lbl === 'TRUCK' || lbl === 'BUS') return 'TRUCK';
+    if (lbl === 'BICYCLE' || lbl === 'MOTORCYCLE') return 'BICYCLE';
+    if (lbl === 'CONE') return 'CONE';
+    if (lbl === 'CLUSTER' || lbl === 'UNKNOWN' || lbl === 'OBSTACLE' || lbl === 'BOX') return 'CLUSTER';
     return null;
   }
 
@@ -970,7 +1017,12 @@ export class SurroundingTraffic {
       active.scale.set(hScale, hScale, hScale);
     } else {
       if (actor.skeletonGroup) actor.skeletonGroup.visible = false;
-      if (targetModel === 'CONE') {
+      if (targetModel === 'CLUSTER') {
+        const w = Math.max(width || 1.0, 0.4);
+        const l = Math.max(length || 1.0, 0.4);
+        const h = Math.max(height || 1.0, 0.4);
+        active.scale.set(w, h, l);
+      } else if (targetModel === 'CONE') {
         const coneScale = Math.min(Math.max((width + length) / 1.0, 0.8), 1.4);
         active.scale.set(coneScale, coneScale, coneScale);
       } else if (targetModel === 'CAR') {

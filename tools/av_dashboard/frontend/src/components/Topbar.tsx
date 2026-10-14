@@ -1,6 +1,7 @@
 import React from 'react';
 import { useCanStore } from '../store/canStore';
 import { Play, Pause, Activity, Wifi, WifiOff, Search, Database, Eye, Radio } from 'lucide-react';
+import { SensorTriadIndicator } from './cockpit/SensorTriadIndicator';
 
 export const Topbar: React.FC = () => {
   const {
@@ -202,6 +203,9 @@ export const Topbar: React.FC = () => {
             +
           </button>
         </div>
+
+        {/* Multi-Sensor Indicator (Camera, LiDAR, Combined) */}
+        <SensorTriadIndicator size="compact" />
 
         {/* Frame Counter */}
         <div className="flex items-center gap-1.5 text-[11px] font-mono bg-[#0a0a0a] px-2.5 py-1 rounded border border-neutral-800">

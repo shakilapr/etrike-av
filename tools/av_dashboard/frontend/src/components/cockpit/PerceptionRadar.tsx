@@ -16,6 +16,8 @@ const CLASS_GLYPH: Record<string, string> = {
   BICYCLE: 'b',
   PEDESTRIAN: 'P',
   BOX: 'X',
+  CLUSTER: 'L',
+  OBSTACLE: 'O',
   UNKNOWN: '?',
 };
 
@@ -27,7 +29,9 @@ const CLASS_COLOR: Record<string, string> = {
   BICYCLE: '#34d399',
   PEDESTRIAN: '#f59e0b',
   BOX: '#d97706',
-  UNKNOWN: '#9ca3af',
+  CLUSTER: '#06b6d4',
+  OBSTACLE: '#06b6d4',
+  UNKNOWN: '#06b6d4',
 };
 
 export const PerceptionRadar: React.FC = () => {
@@ -68,14 +72,14 @@ export const PerceptionRadar: React.FC = () => {
 
           {/* Perception objects */}
           {objects.map((obj, i) => {
-            if (obj.label === 'UNKNOWN' || (obj.label as string) === 'BOX') return null;
             if (Math.abs(obj.z) > RANGE_M + 10 || Math.abs(obj.x) > RANGE_M + 10) return null;
             const px = CENTER + obj.x * SCALE;
             const py = CENTER + obj.z * SCALE;
             if (px < 6 || px > VIEW - 6 || py < 6 || py > VIEW - 6) return null;
-            const color = CLASS_COLOR[obj.label] ?? CLASS_COLOR.UNKNOWN;
-            const glyph = CLASS_GLYPH[obj.label] ?? '?';
-            const isPed = obj.label === 'PEDESTRIAN';
+            const resolvedLabel = (obj.label === 'UNKNOWN' || (obj.label as string) === 'BOX') ? 'CLUSTER' : obj.label;
+            const color = CLASS_COLOR[resolvedLabel] ?? CLASS_COLOR.UNKNOWN;
+            const glyph = CLASS_GLYPH[resolvedLabel] ?? '?';
+            const isPed = resolvedLabel === 'PEDESTRIAN';
             return (
               <g key={`${obj.id}-${i}`}>
                 <circle

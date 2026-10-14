@@ -29,7 +29,8 @@ const CLASS_CONFIG: Record<
   BICYCLE: { color: '#34d399', label: 'BIKE', icon: AlertTriangle },
   CONE: { color: '#f97316', label: 'CONE', icon: AlertTriangle },
   BOX: { color: '#fb923c', label: 'OBSTACLE', icon: AlertTriangle },
-  UNKNOWN: { color: '#9ca3af', label: 'OBJECT', icon: AlertTriangle },
+  CLUSTER: { color: '#06b6d4', label: 'LIDAR CLUSTER', icon: AlertTriangle },
+  UNKNOWN: { color: '#06b6d4', label: 'OBJECT', icon: AlertTriangle },
 };
 
 export const RadarView: React.FC = () => {
@@ -57,7 +58,6 @@ export const RadarView: React.FC = () => {
 
   // Sort objects by distance from vehicle
   const objects = [...rawObjects]
-    .filter((obj) => obj.label !== 'UNKNOWN' && (obj.label as string) !== 'BOX')
     .map((obj) => {
       // Three.js coords: x is lateral (right is +), z is longitudinal (forward is -)
       const lat = obj.x;
@@ -67,12 +67,15 @@ export const RadarView: React.FC = () => {
       let bearingDeg = Math.round((bearingRad * 180) / Math.PI);
       if (bearingDeg < 0) bearingDeg += 360;
 
+      const lbl = String(obj.label);
       const isCone =
-        (obj.label as string) === 'CONE' ||
-        ((obj.label === 'UNKNOWN' || obj.label === 'BOX') &&
+        lbl === 'CONE' ||
+        ((lbl === 'UNKNOWN' || lbl === 'BOX' || lbl === 'CLUSTER') &&
           Math.max(obj.dx || 0, obj.dy || 0, obj.dz || 0) <= 0.85);
 
-      const resolvedLabel = isCone ? 'CONE' : obj.label;
+      const resolvedLabel = isCone
+        ? 'CONE'
+        : (lbl === 'UNKNOWN' || lbl === 'BOX' || lbl === 'CLUSTER' ? 'CLUSTER' : lbl);
 
       return {
         ...obj,

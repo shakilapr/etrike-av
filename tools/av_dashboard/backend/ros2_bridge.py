@@ -133,6 +133,15 @@ class Ros2Bridge:
             "timestamp": 0.0,
         }
         self._bench_perception_time: float = 0.0
+        # Dedicated perception stores for Camera and LiDAR
+        self._camera_objects: List[Dict[str, Any]] = []
+        self._lidar_objects: List[Dict[str, Any]] = []
+        self._last_camera_image_time: float = 0.0
+        self._last_camera_det_time: float = 0.0
+        self._last_lidar_raw_time: float = 0.0
+        self._last_lidar_cluster_time: float = 0.0
+        self._camera_timestamps: List[float] = []
+        self._lidar_timestamps: List[float] = []
         # Human skeletal poses (RTMPose-s)
         self._human_poses: Dict[str, Any] = {}
         self._human_poses_time: float = 0.0
@@ -338,6 +347,27 @@ class Ros2Bridge:
             except Exception as e:
                 self._mark_subscribed("camera_debug_image", False)
                 print(f"[ROS 2 Bridge] Camera image subscription failed: {e}")
+
+            # 2e. LiDAR PointCloud Heartbeat / Telemetry
+            try:
+                from sensor_msgs.msg import PointCloud2
+                for lidar_topic in (
+                    "/sensing/lidar/top/pointcloud_raw_ex",
+                    "/sensing/lidar/top/pointcloud_raw",
+                    "/sensing/lidar/concatenated/pointcloud",
+                    "/sensing/lidar/pointcloud",
+                ):
+                    node.create_subscription(
+                        PointCloud2,
+                        lidar_topic,
+                        self._on_lidar_pointcloud,
+                        qos_sensor,
+                    )
+                self._mark_subscribed("lidar_pointcloud", True)
+                print("[ROS 2 Bridge] Subscribed to LiDAR pointcloud topics")
+            except Exception as e:
+                self._mark_subscribed("lidar_pointcloud", False)
+                print(f"[ROS 2 Bridge] LiDAR pointcloud subscription failed: {e}")
 
             # 3. Planned Trajectory from Planning (Multiple candidate topics)
             try:
@@ -695,6 +725,8 @@ class Ros2Bridge:
 
         with self._lock:
             self._sources[source] = converted
+            if source == "detection":
+                self._camera_objects = list(converted)
             self._source_time[source] = now
             self._source_frame[source] = frame_id
             self._source_pose_ok[source] = pose_ok
@@ -703,6 +735,67 @@ class Ros2Bridge:
             self._perception_timestamps.append(now)
             while self._perception_timestamps and (now - self._perception_timestamps[0]) > 1.0:
                 self._perception_timestamps.pop(0)
+
+    def _process_clustering_batch(self, objects: List[Any], frame_id: str) -> None:
+        """Process LiDAR cluster bounding boxes into vehicle-relative Three.js coordinates."""
+        now = time.time()
+        is_map_frame = ("map" in frame_id) or ("odom" in frame_id)
+        sensor_tf = None if is_map_frame else self._lookup_sensor_to_base_link(frame_id)
+
+        with self._lock:
+            pose_ok = (not is_map_frame) or (self._has_ego_pose and (now - self._ego_time) < SOURCE_STALE_SEC)
+            ego_snapshot = (self._ego_x, self._ego_y, self._ego_z, self._ego_yaw)
+
+        converted: List[Dict[str, Any]] = []
+        for obj in objects:
+            pose = self._extract_pose(obj, is_predicted=False)
+            if pose is None:
+                continue
+
+            pos = pose.position
+            ori = pose.orientation
+            yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
+            tx, ty, tz, rel_yaw = self._convert_pose(
+                float(pos.x),
+                float(pos.y),
+                float(pos.z),
+                yaw,
+                is_map_frame,
+                pose_ok,
+                ego_pose=ego_snapshot,
+                sensor_tf=sensor_tf,
+            )
+
+            raw_label = self._classify(obj)
+            label = "CLUSTER" if raw_label in ("UNKNOWN", "BOX", "") else raw_label
+
+            dx, dy, dz = 1.0, 1.0, 1.0
+            if hasattr(obj, "shape") and hasattr(obj.shape, "dimensions"):
+                dx = float(obj.shape.dimensions.x)
+                dy = float(obj.shape.dimensions.y)
+                dz = float(obj.shape.dimensions.z)
+
+            converted.append({
+                "id": self._object_id(obj) or f"lidar_{len(converted)}",
+                "label": label,
+                "x": tx,
+                "y": ty,
+                "z": tz,
+                "dx": round(dx, 2),
+                "dy": round(dy, 2),
+                "dz": round(dz, 2),
+                "yaw": rel_yaw,
+                "speed_kmh": 0.0,
+                "sensor": "lidar",
+            })
+
+        with self._lock:
+            self._lidar_objects = list(converted)
+            self._sources["clustering"] = converted
+            self._source_time["clustering"] = now
+            self._source_frame["clustering"] = frame_id
+            self._source_pose_ok["clustering"] = pose_ok
+            self._topic_counts["clustering"] = self._topic_counts.get("clustering", 0) + 1
 
     def _on_tracked_objects(self, msg: Any) -> None:
         """Handle incoming tracked objects from Autoware."""
@@ -713,15 +806,35 @@ class Ros2Bridge:
         self._process_objects_batch(msg.objects, msg.header.frame_id, "prediction", is_predicted=True)
 
     def _on_detected_objects(self, msg: Any) -> None:
-        """Handle incoming detected objects from Autoware."""
-        self._last_detection_canonical_time = time.time()
+        """Handle incoming detected objects from Autoware / Camera YOLO."""
+        now = time.time()
+        self._last_detection_canonical_time = now
+        self._last_camera_det_time = now
+        with self._lock:
+            self._camera_timestamps.append(now)
+            while self._camera_timestamps and (now - self._camera_timestamps[0]) > 1.0:
+                self._camera_timestamps.pop(0)
         self._process_objects_batch(msg.objects, msg.header.frame_id, "detection", is_predicted=False)
 
     def _on_clustering_objects(self, msg: Any) -> None:
-        """Fallback for clustering objects when canonical detection is absent."""
-        if time.time() - getattr(self, "_last_detection_canonical_time", 0.0) < 0.5:
-            return
-        self._process_objects_batch(msg.objects, msg.header.frame_id, "detection", is_predicted=False)
+        """Handle incoming LiDAR cluster objects."""
+        now = time.time()
+        with self._lock:
+            self._last_lidar_cluster_time = now
+            self._lidar_timestamps.append(now)
+            while self._lidar_timestamps and (now - self._lidar_timestamps[0]) > 1.0:
+                self._lidar_timestamps.pop(0)
+        self._process_clustering_batch(msg.objects, msg.header.frame_id)
+
+    def _on_lidar_pointcloud(self, msg: Any) -> None:
+        """Heartbeat monitor for incoming LiDAR pointclouds."""
+        now = time.time()
+        with self._lock:
+            self._last_lidar_raw_time = now
+            self._lidar_timestamps.append(now)
+            while self._lidar_timestamps and (now - self._lidar_timestamps[0]) > 1.0:
+                self._lidar_timestamps.pop(0)
+            self._topic_counts["lidar_pointcloud"] = self._topic_counts.get("lidar_pointcloud", 0) + 1
 
     def _on_bench_perception_status(self, msg: Any) -> None:
         """Handle incoming diagnostic telemetry from bench_perception_node."""
@@ -774,10 +887,15 @@ class Ros2Bridge:
             # Encode to JPEG
             success, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if success:
+                now_t = time.time()
                 with self._lock:
                     self._latest_jpeg = jpeg_buf.tobytes()
-                    self._latest_jpeg_time = time.time()
-                    self._latest_debug_jpeg_time = time.time()
+                    self._latest_jpeg_time = now_t
+                    self._latest_debug_jpeg_time = now_t
+                    self._last_camera_image_time = now_t
+                    self._camera_timestamps.append(now_t)
+                    while self._camera_timestamps and (now_t - self._camera_timestamps[0]) > 1.0:
+                        self._camera_timestamps.pop(0)
                     self._topic_counts["camera_debug_image"] = self._topic_counts.get("camera_debug_image", 0) + 1
         except Exception:
             pass
@@ -812,9 +930,14 @@ class Ros2Bridge:
 
             success, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if success:
+                now_t = time.time()
                 with self._lock:
                     self._latest_jpeg = jpeg_buf.tobytes()
-                    self._latest_jpeg_time = time.time()
+                    self._latest_jpeg_time = now_t
+                    self._last_camera_image_time = now_t
+                    self._camera_timestamps.append(now_t)
+                    while self._camera_timestamps and (now_t - self._camera_timestamps[0]) > 1.0:
+                        self._camera_timestamps.pop(0)
                     self._topic_counts["camera_raw_image"] = self._topic_counts.get("camera_raw_image", 0) + 1
         except Exception:
             pass
@@ -915,6 +1038,10 @@ class Ros2Bridge:
         with self._lock:
             while self._perception_timestamps and (now - self._perception_timestamps[0]) > 1.0:
                 self._perception_timestamps.pop(0)
+            while self._camera_timestamps and (now - self._camera_timestamps[0]) > 1.0:
+                self._camera_timestamps.pop(0)
+            while self._lidar_timestamps and (now - self._lidar_timestamps[0]) > 1.0:
+                self._lidar_timestamps.pop(0)
 
             fresh_sources = [
                 name for name in SOURCE_PRIORITY
@@ -925,77 +1052,117 @@ class Ros2Bridge:
             traj_fresh = self._last_trajectory_time > 0.0 and (now - self._last_trajectory_time) < 2.5
             veh_fresh = self._veh_status_time > 0.0 and (now - self._veh_status_time) < SOURCE_STALE_SEC
 
+            # Camera & LiDAR physical stream freshness
+            cam_online = (
+                (now - self._last_camera_image_time) < SOURCE_STALE_SEC
+                or (now - self._last_camera_det_time) < SOURCE_STALE_SEC
+            )
+            lidar_online = (
+                (now - self._last_lidar_raw_time) < SOURCE_STALE_SEC
+                or (now - self._last_lidar_cluster_time) < SOURCE_STALE_SEC
+            )
+
+            cam_hz = round(float(len(self._camera_timestamps)), 1)
+            lidar_hz = round(float(len(self._lidar_timestamps)), 1)
+
+            cam_objs = list(self._camera_objects) if cam_online else []
+            lidar_objs = list(self._lidar_objects) if lidar_online else []
+
             # Check if Standalone Bench Perception is actively publishing
             bench_active = (now - self._bench_perception_time) < SOURCE_STALE_SEC
             bench_mode = self._bench_perception_status.get("mode", "UNAVAILABLE") if bench_active else None
 
-            # Merge real-time sensor detection (e.g. from 1 LiDAR + 1 Camera bench perception in base_link)
-            # with upstream tracking / prediction objects
-            det_fresh = ("detection" in fresh_sources)
-            det_objects = list(self._sources.get("detection", [])) if det_fresh else []
-            det_pose_ok = self._source_pose_ok.get("detection", False)
+            # Determine operating mode: CAMERA_ONLY, LIDAR_ONLY, COMBINED, or OFFLINE
+            if cam_online and lidar_online:
+                active_mode = "COMBINED"
+            elif cam_online:
+                active_mode = "CAMERA_ONLY"
+            elif lidar_online:
+                active_mode = "LIDAR_ONLY"
+            elif bench_active and bench_mode in ("CAMERA_ONLY", "LIDAR_ONLY", "FUSED", "COMBINED"):
+                active_mode = "COMBINED" if bench_mode in ("FUSED", "COMBINED") else bench_mode
+            else:
+                active_mode = "OFFLINE"
 
-            # Determine primary upstream tracking/prediction source (if any)
-            primary_source = None
-            for s_name in ("tracking", "prediction"):
-                if s_name in fresh_sources and len(self._sources[s_name]) > 0:
-                    primary_source = s_name
-                    break
+            # Merge real-time sensor detection
+            if active_mode == "COMBINED":
+                fused_objects: List[Dict[str, Any]] = []
+                matched_lidar_indices = set()
 
-            if bench_active:
-                # Standalone Bench Perception is actively providing real physical sensor perception
-                if bench_mode == "UNAVAILABLE":
-                    # Fail-closed: both physical sensors disconnected.
-                    # Zero fabricated objects, no synthetic hallucinations!
-                    objects = []
-                    source = "bench_unavailable"
-                    frame_id = "base_link"
-                    pose_ok = True
-                else:
-                    # Physical sensors active (CAMERA_ONLY, LIDAR_ONLY, or FUSED)
-                    # Use physical det_objects exclusively in base_link; never mix in synthetic simulation objects!
-                    objects = det_objects if det_fresh else []
-                    source = f"bench_{bench_mode.lower()}"
-                    frame_id = "base_link"
-                    pose_ok = True
-            elif det_fresh and self._source_frame.get("detection") == "base_link":
-                # Real physical sensor detections in vehicle frame without bench status
-                objects = det_objects
-                source = "physical_sensors"
+                for c_obj in cam_objs:
+                    cx = c_obj.get("x", 0.0)
+                    cz = c_obj.get("z", 0.0)
+                    best_l_idx = None
+                    best_dist = 1.5
+                    for l_idx, l_obj in enumerate(lidar_objs):
+                        if l_idx in matched_lidar_indices:
+                            continue
+                        lx = l_obj.get("x", 0.0)
+                        lz = l_obj.get("z", 0.0)
+                        d = math.hypot(cx - lx, cz - lz)
+                        if d < best_dist:
+                            best_dist = d
+                            best_l_idx = l_idx
+
+                    if best_l_idx is not None:
+                        matched_lidar_indices.add(best_l_idx)
+                        l_obj = lidar_objs[best_l_idx]
+                        merged = dict(c_obj)
+                        # Refine spatial positioning and bounding box dimensions with LiDAR accuracy
+                        merged["x"] = round(c_obj["x"] * 0.4 + l_obj["x"] * 0.6, 2)
+                        merged["z"] = round(c_obj["z"] * 0.4 + l_obj["z"] * 0.6, 2)
+                        merged["dx"] = l_obj.get("dx") or c_obj.get("dx")
+                        merged["dy"] = l_obj.get("dy") or c_obj.get("dy")
+                        merged["dz"] = l_obj.get("dz") or c_obj.get("dz")
+                        merged["fused"] = True
+                        fused_objects.append(merged)
+                    else:
+                        fused_objects.append(c_obj)
+
+                # Append non-overlapping LiDAR clusters (360° coverage, obstacles, rear targets)
+                for l_idx, l_obj in enumerate(lidar_objs):
+                    if l_idx not in matched_lidar_indices:
+                        fused_objects.append(l_obj)
+
+                objects = fused_objects
+                source = "bench_fused"
                 frame_id = "base_link"
                 pose_ok = True
-            elif primary_source and det_objects:
-                # Merge tracking and detection, deduplicating close centroids (< 1.2m)
-                merged_objects: List[Dict[str, Any]] = list(self._sources[primary_source])
-                for d_obj in det_objects:
-                    d_x = d_obj.get("x", 0.0)
-                    d_z = d_obj.get("z", 0.0)
-                    if not any(
-                        math.hypot(d_x - ex.get("x", 0.0), d_z - ex.get("z", 0.0)) < 1.2
-                        for ex in merged_objects
-                    ):
-                        merged_objects.append(d_obj)
-                objects = merged_objects
-                source = f"{primary_source}+detection"
-                frame_id = self._source_frame[primary_source]
-                pose_ok = self._source_pose_ok[primary_source] or det_pose_ok or True
-            elif primary_source:
-                objects = list(self._sources[primary_source])
-                source = primary_source
-                frame_id = self._source_frame[primary_source]
-                pose_ok = self._source_pose_ok[primary_source]
-            elif det_fresh:
-                objects = det_objects
-                source = "detection"
-                frame_id = self._source_frame.get("detection", "base_link")
-                pose_ok = det_pose_ok or True
-            else:
-                source = fresh_sources[0] if fresh_sources else None
-                objects = list(self._sources[source]) if source else []
-                pose_ok = self._source_pose_ok[source] if source else ego_fresh
-                frame_id = self._source_frame[source] if source else ""
 
-            hz = float(len(self._perception_timestamps)) if fresh_sources else 0.0
+            elif active_mode == "CAMERA_ONLY":
+                objects = cam_objs
+                source = "bench_camera_only"
+                frame_id = "base_link"
+                pose_ok = True
+
+            elif active_mode == "LIDAR_ONLY":
+                objects = lidar_objs
+                source = "bench_lidar_only"
+                frame_id = "base_link"
+                pose_ok = True
+
+            else:
+                # Primary upstream tracking fallback
+                primary_source = None
+                for s_name in ("tracking", "prediction"):
+                    if s_name in fresh_sources and len(self._sources[s_name]) > 0:
+                        primary_source = s_name
+                        break
+
+                if primary_source:
+                    objects = list(self._sources[primary_source])
+                    source = primary_source
+                    frame_id = self._source_frame[primary_source]
+                    pose_ok = self._source_pose_ok[primary_source]
+                else:
+                    objects = []
+                    source = fresh_sources[0] if fresh_sources else "offline"
+                    pose_ok = ego_fresh
+                    frame_id = "base_link"
+
+            hz = float(len(self._perception_timestamps)) if (fresh_sources or cam_online or lidar_online) else 0.0
+            if hz == 0.0:
+                hz = max(cam_hz, lidar_hz)
 
             trajectory = (
                 list(self._planned_trajectory)
@@ -1004,9 +1171,8 @@ class Ros2Bridge:
             )
 
             return {
-                "active": bool(fresh_sources) or ego_fresh or traj_fresh or veh_fresh,
+                "active": bool(fresh_sources) or ego_fresh or traj_fresh or veh_fresh or cam_online or lidar_online,
                 "hz": round(hz, 1),
-                # tracked_count retained for the existing HUD label; equals rendered objects.
                 "tracked_count": len(objects),
                 "object_count": len(objects),
                 "objects": objects,
@@ -1032,15 +1198,18 @@ class Ros2Bridge:
                     },
                 },
                 "class_counts": self._class_counts(objects),
-                "bench_perception": dict(self._bench_perception_status) if bench_active else {
-                    "mode": "OFFLINE",
-                    "object_count": 0,
-                    "latency_ms": 0.0,
-                    "camera_online": False,
-                    "lidar_online": False,
-                    "camera_connected": False,
-                    "lidar_connected": False,
-                    "timestamp": 0.0,
+                "bench_perception": {
+                    "mode": active_mode,
+                    "object_count": len(objects),
+                    "camera_online": cam_online,
+                    "camera_connected": cam_online,
+                    "camera_hz": cam_hz,
+                    "lidar_online": lidar_online,
+                    "lidar_connected": lidar_online,
+                    "lidar_hz": lidar_hz,
+                    "combined": (cam_online and lidar_online),
+                    "fusion_active": (cam_online and lidar_online),
+                    "timestamp": now,
                 },
                 "bridge_available": self.is_available,
                 "subscribed": dict(self._subscribed),

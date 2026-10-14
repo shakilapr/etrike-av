@@ -22,6 +22,7 @@ import {
   HighBeamTelltale,
   HazardTelltale,
 } from './AutomotiveTelltales';
+import { SensorTriadIndicator } from './SensorTriadIndicator';
 
 export const CockpitHud: React.FC = () => {
   const {
@@ -241,6 +242,9 @@ export const CockpitHud: React.FC = () => {
                 {speedUnit}
               </span>
             </div>
+
+            {/* Sensor Triad Indicator: Camera, LiDAR, and Combined Status */}
+            <SensorTriadIndicator size="hud" className="mt-2" />
 
             {/* ADAS Avatar & YOLO26x + RTMPose-s 17-Keypoint Engine Status Pill */}
             <div className="flex items-center gap-2 mt-1 px-3 py-0.5 bg-[#080808]/90 backdrop-blur-md rounded-full border border-cyan-500/40 text-[10px] font-mono shadow-[0_0_12px_rgba(6,182,212,0.25)]">

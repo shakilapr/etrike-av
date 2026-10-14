@@ -88,7 +88,7 @@ export interface TelemetrySummary {
 
 export interface PerceptionObject {
   id: string | number;
-  label: 'CAR' | 'TRUCK' | 'BUS' | 'MOTORCYCLE' | 'PEDESTRIAN' | 'BICYCLE' | 'BOX' | 'UNKNOWN';
+  label: 'CAR' | 'TRUCK' | 'BUS' | 'MOTORCYCLE' | 'PEDESTRIAN' | 'BICYCLE' | 'BOX' | 'CLUSTER' | 'OBSTACLE' | 'UNKNOWN' | string;
   x: number; // lateral position (meters, left is negative, right is positive)
   y: number; // vertical height (meters)
   z: number; // longitudinal position (meters ahead, forward is negative Z in Three.js)
@@ -143,13 +143,17 @@ export interface RosStatus {
   subscribed?: Record<string, boolean>;
   last_error?: string | null;
   bench_perception?: {
-    mode?: string;
+    mode?: 'CAMERA_ONLY' | 'LIDAR_ONLY' | 'COMBINED' | 'FUSED' | 'OFFLINE' | 'UNAVAILABLE' | string;
     object_count?: number;
     latency_ms?: number;
     camera_online?: boolean;
     lidar_online?: boolean;
     camera_connected?: boolean;
     lidar_connected?: boolean;
+    camera_hz?: number;
+    lidar_hz?: number;
+    combined?: boolean;
+    fusion_active?: boolean;
     timestamp?: number;
   };
   human_poses?: HumanPosesPayload;
