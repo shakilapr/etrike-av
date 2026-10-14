@@ -14,7 +14,9 @@ import type { MhrHumanPayload } from '../../types/can';
  * mesh remains authoritative.
  */
 
-const TOPOLOGY_URL = '/api/v1/mhr/topology';
+/** Vite dev server runs on :5173 with the backend on :8000. */
+const API_BASE = window.location.port === '5173' ? 'http://127.0.0.1:8000' : '';
+const TOPOLOGY_URL = `${API_BASE}/api/v1/mhr/topology`;
 
 /** MHR's native mesh faces +Z; the cockpit actor forward is -Z. */
 const MHR_FORWARD_OFFSET = Math.PI;
