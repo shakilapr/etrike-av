@@ -24,8 +24,7 @@ Write-Host " Starting CAN Watcher on port $Port" -ForegroundColor Cyan
 Write-Host " URL: http://localhost:$Port" -ForegroundColor Green
 Write-Host "======================================================================" -ForegroundColor Cyan
 
-$serverArgs = @("--interface", $Interface, "--port", $Port)
-if ($Sim) { $serverArgs += "--sim" }
+$simArg = if ($Sim) { "--sim" } else { "" }
 
 if ($Desktop) {
     # Launch Electron desktop window
@@ -47,6 +46,6 @@ if ($Desktop) {
 }
 
 $pythonExe = if (Test-Path "E:\miniconda\python.exe") { "E:\miniconda\python.exe" } else { "python" }
-& $pythonExe -m tools.can_watcher.backend.server @serverArgs
+& $pythonExe -m tools.can_watcher.backend.server --interface $Interface --port $Port $simArg
 
 
