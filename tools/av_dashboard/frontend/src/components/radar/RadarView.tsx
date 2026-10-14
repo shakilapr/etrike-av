@@ -57,6 +57,7 @@ export const RadarView: React.FC = () => {
 
   // Sort objects by distance from vehicle
   const objects = [...rawObjects]
+    .filter((obj) => obj.label !== 'UNKNOWN' && (obj.label as string) !== 'BOX')
     .map((obj) => {
       // Three.js coords: x is lateral (right is +), z is longitudinal (forward is -)
       const lat = obj.x;

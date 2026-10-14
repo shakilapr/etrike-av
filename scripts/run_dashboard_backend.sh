@@ -7,4 +7,5 @@ export PYTHONPATH="/workspace/av_project:/host_local/lib/python3.10/site-package
 pkill -f "tools.av_dashboard.backend.server" 2>/dev/null || true
 sleep 1
 
-exec python3 -m tools.av_dashboard.backend.server --interface "${1:-can2}" --host 0.0.0.0 --port "${2:-8080}"
+echo "=== Starting AV Dashboard Backend ===" > /tmp/av_dashboard_run.log
+exec python3 -m tools.av_dashboard.backend.server --interface "${1:-can2}" --host 0.0.0.0 --port "${2:-8080}" >> /tmp/av_dashboard_run.log 2>&1

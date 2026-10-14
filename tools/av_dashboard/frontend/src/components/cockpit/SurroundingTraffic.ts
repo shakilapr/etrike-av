@@ -767,8 +767,6 @@ export class SurroundingTraffic {
       BUS: this.createTruckMesh(),
       BICYCLE: this.createCyclistMesh(),
       MOTORCYCLE: this.createCyclistMesh(),
-      BOX: this.createObstacleMesh(),
-      UNKNOWN: this.createObstacleMesh(),
     };
 
     for (const mesh of Object.values(meshes)) {
@@ -799,18 +797,24 @@ export class SurroundingTraffic {
     };
   }
 
-  private resolveActiveModel(obj: PerceptionObject): string {
+  private resolveActiveModel(obj: PerceptionObject): string | null {
     if (obj.label === 'PEDESTRIAN') return 'PEDESTRIAN';
     if (obj.label === 'CAR') return 'CAR';
     if (obj.label === 'TRUCK' || obj.label === 'BUS') return 'TRUCK';
     if (obj.label === 'BICYCLE' || obj.label === 'MOTORCYCLE') return 'BICYCLE';
     if ((obj.label as string) === 'CONE') return 'CONE';
-    if (obj.label === 'BOX') return 'BOX';
-    return 'UNKNOWN';
+    return null;
   }
 
   private applyClassGeometry(actor: Actor, obj: PerceptionObject) {
     const targetModel = this.resolveActiveModel(obj);
+    if (!targetModel) {
+      for (const [key, mesh] of Object.entries(actor.meshes)) {
+        if (key.startsWith('__')) continue;
+        mesh.visible = false;
+      }
+      return;
+    }
 
     for (const [key, mesh] of Object.entries(actor.meshes)) {
       if (key.startsWith('__')) continue;
@@ -833,11 +837,6 @@ export class SurroundingTraffic {
     } else if (targetModel === 'CONE') {
       const coneScale = Math.min(Math.max((width + length) / 1.0, 0.8), 1.4);
       active.scale.set(coneScale, coneScale, coneScale);
-    } else if (targetModel === 'UNKNOWN' || targetModel === 'BOX') {
-      const wScale = Math.min(Math.max(width / 0.7, 0.6), 2.5);
-      const lScale = Math.min(Math.max(length / 0.7, 0.6), 2.5);
-      const hScale = Math.min(Math.max(height / 0.75, 0.6), 2.0);
-      active.scale.set(wScale, hScale, lScale);
     } else if (targetModel === 'CAR') {
       active.scale.set(Math.max(width / 1.85, 0.8), Math.max(height / 1.45, 0.8), Math.max(length / 4.3, 0.8));
     }
@@ -879,6 +878,16 @@ export class SurroundingTraffic {
     const seen = new Set<string>();
     if (perceptionList && perceptionList.length > 0) {
       perceptionList.forEach((obj, index) => {
+        // Suppress unknown obstacle cylinders and generic boxes from 3D cockpit
+        if (obj.label === 'UNKNOWN' || (obj.label as string) === 'BOX') {
+          const key = String(obj.id || `anon-${index}`);
+          const existing = this.actors.get(key);
+          if (existing) {
+            existing.group.visible = false;
+          }
+          return;
+        }
+
         const key = String(obj.id || `anon-${index}`);
         seen.add(key);
 

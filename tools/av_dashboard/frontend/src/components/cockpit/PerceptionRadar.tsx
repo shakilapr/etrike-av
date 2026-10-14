@@ -68,6 +68,7 @@ export const PerceptionRadar: React.FC = () => {
 
           {/* Perception objects */}
           {objects.map((obj, i) => {
+            if (obj.label === 'UNKNOWN' || (obj.label as string) === 'BOX') return null;
             if (Math.abs(obj.z) > RANGE_M + 10 || Math.abs(obj.x) > RANGE_M + 10) return null;
             const px = CENTER + obj.x * SCALE;
             const py = CENTER + obj.z * SCALE;

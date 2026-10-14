@@ -595,7 +595,8 @@ class YoloPerceptionNode(LifecycleNode):
                     shape.type = Shape.BOUNDING_BOX
                     shape.dimensions = Vector3(x=0.8, y=0.8, z=1.7) if autoware_class == ObjectClassification.PEDESTRIAN else Vector3(x=1.8, y=1.5, z=1.5)
                     det_obj.shape = shape
-                    out_msg.objects.append(det_obj)
+                    if autoware_class != ObjectClassification.UNKNOWN:
+                        out_msg.objects.append(det_obj)
 
                     # Top-Down RTMPose-s Pose Estimation Branch for Pedestrians
                     posture_str = "STANDING"
