@@ -183,12 +183,16 @@ case "$FINAL_MODE" in
             ros2 launch etrike_common_launch hesai_bench.launch.py > /tmp/hesai_bench.log 2>&1
         "
         if [ "$LIDAR_CONNECTED" -eq 0 ]; then
-            echo "  [INFO] Physical LiDAR offline; starting 10 Hz 32-ring synthetic LiDAR stream for fusion bench..."
-            docker exec -d "$CONTAINER" bash -c "
-                source /opt/ros/humble/setup.bash
-                source /workspace/autoware/install/setup.bash 2>/dev/null || true
-                python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/hesai_synthetic_publisher.py > /tmp/hesai_synthetic.log 2>&1
-            "
+            if [ "$ALLOW_SIM" -eq 1 ]; then
+                echo "  [INFO] Physical LiDAR offline; starting 10 Hz 32-ring synthetic LiDAR stream for fusion bench (--sim requested)..."
+                docker exec -d "$CONTAINER" bash -c "
+                    source /opt/ros/humble/setup.bash
+                    source /workspace/autoware/install/setup.bash 2>/dev/null || true
+                    python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/hesai_synthetic_publisher.py > /tmp/hesai_synthetic.log 2>&1
+                "
+            else
+                echo "  [WARN] Physical LiDAR offline or not communicating on eno1:2368. Fails closed (no silent simulation fallback; pass --sim to allow)."
+            fi
         fi
         ;;
     bevfusion)
@@ -204,38 +208,17 @@ case "$FINAL_MODE" in
             ros2 launch etrike_common_launch etrike_bevfusion.launch.xml > /tmp/etrike_bevfusion.log 2>&1
         "
         if [ "$LIDAR_CONNECTED" -eq 0 ]; then
-            echo "  [INFO] Physical LiDAR offline; starting 10 Hz 32-ring synthetic LiDAR stream for BEVFusion..."
-            docker exec -d "$CONTAINER" bash -c "
-                source /opt/ros/humble/setup.bash
-                source /workspace/autoware/install/setup.bash 2>/dev/null || true
-                python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/hesai_synthetic_publisher.py > /tmp/hesai_synthetic.log 2>&1
-            "
+            if [ "$ALLOW_SIM" -eq 1 ]; then
+                echo "  [INFO] Physical LiDAR offline; starting 10 Hz 32-ring synthetic LiDAR stream for BEVFusion (--sim requested)..."
+                docker exec -d "$CONTAINER" bash -c "
+                    source /opt/ros/humble/setup.bash
+                    source /workspace/autoware/install/setup.bash 2>/dev/null || true
+                    python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/hesai_synthetic_publisher.py > /tmp/hesai_synthetic.log 2>&1
+                "
+            else
+                echo "  [WARN] Physical LiDAR offline or not communicating on eno1:2368. Fails closed (no silent simulation fallback; pass --sim to allow)."
+            fi
         fi
-        ;;
-    bevfusion)
-        echo "Launching BEVFusion Pipeline (PointXYZIRC Adapter + Autoware BEVFusion TRT)..."
-        docker exec -d "$CONTAINER" bash -c "
-            source /opt/ros/humble/setup.bash
-            source /workspace/autoware/install/setup.bash 2>/dev/null || true
-            pkill -f 'yolo_perception_node' || true
-            ros2 launch etrike_yolo_perception yolo_perception.launch.py publish_mode:=bench auto_start:=true > /tmp/yolo_node.log 2>&1
-        "
-        if [ "$LIDAR_CONNECTED" -eq 0 ]; then
-            echo "  [INFO] Physical LiDAR offline; starting 10 Hz 32-ring synthetic LiDAR stream..."
-            docker exec -d "$CONTAINER" bash -c "
-                source /opt/ros/humble/setup.bash
-                source /workspace/autoware/install/setup.bash 2>/dev/null || true
-                python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/hesai_synthetic_publisher.py > /tmp/hesai_synthetic.log 2>&1
-            "
-        fi
-        docker exec -d "$CONTAINER" bash -c "
-            source /opt/ros/humble/setup.bash
-            source /opt/autoware/setup.bash 2>/dev/null || true
-            source /workspace/autoware/install/setup.bash 2>/dev/null || true
-            pkill -f 'autoware_bevfusion_node' || true
-            pkill -f 'hesai_pointxyzirc_adapter' || true
-            ros2 launch etrike_common_launch etrike_bevfusion.launch.xml model_name:=bevfusion_lidar > /tmp/bevfusion.log 2>&1
-        "
         ;;
     cam)
         echo "Launching Camera Pipeline (Kinect v2 + YOLO26x-Pose TRT)..."
@@ -264,12 +247,16 @@ case "$FINAL_MODE" in
             ros2 launch etrike_common_launch hesai_bench.launch.py > /tmp/hesai_bench.log 2>&1
         "
         if [ "$LIDAR_CONNECTED" -eq 0 ]; then
-            echo "  [INFO] Physical LiDAR offline; starting 10 Hz 32-ring synthetic LiDAR stream..."
-            docker exec -d "$CONTAINER" bash -c "
-                source /opt/ros/humble/setup.bash
-                source /workspace/autoware/install/setup.bash 2>/dev/null || true
-                python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/hesai_synthetic_publisher.py > /tmp/hesai_synthetic.log 2>&1
-            "
+            if [ "$ALLOW_SIM" -eq 1 ]; then
+                echo "  [INFO] Physical LiDAR offline; starting 10 Hz 32-ring synthetic LiDAR stream (--sim requested)..."
+                docker exec -d "$CONTAINER" bash -c "
+                    source /opt/ros/humble/setup.bash
+                    source /workspace/autoware/install/setup.bash 2>/dev/null || true
+                    python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/hesai_synthetic_publisher.py > /tmp/hesai_synthetic.log 2>&1
+                "
+            else
+                echo "  [WARN] Physical LiDAR offline or not communicating on eno1:2368. Fails closed (no silent simulation fallback; pass --sim to allow)."
+            fi
         fi
         ;;
     standby)
