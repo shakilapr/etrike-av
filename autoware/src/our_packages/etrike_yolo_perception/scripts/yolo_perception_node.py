@@ -171,7 +171,7 @@ class YoloPerceptionNode(LifecycleNode):
         super().__init__(node_name)
 
         # Declare parameters
-        self.declare_parameter("engine_path", "/workspace/data/ml_models/yolov8x_fp16.engine")
+        self.declare_parameter("engine_path", "/workspace/data/ml_models/yolo26x_fp16.engine")
         self.declare_parameter("publish_mode", "bench")  # 'bench' (isolated) or 'vehicle'
         self.declare_parameter("input_image_topic", "/kinect_front/color/image_raw")
         self.declare_parameter("input_depth_topic", "/kinect_front/depth_registered/image_raw")
@@ -250,7 +250,7 @@ class YoloPerceptionNode(LifecycleNode):
         publish_mode = str(self.get_parameter("publish_mode").value).lower()
 
         if not os.path.exists(engine_path):
-            fallback_engine = "/workspace/data/ml_models/yolov8x_fp16.engine"
+            fallback_engine = "/workspace/data/ml_models/yolo26x_fp16.engine"
             if os.path.exists(fallback_engine):
                 self.get_logger().warn(
                     f"Specified engine '{engine_path}' not found on disk. "

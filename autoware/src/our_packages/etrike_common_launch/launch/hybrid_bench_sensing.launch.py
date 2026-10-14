@@ -169,7 +169,7 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
-    # 5. TensorRT YOLOv8x + RTMPose-s Real-time Bench Perception Node (Camera)
+    # 5. TensorRT YOLO26x + RTMPose-s Real-time Bench Perception Node (Camera)
     pkg_yolo = get_package_share_directory("etrike_yolo_perception")
     yolo_launch_path = os.path.join(pkg_yolo, "launch", "yolo_perception.launch.py")
     yolo_node = IncludeLaunchDescription(

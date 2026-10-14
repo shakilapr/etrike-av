@@ -678,7 +678,7 @@ async def standalone_camera_page():
       <div class="title">E-TRIKE • KINECT v2 PERCEPTION STREAM</div>
     </div>
     <div class="badges">
-      <span class="badge cyan">YOLOv8x + RTMPose-s (SimCC)</span>
+      <span class="badge cyan">YOLO26x + RTMPose-s (SimCC)</span>
       <span class="badge">1080p @ 25 Hz</span>
       <button class="btn" onclick="toggleFullscreen()">Fullscreen (F)</button>
     </div>
