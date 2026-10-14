@@ -28,6 +28,7 @@ import sys
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -36,6 +37,13 @@ from launch_ros.actions import Node
 def generate_launch_description() -> LaunchDescription:
     pkg_common = get_package_share_directory("etrike_common_launch")
     pkg_kinect = get_package_share_directory("etrike_kinect2")
+
+    feed_autoware = LaunchConfiguration("feed_autoware_simulation")
+    feed_autoware_arg = DeclareLaunchArgument(
+        "feed_autoware_simulation",
+        default_value="false",
+        description="If true, relays raw sensors to Autoware internal topics. Default false (bench isolation).",
+    )
 
     # 1. Hesai XT32M2X LiDAR driver (Nebula UDP mode)
     lidar_calib = os.path.join(pkg_common, "config", "lidar", "PandarXT32M.csv")
@@ -90,12 +98,13 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
-    # Relay raw_ex -> before_sync so downstream modules always have a continuous pointcloud stream
+    # Relay raw_ex -> before_sync (disabled by default on bench to protect Autoware simulation & localization)
     lidar_relay = Node(
         package="topic_tools",
         executable="relay",
         name="lidar_bench_sync_relay",
         output="screen",
+        condition=IfCondition(feed_autoware),
         parameters=[
             {
                 "input_topic": "/sensing/lidar/top/pointcloud_raw_ex",
@@ -112,12 +121,13 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={"camera": "front"}.items(),
     )
 
-    # 3. Canonical camera0 relays
+    # 3. Canonical camera0 relays (disabled by default on bench to avoid injecting into Autoware vision)
     cam0_color_relay = Node(
         package="topic_tools",
         executable="relay",
         name="kinect_bench_cam0_color_relay",
         output="screen",
+        condition=IfCondition(feed_autoware),
         parameters=[
             {
                 "input_topic": "/kinect_front/color/image_raw",
@@ -131,6 +141,7 @@ def generate_launch_description() -> LaunchDescription:
         executable="relay",
         name="kinect_bench_cam0_info_relay",
         output="screen",
+        condition=IfCondition(feed_autoware),
         parameters=[
             {
                 "input_topic": "/kinect_front/color/camera_info",
@@ -140,7 +151,7 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
-    # 4. Bench Perception Node (1 LiDAR + 1 Camera fusion)
+    # 4. Bench Perception Node (1 LiDAR + 1 Camera fusion publishing to isolated topic)
     perception_node = Node(
         package="etrike_common_launch",
         executable="bench_perception_node.py",
@@ -148,6 +159,7 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         parameters=[
             {
+                "output_objects_topic": "/bench_perception/objects",
                 "publish_rate_hz": 10.0,
                 "sensor_timeout_sec": 1.5,
                 "min_cluster_points": 8,
@@ -158,6 +170,7 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         [
+            feed_autoware_arg,
             nebula_driver,
             lidar_relay,
             kinect_node,
