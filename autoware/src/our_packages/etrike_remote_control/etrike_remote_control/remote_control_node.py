@@ -175,20 +175,24 @@ class RemoteControlNode(LifecycleNode if (HAS_ROS2 and HAS_LIFECYCLE_LIB) else (
         if not HAS_ROS2:
             return
 
-        self.declare_parameter("control_topic", self.control_topic)
-        self.declare_parameter("gear_topic", self.gear_topic)
-        self.declare_parameter("turn_topic", self.turn_topic)
-        self.declare_parameter("hazard_topic", self.hazard_topic)
-        self.declare_parameter("engage_topic", self.engage_topic)
-        self.declare_parameter("emergency_topic", self.emergency_topic)
-        self.declare_parameter("control_mode_service", self.control_mode_service)
+        def _declare_if_not_exists(name: str, default: Any) -> None:
+            if not self.has_parameter(name):
+                self.declare_parameter(name, default)
 
-        self.declare_parameter("max_speed_forward", self.max_speed_forward)
-        self.declare_parameter("max_speed_reverse", self.max_speed_reverse)
-        self.declare_parameter("max_steering_angle", self.max_steering_angle)
-        self.declare_parameter("max_acceleration", self.max_acceleration)
-        self.declare_parameter("max_deceleration", self.max_deceleration)
-        self.declare_parameter("publish_rate_hz", self.publish_rate_hz)
+        _declare_if_not_exists("control_topic", self.control_topic)
+        _declare_if_not_exists("gear_topic", self.gear_topic)
+        _declare_if_not_exists("turn_topic", self.turn_topic)
+        _declare_if_not_exists("hazard_topic", self.hazard_topic)
+        _declare_if_not_exists("engage_topic", self.engage_topic)
+        _declare_if_not_exists("emergency_topic", self.emergency_topic)
+        _declare_if_not_exists("control_mode_service", self.control_mode_service)
+
+        _declare_if_not_exists("max_speed_forward", self.max_speed_forward)
+        _declare_if_not_exists("max_speed_reverse", self.max_speed_reverse)
+        _declare_if_not_exists("max_steering_angle", self.max_steering_angle)
+        _declare_if_not_exists("max_acceleration", self.max_acceleration)
+        _declare_if_not_exists("max_deceleration", self.max_deceleration)
+        _declare_if_not_exists("publish_rate_hz", self.publish_rate_hz)
 
         self.control_topic = str(self.get_parameter("control_topic").value)
         self.gear_topic = str(self.get_parameter("gear_topic").value)
@@ -207,6 +211,9 @@ class RemoteControlNode(LifecycleNode if (HAS_ROS2 and HAS_LIFECYCLE_LIB) else (
 
     def _setup_ros_interfaces(self) -> None:
         """Create publishers and service clients."""
+        if not HAS_ROS2 or self._pub_control is not None:
+            return
+
         qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
