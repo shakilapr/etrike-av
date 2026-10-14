@@ -22,6 +22,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description() -> LaunchDescription:
+    control_topic = LaunchConfiguration("control_topic")
     engage_topic = LaunchConfiguration("engage_topic")
     publish_rate_hz = LaunchConfiguration("publish_rate_hz")
 
@@ -38,6 +39,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[
             parameter_file,
             {
+                "control_topic": control_topic,
                 "engage_topic": engage_topic,
                 "publish_rate_hz": publish_rate_hz,
             },
@@ -46,6 +48,11 @@ def generate_launch_description() -> LaunchDescription:
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument(
+                "control_topic",
+                default_value="/control/command/control_cmd",
+                description="Topic for vehicle control message.",
+            ),
             DeclareLaunchArgument(
                 "engage_topic",
                 default_value="/api/autoware/get/engage",

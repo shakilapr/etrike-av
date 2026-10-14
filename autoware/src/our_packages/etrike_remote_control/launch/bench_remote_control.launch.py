@@ -30,6 +30,7 @@ def generate_launch_description() -> LaunchDescription:
     can_interface = LaunchConfiguration("can_interface")
     sim_mode = LaunchConfiguration("sim_mode")
     publish_rate_hz = LaunchConfiguration("publish_rate_hz")
+    control_topic = LaunchConfiguration("control_topic")
 
     bridge_param_file = PathJoinSubstitution(
         [FindPackageShare("autoware_vehicle_bridge"), "config", "etrike.param.yaml"]
@@ -78,6 +79,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[
             remote_param_file,
             {
+                "control_topic": control_topic,
                 "engage_topic": "/api/autoware/get/engage",
                 "publish_rate_hz": publish_rate_hz,
             },
@@ -100,6 +102,11 @@ def generate_launch_description() -> LaunchDescription:
                 "publish_rate_hz",
                 default_value="25.0",
                 description="Frequency in Hz to publish vehicle control commands.",
+            ),
+            DeclareLaunchArgument(
+                "control_topic",
+                default_value="/control/command/control_cmd",
+                description="Topic for vehicle control message.",
             ),
             bridge,
             RegisterEventHandler(
