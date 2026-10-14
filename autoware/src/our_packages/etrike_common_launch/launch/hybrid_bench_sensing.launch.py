@@ -151,7 +151,7 @@ def generate_launch_description() -> LaunchDescription:
         ],
     )
 
-    # 4. Bench Perception Node (1 LiDAR + 1 Camera fusion publishing to isolated topic)
+    # 4. Bench Perception Node (LiDAR point cloud clustering publishing to isolated topic)
     perception_node = Node(
         package="etrike_common_launch",
         executable="bench_perception_node.py",
@@ -164,8 +164,21 @@ def generate_launch_description() -> LaunchDescription:
                 "sensor_timeout_sec": 1.5,
                 "min_cluster_points": 8,
                 "voxel_grid_size_m": 0.28,
+                "enable_hog_person_detector": False,
             }
         ],
+    )
+
+    # 5. TensorRT YOLOv8x + RTMPose-s Real-time Bench Perception Node (Camera)
+    pkg_yolo = get_package_share_directory("etrike_yolo_perception")
+    yolo_launch_path = os.path.join(pkg_yolo, "launch", "yolo_perception.launch.py")
+    yolo_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(yolo_launch_path),
+        launch_arguments={
+            "publish_mode": "bench",
+            "auto_start": "true",
+            "confidence_threshold": "0.35",
+        }.items(),
     )
 
     return LaunchDescription(
@@ -177,5 +190,7 @@ def generate_launch_description() -> LaunchDescription:
             cam0_color_relay,
             cam0_info_relay,
             perception_node,
+            yolo_node,
         ]
     )
+
