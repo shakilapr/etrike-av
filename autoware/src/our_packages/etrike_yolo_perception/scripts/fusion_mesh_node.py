@@ -43,7 +43,7 @@ from rclpy.lifecycle import LifecycleNode, LifecyclePublisher
 from rclpy.lifecycle import LifecycleState, TransitionCallbackReturn
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 
-from autoware_perception_msgs.msg import DetectedObject, DetectedObjects
+from autoware_perception_msgs.msg import DetectedObject, DetectedObjects, ObjectClassification
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Point, Quaternion, Vector3
 from sensor_msgs.msg import CameraInfo, Image
@@ -237,8 +237,17 @@ class FusionMeshNode(LifecycleNode):
     def _on_cam_objects(self, msg: DetectedObjects) -> None:
         cam_objs = []
         for obj in msg.objects:
-            lbl = obj.classification[0].label if obj.classification else "unknown"
-            prob = obj.classification[0].probability if obj.classification else 0.0
+            if obj.classification:
+                c_lbl = obj.classification[0].label
+                # Autoware ObjectClassification.PEDESTRIAN is 7, or string label
+                if isinstance(c_lbl, int):
+                    lbl = "person" if c_lbl == ObjectClassification.PEDESTRIAN else f"class_{c_lbl}"
+                else:
+                    lbl = str(c_lbl)
+                prob = float(obj.classification[0].probability)
+            else:
+                lbl = "unknown"
+                prob = 0.0
             pos = obj.kinematics.pose_with_covariance.pose.position
             dims = obj.shape.dimensions if obj.shape else Vector3(x=0.6, y=0.6, z=1.75)
             cam_objs.append({
@@ -351,7 +360,7 @@ class FusionMeshNode(LifecycleNode):
 
         # Add Camera-only pedestrian detections
         for c_idx, co in enumerate(cam_objs):
-            if c_idx not in matched_cam_indices and "person" in co["label"].lower():
+            if c_idx not in matched_cam_indices and "person" in str(co["label"]).lower():
                 co_pos = co["pos"]
                 fused_tracks.append({
                     "type": "CAMERA_ONLY",
