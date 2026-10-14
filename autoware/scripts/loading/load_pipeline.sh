@@ -92,6 +92,12 @@ ensure_x11_access() {
   detect_x11
   DISPLAY="$X_DISPLAY" XAUTHORITY="$XAUTH" xhost +local:docker >/dev/null 2>&1 || true
   DISPLAY="$X_DISPLAY" XAUTHORITY="$XAUTH" xhost +SI:localuser:root >/dev/null 2>&1 || true
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    if [ -n "$XAUTH" ] && [ -f "$XAUTH" ]; then
+      docker cp "$XAUTH" "$CONTAINER":/tmp/.docker.xauth >/dev/null 2>&1 || true
+      docker exec "$CONTAINER" chmod 644 /tmp/.docker.xauth >/dev/null 2>&1 || true
+    fi
+  fi
 }
 
 ensure_kinect_libs() {
@@ -160,6 +166,7 @@ start_container() {
     -v "$HOME/.local:/host_local:ro" \
     -v /usr/local/lib/python3.10/dist-packages:/host_dist_packages:ro \
     "$IMAGE" bash -c 'while true; do sleep 1000; done'
+  ensure_x11_access
   ensure_kinect_libs
   echo "  started."
 }
@@ -169,7 +176,7 @@ start_universe() {
   ensure_x11_access
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
-    export XAUTHORITY=$XAUTH;
+    if [ -f /tmp/.docker.xauth ]; then export XAUTHORITY=/tmp/.docker.xauth; else export XAUTHORITY=$XAUTH; fi;
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
     if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
     export LD_LIBRARY_PATH=/usr/local/lib:/host_local/lib:\$LD_LIBRARY_PATH;
@@ -196,7 +203,7 @@ start_live_autoware() {
   detect_can
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
-    export XAUTHORITY=$XAUTH;
+    if [ -f /tmp/.docker.xauth ]; then export XAUTHORITY=/tmp/.docker.xauth; else export XAUTHORITY=$XAUTH; fi;
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
     if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
     export LD_LIBRARY_PATH=/usr/local/lib:/host_local/lib:\$LD_LIBRARY_PATH;
@@ -239,9 +246,10 @@ start_hybrid_sensing() {
   say "Hybrid Bench Sensing (Hesai XT32M2X LiDAR + Kinect v2 Camera + Bench 3D Perception)"
   ensure_lidar_network
   ensure_kinect_libs
+  ensure_x11_access
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
-    export XAUTHORITY=$XAUTH;
+    if [ -f /tmp/.docker.xauth ]; then export XAUTHORITY=/tmp/.docker.xauth; else export XAUTHORITY=$XAUTH; fi;
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
     if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
     export LD_LIBRARY_PATH=/usr/local/lib:/host_local/lib:\$LD_LIBRARY_PATH;
