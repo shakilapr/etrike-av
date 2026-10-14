@@ -314,6 +314,11 @@ start_watcher() {
 }
 
 stop_all() {
+  if [ -f "$WORKSPACE_ROOT/scripts/close_everything.sh" ]; then
+    bash "$WORKSPACE_ROOT/scripts/close_everything.sh"
+    return
+  fi
+
   detect_can
   say "Stopping all Autoware, Bridge, Dashboard, and CAN services"
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then

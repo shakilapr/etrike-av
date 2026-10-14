@@ -16,4 +16,4 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-exec bash "$SCRIPT_DIR/../autoware/scripts/loading/load_pipeline.sh" --stop
+exec bash "$SCRIPT_DIR/close_everything.sh" "$@"

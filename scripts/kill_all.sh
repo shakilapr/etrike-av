@@ -4,27 +4,5 @@
 
 set -euo pipefail
 
-echo "=== Stopping all Autoware containers ==="
-docker rm -f autoware_test 2>/dev/null || true
-
-echo "=== Killing leftover processes on host ==="
-pkill -9 -f "ros2" 2>/dev/null || true
-pkill -9 -f "rviz2" 2>/dev/null || true
-pkill -9 -f "robot_state_publisher" 2>/dev/null || true
-pkill -9 -f "planning_simulator" 2>/dev/null || true
-pkill -f "tools.can_watcher.backend.server" 2>/dev/null || true
-pkill -f "tools.av_dashboard.backend.server" 2>/dev/null || true
-pkill -f "autoware_teleop" 2>/dev/null || true
-pkill -f "etrike_remote_control" 2>/dev/null || true
-pkill -f "vehicle_bridge" 2>/dev/null || true
-pkill -f "localhost:8000" 2>/dev/null || true
-pkill -f "localhost:8080" 2>/dev/null || true
-pkill -f "run_bench_perception" 2>/dev/null || true
-pkill -f "bench_perception_node" 2>/dev/null || true
-pkill -f "chromium" 2>/dev/null || true
-
-echo "=== Done ==="
-echo "Containers:"
-docker ps -a --format "{{.Names}} {{.Status}}" 2>/dev/null || true
-echo "Remaining ros2 processes:"
-pgrep -cf ros2 2>/dev/null || echo "0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec bash "$SCRIPT_DIR/close_everything.sh" --rm-container "$@"

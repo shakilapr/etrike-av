@@ -20,6 +20,10 @@ This directory contains utility scripts for workspace management, testing, diagn
    - [check_rviz_diag.sh](file:///E:/work/av_project/scripts/check_rviz_diag.sh)
    - [check_rviz_deep.sh](file:///E:/work/av_project/scripts/check_rviz_deep.sh)
 4. [Lifecycle & Process Control](#4-lifecycle--process-control)
+   - [close_everything.sh](file:///E:/work/av_project/scripts/close_everything.sh)
+   - [close_everything.ps1](file:///E:/work/av_project/scripts/close_everything.ps1)
+   - [close-etrike.sh](file:///E:/work/av_project/scripts/close-etrike.sh)
+   - [close_remote_control.sh](file:///E:/work/av_project/scripts/close_remote_control.sh)
    - [kill_all.sh](file:///E:/work/av_project/scripts/kill_all.sh)
    - [kill_container.sh](file:///E:/work/av_project/scripts/kill_container.sh)
 5. [SSH Remote Commands](#5-ssh-remote-commands)
@@ -330,6 +334,55 @@ This directory contains utility scripts for workspace management, testing, diagn
 ---
 
 ## 4. Lifecycle & Process Control
+
+### [close_everything.sh](file:///E:/work/av_project/scripts/close_everything.sh)
+* **Description**: Master, unified shutdown script for the entire E-Trike AV stack on Jetson. Cleanly stops all ROS 2 nodes, Autoware Universe simulator, remote cockpit GUI, vehicle bridge, sensor drivers (Hesai LiDAR, Kinect v2, bench perception), SLAM/mapping/bag players, AV Dashboard & CAN Watcher web servers (ports 8080/8000), physical monitor UI windows (Chromium, Electron, RViz), and brings down SocketCAN & CANalyst-II adapters. Restarts Docker container cleanly by default or supports `--stop-container` / `--rm-container`.
+* **Pseudo-code**:
+  ```python
+  PARSE arguments: [--keep-container | --stop-container | --rm-container]
+  PRINT "[STOP] Closing Everything across E-Trike Stack..."
+
+  # 1. Graceful control shutdown
+  SEND SIGINT to vehicle_bridge, etrike_remote_control, rosbag2 (0.8s)
+
+  # 2. In-container teardown
+  TERMINATE all container processes matching ros2, rviz2, component_container,
+            planning_simulator, robot_state_publisher, vehicle_bridge,
+            etrike_remote_control, kinect2, hesai, bench_perception,
+            lidarslam, dashboard, can_watcher
+  STOP ros2 daemon inside container
+
+  # 3. Host-side teardown
+  TERMINATE host servers: av_dashboard, can_watcher, teleop_web, canalyst_daemon, vite
+  TERMINATE host displays: chromium (8080/8000), electron, rviz2, remote_control_gui
+
+  # 4. CAN bus teardown
+  STOP canalyst_socketcan_daemon.py and bring down can2
+  BRING DOWN interfaces: can2, canable0, can0, can1, vcan0
+  TERMINATE slcand daemons
+
+  # 5. Container management
+  IF action == "stop": docker stop autoware_test
+  ELIF action == "rm": docker rm -f autoware_test
+  ELSE (default):      docker restart autoware_test (clean shm/zombies)
+
+  PRINT system summary (container, CAN status, process count, port checks)
+  ```
+
+### [close_everything.ps1](file:///E:/work/av_project/scripts/close_everything.ps1)
+* **Description**: PowerShell wrapper that invokes `close_everything.sh` on the Jetson over SSH (`med1@172.16.25.67`), allowing Windows developers to cleanly terminate all processes with a single command.
+* **Usage**:
+  ```powershell
+  pwsh scripts/close_everything.ps1                   # Clean shutdown + restart container clean
+  pwsh scripts/close_everything.ps1 -StopContainer   # Clean shutdown + stop Docker container
+  pwsh scripts/close_everything.ps1 -RmContainer     # Clean shutdown + delete Docker container
+  ```
+
+### [close-etrike.sh](file:///E:/work/av_project/scripts/close-etrike.sh)
+* **Description**: Convenience shortcut wrapper that forwards to `close_everything.sh`.
+
+### [close_remote_control.sh](file:///E:/work/av_project/scripts/close_remote_control.sh)
+* **Description**: Focused shutdown script targeting the remote cockpit GUI, teleop web server, and vehicle bridge while leaving simulator components untouched.
 
 ### [kill_all.sh](file:///E:/work/av_project/scripts/kill_all.sh)
 * **Description**: Cleanly removes the test container and forcefully terminates leftover ROS2/RViz processes on the host.
