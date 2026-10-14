@@ -168,19 +168,18 @@ export class SurroundingTraffic {
     this.group = new THREE.Group();
 
     // 1. Shared Materials (Automotive Digital Cockpit Palette)
-    // SMPL authentic anatomical grey humanoid styling
+    // Sleek automotive ADAS pedestrian avatar palette (clothed athletic styling, zero nudity)
     this.pedMat = new THREE.MeshStandardMaterial({
-      color: 0x94a3b8, // Classic SMPL matte silver-grey PBR
-      roughness: 0.50,
-      metalness: 0.15,
+      color: 0x475569, // Slate-600 tailored jacket/body tone
+      roughness: 0.55,
+      metalness: 0.20,
       transparent: false,
     });
     this.pedAccentMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b, // Slate-800 darker accent tone
-      roughness: 0.75,
-      metalness: 0.10,
-      transparent: true,
-      opacity: 0.88,
+      color: 0x0f172a, // Slate-900 footwear & cuff accents
+      roughness: 0.70,
+      metalness: 0.15,
+      transparent: false,
     });
     this.pedVisorMat = new THREE.MeshStandardMaterial({
       color: 0x38bdf8, // Sky-400 subtle sensor visor
@@ -298,32 +297,10 @@ export class SurroundingTraffic {
     this.coneBodyGeo = new THREE.CylinderGeometry(0.035, 0.18, 0.65, 20);
     this.coneReflectGeo = new THREE.CylinderGeometry(0.08, 0.13, 0.16, 20);
 
-    // Preload SMPL-derived rigged humanoid asset
-    const gltfLoader = new GLTFLoader();
-    gltfLoader.load(
-      '/models/pedestrian_smpl.glb',
-      (gltf) => {
-        this.smplTemplate = gltf.scene;
-        this.isSmplLoaded = true;
-        this.smplTemplate.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-        // Upgrade any existing pedestrian actors created before GLB loaded
-        this.actors.forEach((actor) => {
-          if (actor.currentLabel === 'PEDESTRIAN') {
-            this.upgradeActorToSmpl(actor);
-          }
-        });
-        console.log('[Cockpit 3D] Loaded SMPL-derived rigged humanoid mesh (pedestrian_smpl.glb)');
-      },
-      undefined,
-      (err) => {
-        console.warn('[Cockpit 3D] Using procedural SMPL model:', err);
-      }
-    );
+    // Use the clean, clothed procedural ADAS avatar to prevent anatomical/nude appearances
+    // The procedural avatar features a sleek automotive sensor visor, dark footwear/accents,
+    // and full 17-joint RTMPose-s live kinematics.
+    this.isSmplLoaded = false;
   }
 
   /**
@@ -1258,7 +1235,7 @@ export class SurroundingTraffic {
           distBadge.visible = true;
           const isCritical = closestDist < 3.5;
           distBadge.position.y = actor.meshes['PEDESTRIAN']?.visible ? (actor.isSeated ? 1.45 : 1.95) : 1.35;
-          const postureTag = actor.meshes['PEDESTRIAN']?.visible ? ` • SMPL ${actor.postureText} [YOLO + RTMPose-s]` : '';
+          const postureTag = actor.meshes['PEDESTRIAN']?.visible ? ` • ${actor.postureText} [YOLO26x + RTMPose-s]` : '';
           const dStr = `${closestDist.toFixed(1)} m${postureTag}`;
           this.updateDistanceBadge(distBadge, dStr, isCritical);
         } else {
