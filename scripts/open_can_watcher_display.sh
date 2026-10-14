@@ -17,11 +17,23 @@ URL="http://localhost:${PORT}"
 
 # 1. Detect X11 Display and Authority
 export DISPLAY="${DISPLAY:-:1}"
+if [ ! -e "/tmp/.X11-unix/X${DISPLAY#:}" ]; then
+    for d in 1 0; do
+        if [ -e "/tmp/.X11-unix/X${d}" ]; then
+            DISPLAY=":${d}"
+            break
+        fi
+    done
+fi
 if [ -z "$XAUTHORITY" ]; then
-    if [ -f "/run/user/1000/gdm/Xauthority" ]; then
+    if [ -f "/run/user/$(id -u)/gdm/Xauthority" ]; then
+        export XAUTHORITY="/run/user/$(id -u)/gdm/Xauthority"
+    elif [ -f "/run/user/1000/gdm/Xauthority" ]; then
         export XAUTHORITY="/run/user/1000/gdm/Xauthority"
     elif [ -f "$HOME/.Xauthority" ]; then
         export XAUTHORITY="$HOME/.Xauthority"
+    elif [ -f "/home/med1/.Xauthority" ]; then
+        export XAUTHORITY="/home/med1/.Xauthority"
     fi
 fi
 
