@@ -1456,7 +1456,6 @@ export class SurroundingTraffic {
           const b = actor.smplBones;
           // Suppress procedural capsule primitives when authentic rigged SMPL model is loaded
           if (actor.proceduralMesh) actor.proceduralMesh.visible = false;
-          if (actor.skeletonGroup) actor.skeletonGroup.visible = false;
 
           // Pelvis height (rest = 97.27 cm; drops down ~36 cm when seated)
           if (b['m_avg_Pelvis']) {
@@ -1571,13 +1570,17 @@ export class SurroundingTraffic {
           }
         }
 
-        // Live RTMPose-s 17-Keypoint Skeletal Rig Dynamic Alignment
-        if (actor.skeletonJoints && actor.skeletonBones && actor.skeletonGroup && actor.limbs) {
-          actor.skeletonGroup.visible = !actor.smplBones;
-          const positions: THREE.Vector3[] = [];
-          const headObj = actor.limbs.head || actor.limbs.hips;
+        // Live YOLO26x-Pose / RTMPose 17-Keypoint Skeletal Rig Dynamic Alignment
+        if (actor.skeletonJoints && actor.skeletonBones && actor.skeletonGroup) {
+          actor.skeletonGroup.visible = true;
 
-          // 17 Kinematic Joint Points in World Coordinates
+          // 17 Kinematic Joint Points in Local Pedestrian Frame:
+          // In the pedestrian avatar:
+          //   Origin (0, 0, 0) is at ground level under pelvis.
+          //   +Y is UP (metric height above ground).
+          //   -Z is FORWARD (along chest normal facing direction).
+          //   -X is LEFT (pedestrian's left).
+          //   +X is RIGHT (pedestrian's right).
           const k3d = actor.lastPoseItem?.keypoints_3d;
           const k3dOrder = [
             'nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear',
@@ -1586,43 +1589,74 @@ export class SurroundingTraffic {
             'left_knee', 'right_knee', 'left_ankle', 'right_ankle'
           ];
 
-          if (k3d) {
+          const localPositions: (THREE.Vector3 | null)[] = new Array(17).fill(null);
+
+          if (k3d && actor.lastPoseItem) {
+            const rootX = actor.lastPoseItem.x_base;
+            const rootY = actor.lastPoseItem.y_base;
+            const yaw = actor.lastPoseItem.yaw ?? actor.targetYaw;
+            const cosY = Math.cos(yaw);
+            const sinY = Math.sin(yaw);
+
             for (let k = 0; k < 17; k++) {
               const kp3 = k3d[k3dOrder[k]];
               if (kp3 && kp3.x !== undefined && kp3.y !== undefined && kp3.z !== undefined) {
-                // Convert vehicle base_link (+X fwd, +Y left, +Z up) to the unified
-                // Three.js frame (x = +y_base, z = 1.0 - x_base) shared with the
-                // LiDAR cloud and perception boxes.
-                positions[k] = new THREE.Vector3(kp3.y, kp3.z, 1.0 - kp3.x);
+                // Vector in vehicle base_link (+X fwd, +Y left) from human root to joint
+                const rel_x = kp3.rel_x !== undefined ? kp3.rel_x : (kp3.x - rootX);
+                const rel_y = kp3.rel_y !== undefined ? kp3.rel_y : (kp3.y - rootY);
+
+                // Project into pedestrian body frame:
+                // fwd (>0): along chest facing direction
+                // lat (>0): along pedestrian's leftward direction
+                const fwd = rel_x * cosY + rel_y * sinY;
+                const lat = -rel_x * sinY + rel_y * cosY;
+
+                // Avatar local frame: -lat is left (-X), -fwd is forward (-Z), kp3.z is height (+Y)
+                const lx = -lat;
+                const ly = Math.max(0.04, kp3.z);
+                const lz = -fwd;
+
+                localPositions[k] = new THREE.Vector3(lx, ly, lz);
               }
             }
           }
 
-          // Fill any missing joints with forward-kinematic fallback defaults
-          if (!positions[0]) positions[0] = headObj.localToWorld(new THREE.Vector3(0, 0.06, -0.12)); // Nose
-          if (!positions[1]) positions[1] = headObj.localToWorld(new THREE.Vector3(0.035, 0.08, -0.10)); // EyeL
-          if (!positions[2]) positions[2] = headObj.localToWorld(new THREE.Vector3(-0.035, 0.08, -0.10)); // EyeR
-          if (!positions[3]) positions[3] = headObj.localToWorld(new THREE.Vector3(0.085, 0.06, -0.02)); // EarL
-          if (!positions[4]) positions[4] = headObj.localToWorld(new THREE.Vector3(-0.085, 0.06, -0.02)); // EarR
-          if (!positions[5]) positions[5] = actor.limbs.armL.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderL
-          if (!positions[6]) positions[6] = actor.limbs.armR.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderR
-          if (!positions[7]) positions[7] = actor.limbs.elbowL.localToWorld(new THREE.Vector3(0, 0, 0)); // ElbowL
-          if (!positions[8]) positions[8] = actor.limbs.elbowR.localToWorld(new THREE.Vector3(0, 0, 0)); // ElbowR
-          if (!positions[9]) positions[9] = actor.limbs.elbowL.localToWorld(new THREE.Vector3(0, -0.22, 0)); // WristL
-          if (!positions[10]) positions[10] = actor.limbs.elbowR.localToWorld(new THREE.Vector3(0, -0.22, 0)); // WristR
-          if (!positions[11]) positions[11] = actor.limbs.legL.localToWorld(new THREE.Vector3(0, 0, 0)); // HipL
-          if (!positions[12]) positions[12] = actor.limbs.legR.localToWorld(new THREE.Vector3(0, 0, 0)); // HipR
-          if (!positions[13]) positions[13] = actor.limbs.kneeL.localToWorld(new THREE.Vector3(0, 0, 0)); // KneeL
-          if (!positions[14]) positions[14] = actor.limbs.kneeR.localToWorld(new THREE.Vector3(0, 0, 0)); // KneeR
-          if (!positions[15]) positions[15] = actor.limbs.kneeL.localToWorld(new THREE.Vector3(0, -0.35, 0)); // AnkleL
-          if (!positions[16]) positions[16] = actor.limbs.kneeR.localToWorld(new THREE.Vector3(0, -0.35, 0)); // AnkleR
+          // Fallback joint positions in pedestrian local frame (anatomically aligned)
+          const fallbackLocal = [
+            new THREE.Vector3(0.0, 1.58, -0.14),    // 0: nose
+            new THREE.Vector3(-0.035, 1.62, -0.10), // 1: left_eye
+            new THREE.Vector3(0.035, 1.62, -0.10),  // 2: right_eye
+            new THREE.Vector3(-0.08, 1.61, -0.02),  // 3: left_ear
+            new THREE.Vector3(0.08, 1.61, -0.02),   // 4: right_ear
+            new THREE.Vector3(-0.19, 1.40, 0.0),    // 5: left_shoulder
+            new THREE.Vector3(0.19, 1.40, 0.0),     // 6: right_shoulder
+            new THREE.Vector3(-0.25, 1.15, 0.0),    // 7: left_elbow
+            new THREE.Vector3(0.25, 1.15, 0.0),     // 8: right_elbow
+            new THREE.Vector3(-0.28, 0.90, 0.0),    // 9: left_wrist
+            new THREE.Vector3(0.28, 0.90, 0.0),     // 10: right_wrist
+            new THREE.Vector3(-0.11, 0.86, 0.0),    // 11: left_hip
+            new THREE.Vector3(0.11, 0.86, 0.0),     // 12: right_hip
+            new THREE.Vector3(-0.11, 0.46, 0.0),    // 13: left_knee
+            new THREE.Vector3(0.11, 0.46, 0.0),     // 14: right_knee
+            new THREE.Vector3(-0.11, 0.08, 0.0),    // 15: left_ankle
+            new THREE.Vector3(0.11, 0.08, 0.0),     // 16: right_ankle
+          ];
 
-          actor.skeletonGroup.updateMatrixWorld(true);
-          const invMatrix = actor.skeletonGroup.matrixWorld.clone().invert();
+          // Adapt lower-body fallback heights if seated
+          if (actor.isSeated) {
+            fallbackLocal[11].y -= 0.35;
+            fallbackLocal[12].y -= 0.35;
+            fallbackLocal[13].y -= 0.35;
+            fallbackLocal[13].z -= 0.38;
+            fallbackLocal[14].y -= 0.35;
+            fallbackLocal[14].z -= 0.38;
+            fallbackLocal[15].z -= 0.38;
+            fallbackLocal[16].z -= 0.38;
+          }
 
           for (let k = 0; k < 17; k++) {
-            const localPt = positions[k].applyMatrix4(invMatrix);
-            actor.skeletonJoints[k].position.copy(localPt);
+            const pos = localPositions[k] || fallbackLocal[k];
+            actor.skeletonJoints[k].position.copy(pos);
           }
 
           for (let bIdx = 0; bIdx < SKELETON_PAIRS.length; bIdx++) {
@@ -1676,5 +1710,26 @@ export class SurroundingTraffic {
         }
       }
     }
+  }
+
+  /** Release every actor, shared geometry/material and the MHR overlay. */
+  public dispose(): void {
+    for (const key of Array.from(this.actors.keys())) {
+      const actor = this.actors.get(key);
+      if (!actor) continue;
+      this.group.remove(actor.group);
+      this.disposeActor(actor);
+      this.actors.delete(key);
+    }
+    this.labelMaterials.forEach((mat) => {
+      if (mat.map) mat.map.dispose();
+      mat.dispose();
+    });
+    this.labelMaterials.clear();
+    this.mhr.dispose();
+    this.boneCylinderGeo.dispose();
+    this.shadowCircleGeo.dispose();
+    this.wheelTireGeo.dispose();
+    this.wheelRimGeo.dispose();
   }
 }

@@ -323,20 +323,20 @@ class Ros2Bridge:
                 self._mark_subscribed("bench_perception_status", False)
                 print(f"[ROS 2 Bridge] Bench perception status subscription failed: {e}")
 
-            # 2c. Human Skeletal Poses from RTMPose-s
-            try:
-                from std_msgs.msg import String
-                node.create_subscription(
-                    String,
-                    "/bench_perception/human_poses",
-                    self._on_human_poses,
-                    qos_sensor,
-                )
-                self._mark_subscribed("human_poses", True)
-                print("[ROS 2 Bridge] Subscribed to /bench_perception/human_poses")
-            except Exception as e:
-                self._mark_subscribed("human_poses", False)
-                print(f"[ROS 2 Bridge] Human poses subscription failed: {e}")
+            # 2c. Human Skeletal Poses (YOLO26x-Pose / RTMPose-s)
+            for pose_topic in ("/bench_perception/human_poses", "/perception/human_poses"):
+                try:
+                    from std_msgs.msg import String
+                    node.create_subscription(
+                        String,
+                        pose_topic,
+                        self._on_human_poses,
+                        qos_sensor,
+                    )
+                    self._mark_subscribed("human_poses", True)
+                    print(f"[ROS 2 Bridge] Subscribed to {pose_topic}")
+                except Exception as e:
+                    print(f"[ROS 2 Bridge] Human poses subscription to {pose_topic} failed: {e}")
 
             # 2d. Camera Image Streams (Annotated Debug image prioritized over raw fallback)
             try:

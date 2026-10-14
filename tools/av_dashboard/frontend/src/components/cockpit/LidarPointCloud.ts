@@ -154,8 +154,8 @@ const lidarFragmentShader = `
       alpha *= 1.25;
     }
 
-    // 6. Distance horizon fade into void
-    float fogFactor = smoothstep(65.0, 42.0, vDist);
+    // 6. Distance horizon fade into void (strictly edge0 < edge1 in GLSL)
+    float fogFactor = 1.0 - smoothstep(42.0, 65.0, vDist);
 
     // 7. Select Color Palette
     vec3 col;
@@ -230,6 +230,8 @@ export class LidarPointCloud {
     });
 
     this.pointsMesh = new THREE.Points(this.geometry, this.material);
+    this.pointsMesh.frustumCulled = false;
+    this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 2000.0);
     this.geometry.setDrawRange(0, 0);
     this.group.add(this.pointsMesh);
   }
@@ -281,6 +283,9 @@ export class LidarPointCloud {
     this.intensityAttr.needsUpdate = true;
     this.ageAttr.needsUpdate = true;
     this.geometry.setDrawRange(0, writeOffset);
+    if (!this.geometry.boundingSphere) {
+      this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 2000.0);
+    }
     this.currentPointCount = writeOffset;
 
     return writeOffset;

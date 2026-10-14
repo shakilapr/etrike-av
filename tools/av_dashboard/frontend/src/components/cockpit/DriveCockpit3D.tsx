@@ -212,6 +212,10 @@ export const DriveCockpit3D: React.FC = () => {
       orbitControls.dispose();
       renderer.dispose();
       lidarCloud.dispose();
+      road.dispose();
+      rangeRings.dispose();
+      tuktuk.dispose();
+      traffic.dispose();
       setLidarCloudInstance(null);
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
