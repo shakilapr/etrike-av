@@ -174,15 +174,17 @@ class YoloPerceptionNode(LifecycleNode):
         self.declare_parameter("engine_path", "/workspace/data/ml_models/yolo26x_fp16.engine")
         self.declare_parameter("publish_mode", "bench")  # 'bench' (isolated) or 'vehicle'
         self.declare_parameter("input_image_topic", "/kinect_front/color/image_raw")
-        self.declare_parameter("input_depth_topic", "/kinect_front/depth_registered/image_raw")
+        self.declare_parameter("input_depth_topic", "/kinect_front/depth/image_raw")
         self.declare_parameter("input_camera_info_topic", "/kinect_front/color/camera_info")
         self.declare_parameter("input_depth_info_topic", "/kinect_front/depth/camera_info")
         self.declare_parameter("camera_mount_x", 1.20)
         self.declare_parameter("camera_mount_y", 0.00)
         self.declare_parameter("camera_mount_z", 1.00)
         self.declare_parameter("camera_pitch_deg", 0.0)
-        self.declare_parameter("confidence_threshold", 0.35)
+        self.declare_parameter("confidence_threshold", 0.40)
         self.declare_parameter("nms_threshold", 0.45)
+        self.declare_parameter("depth_min_m", 0.50)
+        self.declare_parameter("depth_max_m", 4.50)
         self.declare_parameter("sensor_timeout_sec", 1.2)
         self.declare_parameter("publish_debug_image", True)
         self.declare_parameter("auto_start", True)
@@ -233,6 +235,10 @@ class YoloPerceptionNode(LifecycleNode):
         self._camera_mount_z: float = 1.00
         self._camera_pitch_rad: float = 0.0
 
+        # Valid depth sampling range (Kinect v2 usable range)
+        self._depth_min_m: float = 0.50
+        self._depth_max_m: float = 4.50
+
         # Subscriptions & Publishers
         self._sub_color: Optional[Any] = None
         self._sub_depth: Optional[Any] = None
@@ -274,13 +280,24 @@ class YoloPerceptionNode(LifecycleNode):
 
         self._trt_context = self._engine.create_execution_context()
 
-        # Dynamically determine output tensor shape from deserialized engine
+        # Dynamically determine output tensor shape from deserialized engine.
+        # Bind the (fixed) input shape first so dynamic output dims resolve to concrete values.
         try:
-            detected_shape = tuple(self._engine.get_tensor_shape("output0"))
-            if any(dim > 0 for dim in detected_shape):
+            self._trt_context.set_input_shape("images", (1, 3, 640, 640))
+        except Exception as e:
+            self.get_logger().warn(f"Could not set input shape before output-shape query: {e}")
+
+        try:
+            detected_shape = tuple(int(d) for d in self._engine.get_tensor_shape("output0"))
+            if all(dim > 0 for dim in detected_shape) and len(detected_shape) == 3:
                 self._output_shape = detected_shape
                 self._output_size = int(np.prod(self._output_shape) * 4)
                 self.get_logger().info(f"Dynamically detected output tensor shape: {self._output_shape} ({self._output_size} bytes)")
+            else:
+                self.get_logger().warn(
+                    f"Output tensor shape {detected_shape} contains unresolved/unsupported dims; "
+                    f"using default {self._output_shape}"
+                )
         except Exception as e:
             self.get_logger().warn(f"Failed to query output tensor shape dynamically, using default {self._output_shape}: {e}")
 
@@ -358,6 +375,8 @@ class YoloPerceptionNode(LifecycleNode):
         self._camera_mount_y = float(self.get_parameter("camera_mount_y").value)
         self._camera_mount_z = float(self.get_parameter("camera_mount_z").value)
         self._camera_pitch_rad = math.radians(float(self.get_parameter("camera_pitch_deg").value))
+        self._depth_min_m = float(self.get_parameter("depth_min_m").value)
+        self._depth_max_m = float(self.get_parameter("depth_max_m").value)
 
         # Subscriptions
         color_topic = str(self.get_parameter("input_image_topic").value)
@@ -552,7 +571,7 @@ class YoloPerceptionNode(LifecycleNode):
 
             if x2 > x1 and y2 > y1:
                 patch = self._last_depth_frame[y1 : y2 + 1, x1 : x2 + 1]
-                valid = patch[np.isfinite(patch) & (patch >= 0.45) & (patch <= 7.5)]
+                valid = patch[np.isfinite(patch) & (patch >= self._depth_min_m) & (patch <= self._depth_max_m)]
 
                 if valid.size < 4:
                     # Fallback to wider 60% box patch
@@ -562,7 +581,7 @@ class YoloPerceptionNode(LifecycleNode):
                     y2_w = min(depth_h - 1, int(round(v_depth + 0.30 * h_depth)))
                     if x2_w > x1_w and y2_w > y1_w:
                         patch_w = self._last_depth_frame[y1_w : y2_w + 1, x1_w : x2_w + 1]
-                        valid = patch_w[np.isfinite(patch_w) & (patch_w >= 0.45) & (patch_w <= 7.5)]
+                        valid = patch_w[np.isfinite(patch_w) & (patch_w >= self._depth_min_m) & (patch_w <= self._depth_max_m)]
 
                 if valid.size >= 3:
                     # 25th percentile robustly isolates the front surface of human torso,
@@ -593,8 +612,12 @@ class YoloPerceptionNode(LifecycleNode):
             # Human center height at 0.85m ensures 1.7m actor feet are grounded (z=0.0)
             z_base = 0.85
         else:
-            z_base = float(self._camera_mount_z - (z_optical * sin_p + y_optical * cos_p))
-            z_base = float(np.clip(z_base, 0.5, 1.5))
+            # Emit the ground-contact (bottom-of-box) height so the cockpit can place
+            # the actor group on the road surface (meshes are modelled with y=0 at ground).
+            # The bbox bottom is (bh/2) pixels below the box center along optical +Y (down).
+            y_optical_bottom = y_optical + (float(bh) / 2.0) / max(1.0, self._fy_color) * est_z
+            z_base = float(self._camera_mount_z - (z_optical * sin_p + y_optical_bottom * cos_p))
+            z_base = float(np.clip(z_base, 0.0, 1.5))
 
         return est_z, x_base, y_base, z_base
 
@@ -675,8 +698,9 @@ class YoloPerceptionNode(LifecycleNode):
                     det_boxes.append([int(x1), int(y1), int(bw), int(bh)])
                     final_confidences.append(score)
                     final_class_ids.append(cid)
-                indices_arr = cv2.dnn.NMSBoxes(det_boxes, final_confidences, conf_thresh, nms_thresh)
-                indices = indices_arr.flatten().tolist() if len(indices_arr) > 0 else []
+                # YOLO26x end-to-end output is already NMS-free; re-running NMS here would
+                # merge genuinely distinct overlapping detections (e.g. two nearby people).
+                indices = list(range(len(det_boxes)))
             else:
                 # Standard YOLOv8x: output shape (1, 84, 8400)
                 preds = np.transpose(h_output[0], (1, 0))
@@ -758,7 +782,7 @@ class YoloPerceptionNode(LifecycleNode):
                     det_obj.kinematics = kinematics
 
                     # Reject weak noise detections and tiny clutter bounding boxes
-                    if is_ped and (conf < 0.40 or bh < 45 or bw < 20):
+                    if is_ped and (conf < conf_thresh or bh < 45 or bw < 20):
                         continue
 
                     shape = Shape()
@@ -912,8 +936,10 @@ class YoloPerceptionNode(LifecycleNode):
 
             self._pub_objects.publish(out_msg)
 
-            # Publish human skeletal poses if any pedestrians were tracked
-            if self._pub_human_poses and self._pub_human_poses.is_activated and len(human_poses_list) > 0:
+            # Publish human skeletal poses every frame (including an empty payload).
+            # Publishing the empty case clears stale poses in the dashboard, preventing
+            # a positional id (det_N) from matching a previous frame's pose (ghost skeleton).
+            if self._pub_human_poses and self._pub_human_poses.is_activated:
                 poses_payload = {
                     "timestamp": time.time(),
                     "count": len(human_poses_list),

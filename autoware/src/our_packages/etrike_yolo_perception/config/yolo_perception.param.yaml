@@ -12,6 +12,8 @@
     camera_pitch_deg: 0.0
     confidence_threshold: 0.40
     nms_threshold: 0.45
+    depth_min_m: 0.50
+    depth_max_m: 4.50
     sensor_timeout_sec: 1.2
     publish_debug_image: true
     auto_start: true

@@ -347,7 +347,7 @@ export const RadarView: React.FC = () => {
                     <line
                       x1={px}
                       y1={py}
-                      x2={px + 18 * Math.sin(obj.yaw)}
+                      x2={px - 18 * Math.sin(obj.yaw)}
                       y2={py - 18 * Math.cos(obj.yaw)}
                       stroke={cfg.color}
                       strokeWidth={1.5}
