@@ -165,23 +165,12 @@ export const DriveCockpit3D: React.FC = () => {
           camera.position.set(0, 1.25, 0.0);
           camera.lookAt(0, 1.0, -25);
         } else {
-          // Chase Cam: smoothly follow behind vehicle with dynamic hazard framing
-          let leadAheadDist = Infinity;
-          if (poseOk && state.perceptionObjects && state.perceptionObjects.length > 0) {
-            for (const po of state.perceptionObjects) {
-              if (po.z < -0.3 && po.z > -6.0 && Math.abs(po.x) < 1.6) {
-                const d = Math.sqrt(po.x * po.x + po.z * po.z);
-                if (d < leadAheadDist) leadAheadDist = d;
-              }
-            }
-          }
-
-          const hasCloseLead = leadAheadDist < 4.0;
+          // Chase Cam: smoothly follow behind vehicle with stable framing
           const targetCamX = 0;
-          const targetCamY = hasCloseLead ? 2.85 : 2.5;
-          const targetCamZ = hasCloseLead ? 5.6 : 5.2;
-          const targetLookY = hasCloseLead ? 0.9 : 0.75;
-          const targetLookZ = hasCloseLead ? -6.0 : -8.0;
+          const targetCamY = 2.5;
+          const targetCamZ = 5.2;
+          const targetLookY = 0.75;
+          const targetLookZ = -8.0;
 
           if (isNaN(camera.position.x)) camera.position.x = 0;
           if (isNaN(camera.position.y)) camera.position.y = targetCamY;
@@ -230,13 +219,25 @@ export const DriveCockpit3D: React.FC = () => {
     };
   }, []);
 
+  const [filterMode, setFilterMode] = useState<'filtered' | 'raw' | 'inspection'>('filtered');
+
+  const cycleFilterMode = async () => {
+    const nextMode = filterMode === 'filtered' ? 'raw' : filterMode === 'raw' ? 'inspection' : 'filtered';
+    setFilterMode(nextMode);
+    try {
+      await fetch(`/api/v1/lidar/mode?mode=${nextMode}`, { method: 'POST' });
+    } catch {
+      // Backend may be offline during development
+    }
+  };
+
   return (
     <div className="relative w-full h-full bg-[#020412] overflow-hidden select-none">
       {/* Three.js Canvas Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
-      {/* Real Hesai XT32 LiDAR Status Badge */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#050b1a]/85 border border-[#1e293b] backdrop-blur px-3 py-1.5 rounded-md font-mono text-xs shadow-lg pointer-events-none">
+      {/* Real Hesai XT32 LiDAR Status Badge & Mode Switcher */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#050b1a]/85 border border-[#1e293b] backdrop-blur px-3 py-1.5 rounded-md font-mono text-xs shadow-lg pointer-events-auto">
         <span
           className={`w-2 h-2 rounded-full ${
             lidarStream.connected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-neutral-500'
@@ -253,6 +254,20 @@ export const DriveCockpit3D: React.FC = () => {
             <span className="text-emerald-400">{lidarStream.hz} Hz</span>
           </>
         )}
+        <span className="text-neutral-600">|</span>
+        <button
+          onClick={cycleFilterMode}
+          title="Click to cycle: Filtered (Clean) -> Raw (All 360°) -> Inspection (Red Body Strikes)"
+          className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all border ${
+            filterMode === 'filtered'
+              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60 hover:bg-emerald-900/60'
+              : filterMode === 'raw'
+              ? 'bg-amber-950/60 text-amber-300 border-amber-700/60 hover:bg-amber-900/60'
+              : 'bg-rose-950/60 text-rose-300 border-rose-700/60 hover:bg-rose-900/60 shadow-[0_0_8px_rgba(244,63,94,0.4)]'
+          }`}
+        >
+          {filterMode}
+        </button>
       </div>
 
       {/* Ergonomic Floating HUD Overlay */}

@@ -237,13 +237,22 @@ export const CockpitHud: React.FC = () => {
             </div>
 
             {/* Primary Speedometer Digits (Automotive Glance Sizing: 80-96px) */}
-            <div className="flex items-baseline gap-2 drop-shadow-[0_6px_20px_rgba(0,0,0,0.95)]">
-              <span className="text-7xl lg:text-8xl font-black text-white tracking-tight tabular-nums font-mono leading-none">
-                {speedVal.toFixed(0)}
-              </span>
-              <span className="text-base lg:text-lg font-black text-neutral-400 uppercase tracking-widest">
-                {speedUnit}
-              </span>
+            <div className="flex flex-col items-center drop-shadow-[0_6px_20px_rgba(0,0,0,0.95)]">
+              <div className="flex items-baseline gap-2">
+                <span className={`text-7xl lg:text-8xl font-black tracking-tight tabular-nums font-mono leading-none ${
+                  (telemetry.bus_rate_hz ?? 0) > 0 ? 'text-white' : 'text-neutral-500'
+                }`}>
+                  {(telemetry.bus_rate_hz ?? 0) > 0 ? speedVal.toFixed(0) : '--'}
+                </span>
+                <span className="text-base lg:text-lg font-black text-neutral-400 uppercase tracking-widest">
+                  {speedUnit}
+                </span>
+              </div>
+              {(telemetry.bus_rate_hz ?? 0) === 0 && (
+                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/90 bg-amber-950/40 border border-amber-800/50 px-2 py-0.5 rounded mt-1">
+                  CAN TELEMETRY OFFLINE
+                </span>
+              )}
             </div>
           </div>
 

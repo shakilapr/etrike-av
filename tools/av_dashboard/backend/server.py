@@ -816,14 +816,34 @@ async def websocket_lidar_endpoint(websocket: WebSocket) -> None:
 @app.get("/api/v1/lidar/status")
 async def get_lidar_status() -> JSONResponse:
     if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
-        _, count, ts = ros_bridge.lidar_streamer.get_latest_frame()
-        return JSONResponse({
-            "online": (time.time() - ts) < 2.0 if ts > 0 else False,
-            "point_count": count,
-            "timestamp": ts,
-            "total_frames": ros_bridge.lidar_streamer.total_frames,
-        })
+        diag = ros_bridge.lidar_streamer.get_diagnostics()
+        return JSONResponse(diag)
     return JSONResponse({"online": False, "point_count": 0, "timestamp": 0.0, "total_frames": 0})
+
+
+@app.get("/api/v1/lidar/diagnostics")
+async def get_lidar_diagnostics() -> JSONResponse:
+    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
+        diag = ros_bridge.lidar_streamer.get_diagnostics()
+        diag.update({
+            "sensor_model": "PandarXT32M (XT32M2X)",
+            "driver": "Nebula Hesai Wrapper (UDP :2368)",
+            "output_frame": "base_link -> three_js",
+            "active_mode": ros_bridge.lidar_streamer.filter_mode,
+        })
+        return JSONResponse(diag)
+    return JSONResponse({"online": False, "error": "lidar_streamer unavailable"})
+
+
+@app.post("/api/v1/lidar/mode")
+async def set_lidar_mode(mode: str) -> JSONResponse:
+    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
+        if mode in ("filtered", "raw", "inspection"):
+            ros_bridge.lidar_streamer.filter_mode = mode
+            return JSONResponse({"success": True, "mode": mode})
+        return JSONResponse({"success": False, "error": f"Invalid mode '{mode}'"}, status_code=400)
+    return JSONResponse({"success": False, "error": "lidar_streamer unavailable"}, status_code=503)
+
 
 
 # Serve built React frontend if dist exists

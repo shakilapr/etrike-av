@@ -7,6 +7,8 @@ export class LidarRangeRings {
 
   constructor() {
     this.group = new THREE.Group();
+    // Center concentric range rings directly at physical LiDAR roof mount location (matching vehicle TF2)
+    this.group.position.set(0, 0, 0.425);
     this.createRings();
     this.createDistanceLabels();
     this.createRadialAxes();

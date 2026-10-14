@@ -27,6 +27,11 @@ const lidarFragmentShader = `
   varying float vDist;
 
   vec3 getLidarColor(float y, float intensity) {
+    // Inspection mode marker: self-reflection points marked with intensity < 0.0
+    if (intensity < 0.0) {
+      return vec3(0.98, 0.12, 0.25); // Vibrant neon crimson
+    }
+
     // 1. Ground level (y <= 0.25m): deep electric blue to cyan
     if (y <= 0.25) {
       vec3 groundBase = mix(vec3(0.03, 0.25, 0.85), vec3(0.06, 0.65, 0.95), clamp((y + 0.5) / 0.75, 0.0, 1.0));
