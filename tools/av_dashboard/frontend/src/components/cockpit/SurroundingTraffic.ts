@@ -1069,13 +1069,13 @@ export class SurroundingTraffic {
         is_seated: isDemoSeated,
         confidence: 0.98,
         keypoints: {
-          nose: { x: 320 + 20 * Math.sin(lookPhase), y: 120 },
-          left_shoulder: { x: 280, y: 160 },
-          right_shoulder: { x: 360, y: 160 },
-          left_elbow: { x: 260 - 30 * Math.sin(wavePhase), y: 220 - 40 * Math.cos(wavePhase) },
-          left_wrist: { x: 240 - 55 * Math.sin(wavePhase), y: 170 - 65 * Math.cos(wavePhase) },
-          right_elbow: { x: 380, y: 230 },
-          right_wrist: { x: 390, y: 290 },
+          nose: { x: 320 + 15 * Math.sin(lookPhase), y: 120 },
+          left_shoulder: { x: 285, y: 160 },
+          right_shoulder: { x: 355, y: 160 },
+          left_elbow: { x: 275 - 10 * Math.sin(wavePhase), y: 215 },
+          left_wrist: { x: 265 - 20 * Math.sin(wavePhase), y: 155 - 15 * Math.cos(wavePhase) },
+          right_elbow: { x: 365, y: 220 },
+          right_wrist: { x: 370, y: 275 },
         },
       });
     }
