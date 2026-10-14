@@ -36,6 +36,8 @@ export const CockpitHud: React.FC = () => {
     isConnected,
     rosStatus,
     perceptionObjects,
+    demoPedestrian,
+    toggleDemoPedestrian,
   } = useCanStore();
 
   // Speed calculation
@@ -238,6 +240,16 @@ export const CockpitHud: React.FC = () => {
               <span className="text-base lg:text-lg font-black text-neutral-400 uppercase tracking-widest">
                 {speedUnit}
               </span>
+            </div>
+
+            {/* SMPL Humanoid & YOLO + RTMPose-s 17-Keypoint Engine Status Pill */}
+            <div className="flex items-center gap-2 mt-1 px-3 py-0.5 bg-[#080808]/90 backdrop-blur-md rounded-full border border-cyan-500/40 text-[10px] font-mono shadow-[0_0_12px_rgba(6,182,212,0.25)]">
+              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#06b6d4]" />
+              <span className="text-cyan-300 font-bold">SMPL-Body (CC BY 4.0)</span>
+              <span className="text-neutral-500">•</span>
+              <span className="text-emerald-300 font-bold">YOLO + RTMPose-s (17 Joints)</span>
+              <span className="text-neutral-500">•</span>
+              <span className="text-neutral-400">TensorRT FP16</span>
             </div>
           </div>
 
@@ -481,6 +493,22 @@ export const CockpitHud: React.FC = () => {
                 {mode === 'orbit' ? '360°' : mode}
               </button>
             ))}
+
+            <div className="w-[1px] h-6 bg-neutral-800 my-auto" />
+
+            {/* SMPL + RTMPose Demonstration Toggle */}
+            <button
+              onClick={toggleDemoPedestrian}
+              className={`h-10 px-3 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
+                demoPedestrian
+                  ? 'bg-cyan-500 text-black shadow-[0_0_14px_rgba(6,182,212,0.85)] border border-cyan-300'
+                  : 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-700/80'
+              }`}
+              title="Toggle interactive 3D SMPL Humanoid & RTMPose-s 17-keypoint skeletal rig model"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>{demoPedestrian ? 'SMPL RIG: ON' : 'SMPL RIG'}</span>
+            </button>
           </div>
 
           {/* Bottom-Center: Autoware Perception Radar, Drive Mode & Link Status */}

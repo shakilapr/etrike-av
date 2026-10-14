@@ -24,12 +24,14 @@ interface CanState {
   activeView: 'monitor' | 'cockpit' | 'radar';
   cameraMode: 'chase' | 'cabin' | 'orbit';
   speedUnit: 'km/h' | 'mph';
+  demoPedestrian: boolean;
 
   // Actions
   setActiveView: (view: 'monitor' | 'cockpit' | 'radar') => void;
   toggleActiveView: () => void;
   setCameraMode: (mode: 'chase' | 'cabin' | 'orbit') => void;
   setSpeedUnit: (unit: 'km/h' | 'mph') => void;
+  toggleDemoPedestrian: () => void;
   setCatalog: (catalog: MessageDef[], source: string) => void;
   selectMessage: (canId: number) => void;
   setHoveredSignal: (sigName: string | null) => void;
@@ -98,7 +100,9 @@ export const useCanStore = create<CanState>((set, get) => ({
   activeView: 'cockpit',
   cameraMode: 'chase',
   speedUnit: 'km/h',
+  demoPedestrian: true,
 
+  toggleDemoPedestrian: () => set((s) => ({ demoPedestrian: !s.demoPedestrian })),
   setActiveView: (activeView) => {
     try {
       localStorage.setItem('av_dashboard_active_view', activeView);

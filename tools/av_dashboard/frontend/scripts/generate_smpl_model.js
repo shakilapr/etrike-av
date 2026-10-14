@@ -23,293 +23,289 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const outputPath = path.resolve(__dirname, '../public/models/pedestrian_smpl.glb');
 
-console.log(`Generating SMPL-derived rigged humanoid model -> ${outputPath}`);
+console.log(`Generating Refined SMPL Humanoid Mesh + 3D RTMPose-s Rig -> ${outputPath}`);
 
-// 1. Materials
-const smplGreyMat = new THREE.MeshStandardMaterial({
-  name: 'SMPL_SlateGrey_PBR',
-  color: 0x94a3b8, // Neutral slate-400 PBR
-  roughness: 0.45,
-  metalness: 0.15,
+// -------------------------------------------------------------
+// 1. Digital Twin SMPL Shaders & RTMPose-s Palette
+// -------------------------------------------------------------
+const smplSkinMat = new THREE.MeshStandardMaterial({
+  name: 'SMPL_Skin_DigitalTwin',
+  color: 0x334155, // Slate-700 digital twin humanoid silhouette
+  roughness: 0.65,
+  metalness: 0.10,
+  transparent: true,
+  opacity: 0.82,
 });
 
-const jointMat = new THREE.MeshStandardMaterial({
-  name: 'SMPL_AccentJoint_PBR',
-  color: 0x64748b, // Neutral slate-500 for joints and accents
-  roughness: 0.50,
-  metalness: 0.20,
+const smplAccentMat = new THREE.MeshStandardMaterial({
+  name: 'SMPL_Accent_SlateDark',
+  color: 0x1e293b, // Slate-800 darker accent tone
+  roughness: 0.75,
+  metalness: 0.10,
+  transparent: true,
+  opacity: 0.88,
 });
 
 const visorMat = new THREE.MeshStandardMaterial({
-  name: 'SMPL_CyanVisor_PBR',
-  color: 0x38bdf8, // Sky-400 sensor visor
-  roughness: 0.20,
-  metalness: 0.80,
+  name: 'SMPL_Visor_CyanGlow',
+  color: 0x38bdf8,
+  roughness: 0.15,
+  metalness: 0.85,
   emissive: 0x0284c7,
-  emissiveIntensity: 0.4,
+  emissiveIntensity: 1.5,
 });
 
-// 2. Anatomical SMPL Humanoid Hierarchy
+// RTMPose-s 17-Keypoint Glowing Emissive Materials
+const jointCyanMat = new THREE.MeshBasicMaterial({ name: 'RTMPose_Cyan', color: 0x06b6d4 });
+const jointSkyMat = new THREE.MeshBasicMaterial({ name: 'RTMPose_Sky', color: 0x38bdf8 });
+const jointVioletMat = new THREE.MeshBasicMaterial({ name: 'RTMPose_Violet', color: 0xc084fc });
+const jointEmeraldMat = new THREE.MeshBasicMaterial({ name: 'RTMPose_Emerald', color: 0x10b981 });
+const jointAmberMat = new THREE.MeshBasicMaterial({ name: 'RTMPose_Amber', color: 0xf59e0b });
+const jointOrangeMat = new THREE.MeshBasicMaterial({ name: 'RTMPose_Orange', color: 0xf97316 });
+
+// -------------------------------------------------------------
+// 2. Assemble Articulated SMPL Skeleton Hierarchy
+// -------------------------------------------------------------
 const smplRoot = new THREE.Group();
 smplRoot.name = 'SMPL_Humanoid';
 
-// Pelvis / Hips (Root bone)
+// Root Bone: Hips / Pelvis (y = 0.86m)
 const hips = new THREE.Group();
 hips.name = 'Hips';
 hips.position.set(0, 0.86, 0);
 smplRoot.add(hips);
 
-// Pelvis mesh
-const pelvisGeo = new THREE.CylinderGeometry(0.14, 0.12, 0.16, 16);
-const pelvisMesh = new THREE.Mesh(pelvisGeo, smplGreyMat);
+const pelvisGeo = new THREE.CapsuleGeometry(0.118, 0.14, 16, 20);
+pelvisGeo.scale(1.14, 1.0, 0.90);
+const pelvisMesh = new THREE.Mesh(pelvisGeo, smplSkinMat);
 pelvisMesh.name = 'Pelvis_Mesh';
+pelvisMesh.castShadow = true;
+pelvisMesh.receiveShadow = true;
 hips.add(pelvisMesh);
 
-// Spine
+// Spine / Abdomen
 const spine = new THREE.Group();
 spine.name = 'Spine';
-spine.position.set(0, 0.12, 0);
+spine.position.set(0, 0.08, 0);
 hips.add(spine);
 
-const abdomenGeo = new THREE.CylinderGeometry(0.15, 0.13, 0.16, 16);
-const abdomenMesh = new THREE.Mesh(abdomenGeo, smplGreyMat);
+const abdomenGeo = new THREE.CapsuleGeometry(0.105, 0.16, 16, 20);
+abdomenGeo.scale(1.10, 1.0, 0.86);
+const abdomenMesh = new THREE.Mesh(abdomenGeo, smplSkinMat);
 abdomenMesh.name = 'Abdomen_Mesh';
 abdomenMesh.position.set(0, 0.08, 0);
+abdomenMesh.castShadow = true;
 spine.add(abdomenMesh);
 
-// Chest
+// Chest / Thorax (V-taper)
 const chest = new THREE.Group();
 chest.name = 'Chest';
-chest.position.set(0, 0.16, 0);
+chest.position.set(0, 0.26, 0);
 spine.add(chest);
 
-const chestGeo = new THREE.CylinderGeometry(0.18, 0.15, 0.22, 16);
-const chestMesh = new THREE.Mesh(chestGeo, smplGreyMat);
+const chestGeo = new THREE.CapsuleGeometry(0.125, 0.22, 16, 20);
+chestGeo.scale(1.26, 1.0, 0.86);
+const chestMesh = new THREE.Mesh(chestGeo, smplSkinMat);
 chestMesh.name = 'Chest_Mesh';
-chestMesh.position.set(0, 0.11, 0);
-chestMesh.scale.set(1.2, 1.0, 0.8); // Athletic chest contouring
+chestMesh.castShadow = true;
 chest.add(chestMesh);
 
 // Neck
 const neck = new THREE.Group();
 neck.name = 'Neck';
-neck.position.set(0, 0.22, 0);
-chest.add(neck);
+neck.position.set(0, 0.42, 0);
+spine.add(neck);
 
-const neckGeo = new THREE.CylinderGeometry(0.065, 0.075, 0.08, 12);
-const neckMesh = new THREE.Mesh(neckGeo, jointMat);
+const neckGeo = new THREE.CylinderGeometry(0.048, 0.062, 0.09, 16);
+const neckMesh = new THREE.Mesh(neckGeo, smplAccentMat);
 neckMesh.name = 'Neck_Mesh';
-neckMesh.position.set(0, 0.04, 0);
 neck.add(neckMesh);
 
-// Head + Sensor Visor
+// Head & Cybernetic Visor
 const head = new THREE.Group();
 head.name = 'Head';
-head.position.set(0, 0.08, 0);
-neck.add(head);
+head.position.set(0, 0.54, 0);
+spine.add(head);
 
-const headGeo = new THREE.SphereGeometry(0.105, 16, 16);
-headGeo.scale(0.88, 1.15, 1.0); // Natural skull shape
-const headMesh = new THREE.Mesh(headGeo, smplGreyMat);
+const headGeo = new THREE.SphereGeometry(0.105, 24, 24);
+headGeo.scale(0.85, 1.16, 1.02);
+const headMesh = new THREE.Mesh(headGeo, smplSkinMat);
 headMesh.name = 'Head_Mesh';
-headMesh.position.set(0, 0.08, 0);
+headMesh.castShadow = true;
 head.add(headMesh);
 
-const visorGeo = new THREE.BoxGeometry(0.13, 0.035, 0.05);
+const visorGeo = new THREE.BoxGeometry(0.13, 0.035, 0.06);
 const visorMesh = new THREE.Mesh(visorGeo, visorMat);
 visorMesh.name = 'Visor_Mesh';
-visorMesh.position.set(0, 0.08, -0.09);
+visorMesh.position.set(0, 0.01, -0.09);
 head.add(visorMesh);
 
-// --- Left Arm ---
-const leftShoulder = new THREE.Group();
-leftShoulder.name = 'LeftShoulder';
-leftShoulder.position.set(-0.21, 0.18, 0);
-chest.add(leftShoulder);
-
-const shoulderLMesh = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 12), jointMat);
-shoulderLMesh.name = 'ShoulderL_Mesh';
-leftShoulder.add(shoulderLMesh);
-
+// --- Left Arm System ---
 const leftArm = new THREE.Group();
 leftArm.name = 'LeftArm';
-leftArm.position.set(0, 0, 0);
-leftShoulder.add(leftArm);
+leftArm.position.set(-0.19, 0.36, 0);
+spine.add(leftArm);
 
-const upperArmLGeo = new THREE.CylinderGeometry(0.05, 0.042, 0.26, 12);
-const upperArmLMesh = new THREE.Mesh(upperArmLGeo, smplGreyMat);
-upperArmLMesh.name = 'UpperArmL_Mesh';
-upperArmLMesh.position.set(0, -0.13, 0);
-leftArm.add(upperArmLMesh);
+const upperArmGeo = new THREE.CapsuleGeometry(0.040, 0.24, 12, 16);
+const armLMesh = new THREE.Mesh(upperArmGeo, smplSkinMat);
+armLMesh.name = 'UpperArmL_Mesh';
+armLMesh.position.set(0, -0.12, 0);
+armLMesh.castShadow = true;
+leftArm.add(armLMesh);
 
 const leftForeArm = new THREE.Group();
 leftForeArm.name = 'LeftForeArm';
-leftForeArm.position.set(0, -0.26, 0);
+leftForeArm.position.set(0, -0.24, 0);
 leftArm.add(leftForeArm);
 
-const elbowLMesh = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 12), jointMat);
-elbowLMesh.name = 'ElbowL_Mesh';
-leftForeArm.add(elbowLMesh);
-
-const foreArmLGeo = new THREE.CylinderGeometry(0.042, 0.035, 0.24, 12);
-const foreArmLMesh = new THREE.Mesh(foreArmLGeo, smplGreyMat);
+const foreArmGeo = new THREE.CapsuleGeometry(0.032, 0.22, 12, 16);
+const foreArmLMesh = new THREE.Mesh(foreArmGeo, smplSkinMat);
 foreArmLMesh.name = 'ForeArmL_Mesh';
-foreArmLMesh.position.set(0, -0.12, 0);
+foreArmLMesh.position.set(0, -0.11, 0);
+foreArmLMesh.castShadow = true;
 leftForeArm.add(foreArmLMesh);
 
-const leftHand = new THREE.Group();
-leftHand.name = 'LeftHand';
-leftHand.position.set(0, -0.24, 0);
-leftForeArm.add(leftHand);
-
-const handLGeo = new THREE.SphereGeometry(0.04, 10, 10);
-handLGeo.scale(0.8, 1.2, 0.5);
-const handLMesh = new THREE.Mesh(handLGeo, jointMat);
+const handGeo = new THREE.BoxGeometry(0.026, 0.08, 0.065);
+const handLMesh = new THREE.Mesh(handGeo, smplAccentMat);
 handLMesh.name = 'HandL_Mesh';
-handLMesh.position.set(0, -0.03, 0);
-leftHand.add(handLMesh);
+handLMesh.position.set(0, -0.24, 0);
+leftForeArm.add(handLMesh);
 
-// --- Right Arm ---
-const rightShoulder = new THREE.Group();
-rightShoulder.name = 'RightShoulder';
-rightShoulder.position.set(0.21, 0.18, 0);
-chest.add(rightShoulder);
-
-const shoulderRMesh = new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 12), jointMat);
-shoulderRMesh.name = 'ShoulderR_Mesh';
-rightShoulder.add(shoulderRMesh);
-
+// --- Right Arm System ---
 const rightArm = new THREE.Group();
 rightArm.name = 'RightArm';
-rightArm.position.set(0, 0, 0);
-rightShoulder.add(rightArm);
+rightArm.position.set(0.19, 0.36, 0);
+spine.add(rightArm);
 
-const upperArmRGeo = new THREE.CylinderGeometry(0.05, 0.042, 0.26, 12);
-const upperArmRMesh = new THREE.Mesh(upperArmRGeo, smplGreyMat);
-upperArmRMesh.name = 'UpperArmR_Mesh';
-upperArmRMesh.position.set(0, -0.13, 0);
-rightArm.add(upperArmRMesh);
+const armRMesh = new THREE.Mesh(upperArmGeo, smplSkinMat);
+armRMesh.name = 'UpperArmR_Mesh';
+armRMesh.position.set(0, -0.12, 0);
+armRMesh.castShadow = true;
+rightArm.add(armRMesh);
 
 const rightForeArm = new THREE.Group();
 rightForeArm.name = 'RightForeArm';
-rightForeArm.position.set(0, -0.26, 0);
+rightForeArm.position.set(0, -0.24, 0);
 rightArm.add(rightForeArm);
 
-const elbowRMesh = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 12), jointMat);
-elbowRMesh.name = 'ElbowR_Mesh';
-rightForeArm.add(elbowRMesh);
-
-const foreArmRGeo = new THREE.CylinderGeometry(0.042, 0.035, 0.24, 12);
-const foreArmRMesh = new THREE.Mesh(foreArmRGeo, smplGreyMat);
+const foreArmRMesh = new THREE.Mesh(foreArmGeo, smplSkinMat);
 foreArmRMesh.name = 'ForeArmR_Mesh';
-foreArmRMesh.position.set(0, -0.12, 0);
+foreArmRMesh.position.set(0, -0.11, 0);
+foreArmRMesh.castShadow = true;
 rightForeArm.add(foreArmRMesh);
 
-const rightHand = new THREE.Group();
-rightHand.name = 'RightHand';
-rightHand.position.set(0, -0.24, 0);
-rightForeArm.add(rightHand);
-
-const handRGeo = new THREE.SphereGeometry(0.04, 10, 10);
-handRGeo.scale(0.8, 1.2, 0.5);
-const handRMesh = new THREE.Mesh(handRGeo, jointMat);
+const handRMesh = new THREE.Mesh(handGeo, smplAccentMat);
 handRMesh.name = 'HandR_Mesh';
-handRMesh.position.set(0, -0.03, 0);
-rightHand.add(handRMesh);
+handRMesh.position.set(0, -0.24, 0);
+rightForeArm.add(handRMesh);
 
-// --- Left Leg ---
+// --- Left Leg System ---
 const leftUpLeg = new THREE.Group();
 leftUpLeg.name = 'LeftUpLeg';
-leftUpLeg.position.set(-0.11, -0.08, 0);
+leftUpLeg.position.set(-0.095, -0.05, 0);
 hips.add(leftUpLeg);
 
-const hipLMesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), jointMat);
-hipLMesh.name = 'HipL_Mesh';
-leftUpLeg.add(hipLMesh);
-
-const thighLGeo = new THREE.CylinderGeometry(0.075, 0.055, 0.40, 14);
-const thighLMesh = new THREE.Mesh(thighLGeo, smplGreyMat);
+const thighGeo = new THREE.CapsuleGeometry(0.060, 0.36, 12, 18);
+const thighLMesh = new THREE.Mesh(thighGeo, smplSkinMat);
 thighLMesh.name = 'ThighL_Mesh';
-thighLMesh.position.set(0, -0.20, 0);
+thighLMesh.position.set(0, -0.18, 0);
+thighLMesh.castShadow = true;
 leftUpLeg.add(thighLMesh);
 
 const leftLeg = new THREE.Group();
 leftLeg.name = 'LeftLeg';
-leftLeg.position.set(0, -0.40, 0);
+leftLeg.position.set(0, -0.36, 0);
 leftUpLeg.add(leftLeg);
 
-const kneeLMesh = new THREE.Mesh(new THREE.SphereGeometry(0.058, 12, 12), jointMat);
-kneeLMesh.name = 'KneeL_Mesh';
-leftLeg.add(kneeLMesh);
-
-const shinLGeo = new THREE.CylinderGeometry(0.055, 0.042, 0.38, 14);
-const shinLMesh = new THREE.Mesh(shinLGeo, smplGreyMat);
-shinLMesh.name = 'ShinL_Mesh';
-shinLMesh.position.set(0, -0.19, 0);
+const shinGeo = new THREE.CapsuleGeometry(0.044, 0.34, 12, 18);
+const shinLMesh = new THREE.Mesh(shinGeo, smplSkinMat);
+shinLMesh.name = 'CalfL_Mesh';
+shinLMesh.position.set(0, -0.17, 0);
+shinLMesh.castShadow = true;
 leftLeg.add(shinLMesh);
 
-const leftFoot = new THREE.Group();
-leftFoot.name = 'LeftFoot';
-leftFoot.position.set(0, -0.38, 0);
-leftLeg.add(leftFoot);
-
-const footLGeo = new THREE.BoxGeometry(0.08, 0.065, 0.18);
-const footLMesh = new THREE.Mesh(footLGeo, jointMat);
+const footGeo = new THREE.BoxGeometry(0.075, 0.05, 0.22);
+const footLMesh = new THREE.Mesh(footGeo, smplAccentMat);
 footLMesh.name = 'FootL_Mesh';
-footLMesh.position.set(0, -0.02, 0.05);
-leftFoot.add(footLMesh);
+footLMesh.position.set(0, -0.35, 0.04);
+footLMesh.castShadow = true;
+leftLeg.add(footLMesh);
 
-// --- Right Leg ---
+// --- Right Leg System ---
 const rightUpLeg = new THREE.Group();
 rightUpLeg.name = 'RightUpLeg';
-rightUpLeg.position.set(0.11, -0.08, 0);
+rightUpLeg.position.set(0.095, -0.05, 0);
 hips.add(rightUpLeg);
 
-const hipRMesh = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 12), jointMat);
-hipRMesh.name = 'HipR_Mesh';
-rightUpLeg.add(hipRMesh);
-
-const thighRGeo = new THREE.CylinderGeometry(0.075, 0.055, 0.40, 14);
-const thighRMesh = new THREE.Mesh(thighRGeo, smplGreyMat);
+const thighRMesh = new THREE.Mesh(thighGeo, smplSkinMat);
 thighRMesh.name = 'ThighR_Mesh';
-thighRMesh.position.set(0, -0.20, 0);
+thighRMesh.position.set(0, -0.18, 0);
+thighRMesh.castShadow = true;
 rightUpLeg.add(thighRMesh);
 
 const rightLeg = new THREE.Group();
 rightLeg.name = 'RightLeg';
-rightLeg.position.set(0, -0.40, 0);
+rightLeg.position.set(0, -0.36, 0);
 rightUpLeg.add(rightLeg);
 
-const kneeRMesh = new THREE.Mesh(new THREE.SphereGeometry(0.058, 12, 12), jointMat);
-kneeRMesh.name = 'KneeR_Mesh';
-rightLeg.add(kneeRMesh);
-
-const shinRGeo = new THREE.CylinderGeometry(0.055, 0.042, 0.38, 14);
-const shinRMesh = new THREE.Mesh(shinRGeo, smplGreyMat);
-shinRMesh.name = 'ShinR_Mesh';
-shinRMesh.position.set(0, -0.19, 0);
+const shinRMesh = new THREE.Mesh(shinGeo, smplSkinMat);
+shinRMesh.name = 'CalfR_Mesh';
+shinRMesh.position.set(0, -0.17, 0);
+shinRMesh.castShadow = true;
 rightLeg.add(shinRMesh);
 
-const rightFoot = new THREE.Group();
-rightFoot.name = 'RightFoot';
-rightFoot.position.set(0, -0.38, 0);
-rightLeg.add(rightFoot);
-
-const footRGeo = new THREE.BoxGeometry(0.08, 0.065, 0.18);
-const footRMesh = new THREE.Mesh(footRGeo, jointMat);
+const footRMesh = new THREE.Mesh(footGeo, smplAccentMat);
 footRMesh.name = 'FootR_Mesh';
-footRMesh.position.set(0, -0.02, 0.05);
-rightFoot.add(footRMesh);
+footRMesh.position.set(0, -0.35, 0.04);
+footRMesh.castShadow = true;
+rightLeg.add(footRMesh);
 
-// Export as binary GLB
+// -------------------------------------------------------------
+// 3. Attach 17-Keypoint RTMPose-s Glowing Beacons
+// -------------------------------------------------------------
+const jointDefs = [
+  { name: 'Kpt_0_Nose', parent: head, pos: [0, 0.06, -0.12], mat: jointCyanMat },
+  { name: 'Kpt_1_EyeL', parent: head, pos: [-0.035, 0.08, -0.10], mat: jointSkyMat },
+  { name: 'Kpt_2_EyeR', parent: head, pos: [0.035, 0.08, -0.10], mat: jointSkyMat },
+  { name: 'Kpt_3_EarL', parent: head, pos: [-0.085, 0.06, -0.02], mat: jointVioletMat },
+  { name: 'Kpt_4_EarR', parent: head, pos: [0.085, 0.06, -0.02], mat: jointVioletMat },
+  { name: 'Kpt_5_ShoulderL', parent: leftArm, pos: [0, 0, 0], mat: jointCyanMat },
+  { name: 'Kpt_6_ShoulderR', parent: rightArm, pos: [0, 0, 0], mat: jointCyanMat },
+  { name: 'Kpt_7_ElbowL', parent: leftForeArm, pos: [0, 0, 0], mat: jointSkyMat },
+  { name: 'Kpt_8_ElbowR', parent: rightForeArm, pos: [0, 0, 0], mat: jointSkyMat },
+  { name: 'Kpt_9_WristL', parent: leftForeArm, pos: [0, -0.22, 0], mat: jointEmeraldMat },
+  { name: 'Kpt_10_WristR', parent: rightForeArm, pos: [0, -0.22, 0], mat: jointEmeraldMat },
+  { name: 'Kpt_11_HipL', parent: leftUpLeg, pos: [0, 0, 0], mat: jointEmeraldMat },
+  { name: 'Kpt_12_HipR', parent: rightUpLeg, pos: [0, 0, 0], mat: jointEmeraldMat },
+  { name: 'Kpt_13_KneeL', parent: leftLeg, pos: [0, 0, 0], mat: jointAmberMat },
+  { name: 'Kpt_14_KneeR', parent: rightLeg, pos: [0, 0, 0], mat: jointAmberMat },
+  { name: 'Kpt_15_AnkleL', parent: leftLeg, pos: [0, -0.35, 0], mat: jointOrangeMat },
+  { name: 'Kpt_16_AnkleR', parent: rightLeg, pos: [0, -0.35, 0], mat: jointOrangeMat },
+];
+
+const jointSphereGeo = new THREE.SphereGeometry(0.038, 12, 12);
+jointDefs.forEach((def) => {
+  const jMesh = new THREE.Mesh(jointSphereGeo, def.mat);
+  jMesh.name = def.name;
+  jMesh.position.set(...def.pos);
+  def.parent.add(jMesh);
+});
+
+// -------------------------------------------------------------
+// 4. Export to binary GLTF (.glb)
+// -------------------------------------------------------------
 const exporter = new GLTFExporter();
-try {
-  const glb = await exporter.parseAsync(smplRoot, { binary: true });
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, Buffer.from(glb));
-  const stats = fs.statSync(outputPath);
-  console.log(`[SUCCESS] Generated ${outputPath} (${(stats.size / 1024).toFixed(1)} KB)`);
-} catch (err) {
-  console.error('Export error:', err);
-  process.exit(1);
-}
+exporter.parse(
+  smplRoot,
+  (gltfData) => {
+    const buffer = Buffer.from(gltfData);
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, buffer);
+    console.log(`Successfully generated refined SMPL GLB asset: ${outputPath} (${buffer.length} bytes)`);
+  },
+  (err) => {
+    console.error('Error generating SMPL model:', err);
+    process.exit(1);
+  },
+  { binary: true }
+);
