@@ -224,8 +224,16 @@ class YoloPerceptionNode(LifecycleNode):
         publish_mode = str(self.get_parameter("publish_mode").value).lower()
 
         if not os.path.exists(engine_path):
-            self.get_logger().error(f"TensorRT engine not found at: {engine_path}")
-            return TransitionCallbackReturn.FAILURE
+            fallback_engine = "/workspace/data/ml_models/yolov8x_fp16.engine"
+            if os.path.exists(fallback_engine):
+                self.get_logger().warn(
+                    f"Specified engine '{engine_path}' not found on disk. "
+                    f"Falling back to existing compiled engine: '{fallback_engine}'"
+                )
+                engine_path = fallback_engine
+            else:
+                self.get_logger().error(f"TensorRT engine not found at: {engine_path}")
+                return TransitionCallbackReturn.FAILURE
 
         # Load TensorRT Engine
         self.get_logger().info(f"Deserializing TensorRT 10.3 Engine: {engine_path}")
@@ -239,6 +247,16 @@ class YoloPerceptionNode(LifecycleNode):
             return TransitionCallbackReturn.FAILURE
 
         self._trt_context = self._engine.create_execution_context()
+
+        # Dynamically determine output tensor shape from deserialized engine
+        try:
+            detected_shape = tuple(self._engine.get_tensor_shape("output0"))
+            if any(dim > 0 for dim in detected_shape):
+                self._output_shape = detected_shape
+                self._output_size = int(np.prod(self._output_shape) * 4)
+                self.get_logger().info(f"Dynamically detected output tensor shape: {self._output_shape} ({self._output_size} bytes)")
+        except Exception as e:
+            self.get_logger().warn(f"Failed to query output tensor shape dynamically, using default {self._output_shape}: {e}")
 
         # Allocate CUDA device buffers
         d_in = ctypes.c_void_p()
@@ -446,36 +464,72 @@ class YoloPerceptionNode(LifecycleNode):
             _cudaStreamSynchronize(self._stream)
             self._last_infer_ms = (time.time() - t_start) * 1000.0
 
-            # Postprocess: output shape (1, 84, 8400)
-            preds = np.transpose(h_output[0], (1, 0))
-            boxes = preds[:, :4]
-            scores = preds[:, 4:]
+            # Postprocess: dynamically handle YOLO26x (1, 300, 6) vs YOLOv8x (1, 84, 8400)
+            det_boxes: List[List[int]] = []
+            final_confidences: List[float] = []
+            final_class_ids: List[int] = []
 
             conf_thresh = float(self.get_parameter("confidence_threshold").value)
             nms_thresh = float(self.get_parameter("nms_threshold").value)
 
-            class_ids = np.argmax(scores, axis=1)
-            confidences = np.max(scores, axis=1)
-            conf_mask = confidences >= conf_thresh
+            if len(self._output_shape) == 3 and self._output_shape[-1] == 6:
+                # YOLO26x end-to-end NMS-free direct predictions: [x1, y1, x2, y2, score, class_id]
+                preds = h_output[0]  # shape: (N, 6)
+                for i in range(len(preds)):
+                    score = float(preds[i, 4])
+                    if score < conf_thresh or not np.isfinite(score):
+                        continue
+                    px1 = float(preds[i, 0])
+                    py1 = float(preds[i, 1])
+                    px2 = float(preds[i, 2])
+                    py2 = float(preds[i, 3])
+                    cid = int(preds[i, 5])
 
-            boxes = boxes[conf_mask]
-            class_ids = class_ids[conf_mask]
-            confidences = confidences[conf_mask]
+                    x1 = (px1 - pad_w) / ratio
+                    y1 = (py1 - pad_h) / ratio
+                    x2 = (px2 - pad_w) / ratio
+                    y2 = (py2 - pad_h) / ratio
+                    x1 = max(0.0, min(float(w_orig), x1))
+                    y1 = max(0.0, min(float(h_orig), y1))
+                    x2 = max(0.0, min(float(w_orig), x2))
+                    y2 = max(0.0, min(float(h_orig), y2))
+                    bw = max(0.0, x2 - x1)
+                    bh = max(0.0, y2 - y1)
 
-            det_boxes: List[List[int]] = []
-            for i in range(len(boxes)):
-                cx, cy, bw, bh = boxes[i]
-                x1 = (cx - bw / 2.0 - pad_w) / ratio
-                y1 = (cy - bh / 2.0 - pad_h) / ratio
-                x2 = (cx + bw / 2.0 - pad_w) / ratio
-                y2 = (cy + bh / 2.0 - pad_h) / ratio
-                x1 = max(0.0, min(float(w_orig), x1))
-                y1 = max(0.0, min(float(h_orig), y1))
-                x2 = max(0.0, min(float(w_orig), x2))
-                y2 = max(0.0, min(float(h_orig), y2))
-                det_boxes.append([int(x1), int(y1), int(x2 - x1), int(y2 - y1)])
+                    det_boxes.append([int(x1), int(y1), int(bw), int(bh)])
+                    final_confidences.append(score)
+                    final_class_ids.append(cid)
+                indices = list(range(len(det_boxes)))
+            else:
+                # Standard YOLOv8x: output shape (1, 84, 8400)
+                preds = np.transpose(h_output[0], (1, 0))
+                boxes = preds[:, :4]
+                scores = preds[:, 4:]
 
-            indices = cv2.dnn.NMSBoxes(det_boxes, confidences.tolist(), conf_thresh, nms_thresh)
+                raw_class_ids = np.argmax(scores, axis=1)
+                raw_confidences = np.max(scores, axis=1)
+                conf_mask = raw_confidences >= conf_thresh
+
+                boxes = boxes[conf_mask]
+                raw_class_ids = raw_class_ids[conf_mask]
+                raw_confidences = raw_confidences[conf_mask]
+
+                for i in range(len(boxes)):
+                    cx, cy, bw, bh = boxes[i]
+                    x1 = (cx - bw / 2.0 - pad_w) / ratio
+                    y1 = (cy - bh / 2.0 - pad_h) / ratio
+                    x2 = (cx + bw / 2.0 - pad_w) / ratio
+                    y2 = (cy + bh / 2.0 - pad_h) / ratio
+                    x1 = max(0.0, min(float(w_orig), x1))
+                    y1 = max(0.0, min(float(h_orig), y1))
+                    x2 = max(0.0, min(float(w_orig), x2))
+                    y2 = max(0.0, min(float(h_orig), y2))
+                    det_boxes.append([int(x1), int(y1), int(x2 - x1), int(y2 - y1)])
+                    final_confidences.append(float(raw_confidences[i]))
+                    final_class_ids.append(int(raw_class_ids[i]))
+
+                indices_arr = cv2.dnn.NMSBoxes(det_boxes, final_confidences, conf_thresh, nms_thresh)
+                indices = indices_arr.flatten().tolist() if len(indices_arr) > 0 else []
 
             # Construct Autoware DetectedObjects message
             out_msg = DetectedObjects()
@@ -488,10 +542,10 @@ class YoloPerceptionNode(LifecycleNode):
             human_poses_list: List[Dict[str, Any]] = []
 
             if len(indices) > 0:
-                for idx in indices.flatten():
+                for idx in indices:
                     bx, by, bw, bh = det_boxes[idx]
-                    cls_id = int(class_ids[idx])
-                    conf = float(confidences[idx])
+                    cls_id = int(final_class_ids[idx])
+                    conf = float(final_confidences[idx])
                     coco_label = COCO_CLASSES[cls_id] if cls_id < len(COCO_CLASSES) else f"class_{cls_id}"
                     detected_classes_summary[coco_label] = detected_classes_summary.get(coco_label, 0) + 1
 

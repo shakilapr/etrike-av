@@ -34,7 +34,7 @@ def generate_launch_description():
 
     engine_path_arg = DeclareLaunchArgument(
         "engine_path",
-        default_value="/workspace/data/ml_models/yolov8x_fp16.engine",
+        default_value="/workspace/data/ml_models/yolo26x_fp16.engine",
         description="Path to serialized TensorRT 10.3 engine",
     )
 
