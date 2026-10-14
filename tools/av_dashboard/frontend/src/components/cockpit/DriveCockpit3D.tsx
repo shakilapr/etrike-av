@@ -220,8 +220,11 @@ export const DriveCockpit3D: React.FC = () => {
   }, []);
 
   const [filterMode, setFilterMode] = useState<'filtered' | 'raw' | 'inspection'>('filtered');
-  const [opacity, setOpacity] = useState<number>(0.40);
+  const [opacity, setOpacity] = useState<number>(0.60);
   const [density, setDensity] = useState<'med' | 'low' | 'high'>('med');
+  const [colorMode, setColorMode] = useState<'cyber' | 'prox' | 'intensity'>('cyber');
+  const [groundMode, setGroundMode] = useState<'dim' | 'off' | 'full'>('dim');
+  const [trailFrames, setTrailFrames] = useState<number>(3);
 
   const cycleFilterMode = async () => {
     const nextMode = filterMode === 'filtered' ? 'raw' : filterMode === 'raw' ? 'inspection' : 'filtered';
@@ -234,7 +237,7 @@ export const DriveCockpit3D: React.FC = () => {
   };
 
   const cycleOpacity = () => {
-    const next = opacity === 0.40 ? 0.25 : opacity === 0.25 ? 0.70 : 0.40;
+    const next = opacity === 0.60 ? 0.35 : opacity === 0.35 ? 0.85 : 0.60;
     setOpacity(next);
     if (lidarCloudInstance) {
       lidarCloudInstance.setOpacity(next);
@@ -253,29 +256,94 @@ export const DriveCockpit3D: React.FC = () => {
     }
   };
 
+  const cycleColorMode = () => {
+    const next = colorMode === 'cyber' ? 'prox' : colorMode === 'prox' ? 'intensity' : 'cyber';
+    setColorMode(next);
+    if (lidarCloudInstance) {
+      lidarCloudInstance.setColorMode(next);
+    }
+  };
+
+  const cycleGroundMode = () => {
+    const next = groundMode === 'dim' ? 'off' : groundMode === 'off' ? 'full' : 'dim';
+    setGroundMode(next);
+    if (lidarCloudInstance) {
+      lidarCloudInstance.setGroundMode(next);
+    }
+  };
+
+  const cycleTrail = () => {
+    const next = trailFrames === 3 ? 1 : 3;
+    setTrailFrames(next);
+    if (lidarCloudInstance) {
+      lidarCloudInstance.setTrailFrames(next);
+    }
+  };
+
   return (
     <div className="relative w-full h-full bg-[#020412] overflow-hidden select-none">
       {/* Three.js Canvas Container */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
       {/* Real Hesai XT32 LiDAR Status Badge & Mode Switcher */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-[#050b1a]/85 border border-[#1e293b] backdrop-blur px-3 py-1.5 rounded-md font-mono text-xs shadow-lg pointer-events-auto">
+      <div className="absolute top-[4.75rem] right-4 z-20 flex items-center gap-1.5 bg-[#050b1a]/95 border border-[#1e293b] backdrop-blur-md px-3 py-1.5 rounded-md font-mono text-xs shadow-2xl pointer-events-auto">
         <span
           className={`w-2 h-2 rounded-full ${
             lidarStream.connected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-neutral-500'
           }`}
         />
-        <span className="font-semibold text-neutral-200">XT32 LIDAR</span>
-        <span className="text-neutral-500">|</span>
-        <span className="text-cyan-400">
+        <span className="font-semibold text-neutral-200">XT32</span>
+        <span className="text-cyan-400 font-medium">
           {lidarStream.pointCount > 0 ? `${lidarStream.pointCount.toLocaleString()} pts` : 'STANDBY'}
         </span>
         {lidarStream.hz > 0 && (
-          <>
-            <span className="text-neutral-500">@</span>
-            <span className="text-emerald-400">{lidarStream.hz} Hz</span>
-          </>
+          <span className="text-emerald-400 text-[11px]">@{lidarStream.hz}Hz</span>
         )}
+        <span className="text-neutral-600">|</span>
+
+        {/* Color Mode Toggle */}
+        <button
+          onClick={cycleColorMode}
+          title="Color Mode: Click to cycle: CYBER (Elevation) -> PROX (Collision Radar) -> REFL (Laser Reflectivity)"
+          className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all border ${
+            colorMode === 'cyber'
+              ? 'bg-indigo-950/70 text-indigo-300 border-indigo-700/60 hover:bg-indigo-900/70'
+              : colorMode === 'prox'
+              ? 'bg-rose-950/80 text-amber-300 border-amber-500/70 hover:bg-rose-900/80 shadow-[0_0_8px_rgba(245,158,11,0.35)]'
+              : 'bg-teal-950/70 text-teal-300 border-teal-700/60 hover:bg-teal-900/70'
+          }`}
+        >
+          {colorMode === 'cyber' ? 'CYBER' : colorMode === 'prox' ? 'PROX' : 'REFL'}
+        </button>
+
+        {/* Ground Mode Toggle */}
+        <button
+          onClick={cycleGroundMode}
+          title="Ground Mode: Click to cycle: GND:DIM (Subtle road) -> GND:OFF (Obstacles only) -> GND:FULL (All)"
+          className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all border ${
+            groundMode === 'dim'
+              ? 'bg-sky-950/70 text-sky-300 border-sky-700/60 hover:bg-sky-900/70'
+              : groundMode === 'off'
+              ? 'bg-neutral-900/90 text-neutral-400 border-neutral-700/60 hover:bg-neutral-800/90'
+              : 'bg-emerald-950/70 text-emerald-300 border-emerald-700/60 hover:bg-emerald-900/70'
+          }`}
+        >
+          GND:{groundMode}
+        </button>
+
+        {/* Temporal Decay Accumulation Toggle */}
+        <button
+          onClick={cycleTrail}
+          title="Temporal Decay: Click to cycle: 3F (Multi-frame dense sweeps) -> 1F (Instant single sweep)"
+          className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all border ${
+            trailFrames === 3
+              ? 'bg-violet-950/70 text-violet-300 border-violet-700/60 hover:bg-violet-900/70 shadow-[0_0_8px_rgba(167,139,250,0.3)]'
+              : 'bg-slate-900/80 text-neutral-400 border-slate-700/60 hover:bg-slate-800/80'
+          }`}
+        >
+          {trailFrames}F TRAIL
+        </button>
+
         <span className="text-neutral-600">|</span>
 
         {/* Filter Mode Toggle */}
@@ -305,7 +373,7 @@ export const DriveCockpit3D: React.FC = () => {
         {/* Opacity Toggle */}
         <button
           onClick={cycleOpacity}
-          title="Opacity: Click to cycle: 40% -> 25% -> 70%"
+          title="Opacity: Click to cycle: 60% -> 35% -> 85%"
           className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider transition-all border bg-slate-900/80 text-neutral-300 border-slate-700/60 hover:bg-slate-800/80"
         >
           {Math.round(opacity * 100)}% α

@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { FrameSnapshot, MessageDef, TelemetrySummary, PerceptionObject, TrajectoryPoint, RosStatus, HumanPosesPayload, MhrHumanPayload } from '../types/can';
 
+// Single shared cockpit stream socket. Guards against duplicate connections
+// (React StrictMode double-invokes the App effect in development).
+let streamSocket: WebSocket | null = null;
+
 interface CanState {
   catalog: MessageDef[];
   contractsSource: string;
@@ -152,8 +156,13 @@ export const useCanStore = create<CanState>((set, get) => ({
   setZoomToast: (zoomToast) => set({ zoomToast }),
 
   initWebSocket: () => {
+    // Idempotent: never open a second stream socket while one is live.
+    if (streamSocket && streamSocket.readyState <= WebSocket.OPEN) {
+      return;
+    }
+
     const isDev = window.location.port === '5173';
-    const host = isDev ? '127.0.0.1:8000' : window.location.host;
+    const host = isDev ? '127.0.0.1:8080' : window.location.host;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${host}/ws/v1/stream`;
 
@@ -163,6 +172,7 @@ export const useCanStore = create<CanState>((set, get) => ({
     const connect = () => {
       try {
         ws = new WebSocket(wsUrl);
+        streamSocket = ws;
 
         ws.onopen = () => {
           set({ isConnected: true });

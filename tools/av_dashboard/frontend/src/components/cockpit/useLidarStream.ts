@@ -30,7 +30,7 @@ export function useLidarStream(lidarPointCloud: LidarPointCloud | null): LidarSt
       if (isDisposed) return;
 
       const isDev = window.location.port === '5173';
-      const wsHost = isDev ? '127.0.0.1:8000' : window.location.host;
+      const wsHost = isDev ? '127.0.0.1:8080' : window.location.host;
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${wsProtocol}//${wsHost}/ws/lidar`;
 

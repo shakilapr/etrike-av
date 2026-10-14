@@ -125,7 +125,13 @@ class MhrEngine:
 
         self._identity_count = int(model.get_num_identity_blendshapes())
         all_names = list(model.get_parameter_names())
-        self._pose_names = all_names[: -self._identity_count]
+        # Slicing with a runtime-derived negative index is a footgun: with zero
+        # identity blendshapes ``all_names[:-0]`` is ``all_names[:0]`` == [], which
+        # would silently disable the whole engine. Guard the degenerate case.
+        if self._identity_count > 0:
+            self._pose_names = all_names[: len(all_names) - self._identity_count]
+        else:
+            self._pose_names = list(all_names)
         self._num_model_params = len(self._pose_names)
 
         limits = model.get_parameter_limits().detach().cpu().numpy().astype(np.float32)

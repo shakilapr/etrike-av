@@ -305,10 +305,35 @@ export class SurroundingTraffic {
     this.coneBodyGeo = new THREE.CylinderGeometry(0.035, 0.18, 0.65, 20);
     this.coneReflectGeo = new THREE.CylinderGeometry(0.08, 0.13, 0.16, 20);
 
-    // Use the clean, clothed procedural ADAS avatar to prevent anatomical/nude appearances
-    // The procedural avatar features a sleek automotive sensor visor, dark footwear/accents,
-    // and full 17-joint RTMPose-s live kinematics.
-    this.isSmplLoaded = false;
+    // Load the rigged SMPL/MHR pedestrian mesh (bones named m_avg_*). The
+    // procedural avatar (clothed ADAS silhouette + 17-joint RTMPose-s rig) is the
+    // immediate fallback; any actor built before the asset resolves is upgraded
+    // in place, so exactly one pedestrian renderer is ever active per actor.
+    this.loadSmplTemplate();
+  }
+
+  /**
+   * Loads the rigged SMPL/MHR pedestrian GLB from /models and upgrades any
+   * pedestrians that were already spawned with the procedural fallback.
+   */
+  private loadSmplTemplate(): void {
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/pedestrian_smpl.glb',
+      (gltf) => {
+        this.smplTemplate = gltf.scene as unknown as THREE.Group;
+        this.isSmplLoaded = true;
+        for (const actor of this.actors.values()) {
+          if (actor.currentLabel === 'PEDESTRIAN') {
+            this.upgradeActorToSmpl(actor);
+          }
+        }
+      },
+      undefined,
+      (err) => {
+        console.warn('[SurroundingTraffic] SMPL pedestrian mesh unavailable, using procedural avatar:', err);
+      }
+    );
   }
 
   /**
@@ -1089,7 +1114,9 @@ export class SurroundingTraffic {
         label: 'PEDESTRIAN',
         x: 0.22 * Math.sin(lookPhase),
         y: 0.0,
-        z: -3.8,
+        // 3.8 m ahead of the rear axle (base_link) == 2.8 m ahead of the scene
+        // origin (wheelbase center): z = 1.0 - base_x.
+        z: -2.8,
         dx: 0.8,
         dy: 0.8,
         dz: 1.75,
@@ -1158,11 +1185,11 @@ export class SurroundingTraffic {
             matchedPose = poses[0];
           }
           if (!matchedPose) {
-            // Nearest spatial detection (Three.js: x ≈ -y_base, z ≈ -x_base)
+            // Nearest spatial detection (Three.js: x ≈ +y_base, z ≈ 1.0 - x_base)
             let bestDist = Infinity;
             for (const p of poses) {
-              const dx = obj.x - (-p.y_base);
-              const dz = obj.z - (-p.x_base);
+              const dx = obj.x - p.y_base;
+              const dz = obj.z - (1.0 - p.x_base);
               const d = Math.sqrt(dx * dx + dz * dz);
               if (d < 3.0 && d < bestDist) {
                 bestDist = d;
@@ -1563,18 +1590,20 @@ export class SurroundingTraffic {
             for (let k = 0; k < 17; k++) {
               const kp3 = k3d[k3dOrder[k]];
               if (kp3 && kp3.x !== undefined && kp3.y !== undefined && kp3.z !== undefined) {
-                // Convert vehicle base_link (+X fwd, +Y left, +Z up) to Three.js world (+X right, +Y up, -Z fwd)
-                positions[k] = new THREE.Vector3(-kp3.y, kp3.z, -kp3.x);
+                // Convert vehicle base_link (+X fwd, +Y left, +Z up) to the unified
+                // Three.js frame (x = +y_base, z = 1.0 - x_base) shared with the
+                // LiDAR cloud and perception boxes.
+                positions[k] = new THREE.Vector3(kp3.y, kp3.z, 1.0 - kp3.x);
               }
             }
           }
 
           // Fill any missing joints with forward-kinematic fallback defaults
           if (!positions[0]) positions[0] = headObj.localToWorld(new THREE.Vector3(0, 0.06, -0.12)); // Nose
-          if (!positions[1]) positions[1] = headObj.localToWorld(new THREE.Vector3(-0.035, 0.08, -0.10)); // EyeL
-          if (!positions[2]) positions[2] = headObj.localToWorld(new THREE.Vector3(0.035, 0.08, -0.10)); // EyeR
-          if (!positions[3]) positions[3] = headObj.localToWorld(new THREE.Vector3(-0.085, 0.06, -0.02)); // EarL
-          if (!positions[4]) positions[4] = headObj.localToWorld(new THREE.Vector3(0.085, 0.06, -0.02)); // EarR
+          if (!positions[1]) positions[1] = headObj.localToWorld(new THREE.Vector3(0.035, 0.08, -0.10)); // EyeL
+          if (!positions[2]) positions[2] = headObj.localToWorld(new THREE.Vector3(-0.035, 0.08, -0.10)); // EyeR
+          if (!positions[3]) positions[3] = headObj.localToWorld(new THREE.Vector3(0.085, 0.06, -0.02)); // EarL
+          if (!positions[4]) positions[4] = headObj.localToWorld(new THREE.Vector3(-0.085, 0.06, -0.02)); // EarR
           if (!positions[5]) positions[5] = actor.limbs.armL.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderL
           if (!positions[6]) positions[6] = actor.limbs.armR.localToWorld(new THREE.Vector3(0, 0, 0)); // ShoulderR
           if (!positions[7]) positions[7] = actor.limbs.elbowL.localToWorld(new THREE.Vector3(0, 0, 0)); // ElbowL

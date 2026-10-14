@@ -318,4 +318,14 @@ export class TuktukVehicle {
       this.brakeLightsMaterial.color.setHex(0x500724); // Dim running red
     }
   }
+
+  public dispose(): void {
+    this.group.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const mat = mesh.material;
+      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+      else if (mat) (mat as THREE.Material).dispose();
+    });
+  }
 }

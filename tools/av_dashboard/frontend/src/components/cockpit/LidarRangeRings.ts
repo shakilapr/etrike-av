@@ -102,4 +102,16 @@ export class LidarRangeRings {
   public setVisible(visible: boolean): void {
     this.group.visible = visible;
   }
+
+  public dispose(): void {
+    this.group.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const mat = mesh.material;
+      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+      else if (mat) (mat as THREE.Material).dispose();
+      const sprite = child as THREE.Sprite;
+      if (sprite.isSprite && sprite.material?.map) sprite.material.map.dispose();
+    });
+  }
 }

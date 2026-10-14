@@ -52,6 +52,12 @@ SOURCE_STALE_SEC: float = 1.5
 # Odometry is preferred over TF for this long after its last message.
 ODOM_FRESH_SEC: float = 1.0
 
+# Single canonical base_link -> Three.js longitudinal offset (metres). base_link is
+# the ground projection of the rear axle; the cockpit scene origin is the wheelbase
+# center, 1.0 m ahead of it. Shared by the perception transforms here and by
+# LidarStreamer (three_z = 1.0 - base_x) so every producer lands in one frame.
+BASE_LINK_TO_SCENE_Z_OFFSET: float = 1.0
+
 
 def quaternion_to_yaw(qx: float, qy: float, qz: float, qw: float) -> float:
     """Extract yaw angle (radians) around Z axis from a quaternion."""
@@ -150,6 +156,7 @@ class Ros2Bridge:
         # Camera debug stream
         self._latest_jpeg: Optional[bytes] = None
         self._latest_jpeg_time: float = 0.0
+        self._latest_debug_jpeg_time: float = 0.0
         # Dedicated real LiDAR pointcloud streamer
         self.lidar_streamer: LidarStreamer = LidarStreamer()
 
@@ -566,19 +573,30 @@ class Ros2Bridge:
         # Base_link: forward (+X), left (+Y)
         base_x = cos_yaw * dx + sin_yaw * dy
         base_y = -sin_yaw * dx + cos_yaw * dy
-        rel_yaw = yaw - ego_yaw
+        # The base_link -> Three.js basis (x=+Y, z=-X) is a mirror, so headings are
+        # negated to stay consistent with _relative_transform and the LiDAR cloud.
+        rel_yaw = -(yaw - ego_yaw)
 
-        # Three.js: right (+X), up (+Y), forward (-Z)
-        three_x = -base_y
+        # Three.js: right (+X), up (+Y), forward (-Z). The scene origin is the
+        # wheelbase center, so base_link (REP-103, ground projection of the rear
+        # axle) sits at Z = +1.0 m. This MUST match LidarStreamer.process_pointcloud
+        # and the rendered Tuktuk model, otherwise the LiDAR cloud, perception
+        # boxes and the planned trajectory cannot coexist in one frame.
+        three_x = base_y
         three_y = dz
-        three_z = -base_x
+        three_z = BASE_LINK_TO_SCENE_Z_OFFSET - base_x
 
         return (round(three_x, 2), round(three_y, 2), round(three_z, 2), round(rel_yaw, 2))
 
     @staticmethod
     def _relative_transform(x: float, y: float, z: float, yaw: float) -> Tuple[float, float, float, float]:
         """Convert an already base_link-relative pose (base: +X fwd, +Y left) to Three.js."""
-        return (round(-y, 2), round(z, 2), round(-x, 2), round(yaw, 2))
+        return (
+            round(y, 2),
+            round(z, 2),
+            round(BASE_LINK_TO_SCENE_Z_OFFSET - x, 2),
+            round(-yaw, 2),
+        )
 
     def _classify(self, obj: Any) -> str:
         if hasattr(obj, "classification") and obj.classification:
@@ -865,43 +883,82 @@ class Ros2Bridge:
         except Exception:
             pass
 
+    @staticmethod
+    def _ros_image_to_bgr(msg: Any) -> Optional[Any]:
+        """Decode a sensor_msgs/Image into a BGR uint8 ndarray, honouring row ``step``.
+
+        Handles bgr8/rgb8/bgra8/rgba8/mono8/8UC1..4 and 16UC1. Returns ``None`` when
+        the buffer is inconsistent (e.g. padded/4-channel frames) so the caller can
+        skip that frame instead of raising. Naive ``reshape((h, w, 3))`` corrupts or
+        rejects BGRA frames (the Kinect v2 colour stream) and ignores row padding.
+        """
+        try:
+            import cv2
+            import numpy as np
+        except Exception:
+            return None
+
+        h = int(getattr(msg, "height", 0))
+        w = int(getattr(msg, "width", 0))
+        if h <= 0 or w <= 0:
+            return None
+
+        enc = str(getattr(msg, "encoding", "bgr8")).lower()
+        raw = np.frombuffer(msg.data, dtype=np.uint8)
+
+        # 16-bit encodings (e.g. 16UC1 depth): scale to 8-bit grayscale.
+        if "16u" in enc:
+            if raw.size < h * w * 2:
+                return None
+            img16 = raw[: h * w * 2].view(np.uint16).reshape(h, w)
+            peak = int(img16.max())
+            img8 = cv2.convertScaleAbs(img16, alpha=255.0 / peak) if peak > 0 else img16.astype(np.uint8)
+            return cv2.cvtColor(img8, cv2.COLOR_GRAY2BGR)
+
+        is_4ch = "bgra" in enc or "rgba" in enc or "8uc4" in enc
+        is_3ch = "bgr" in enc or "rgb" in enc or "8uc3" in enc
+        channels = 4 if is_4ch else 3 if is_3ch else 1
+
+        step = int(getattr(msg, "step", 0)) or w * channels
+        if step < w * channels or step * h > raw.size:
+            return None
+        rows = raw[: step * h].reshape(h, step)
+
+        if is_4ch:
+            ch4 = rows[:, : w * 4].reshape(h, w, 4)
+            return cv2.cvtColor(ch4, cv2.COLOR_RGBA2BGR if "rgba" in enc else cv2.COLOR_BGRA2BGR)
+        if "rgb" in enc:
+            return cv2.cvtColor(rows[:, : w * 3].reshape(h, w, 3), cv2.COLOR_RGB2BGR)
+        if is_3ch:
+            return rows[:, : w * 3].reshape(h, w, 3).copy()
+        # mono8 / 8UC1 / unknown single-channel.
+        return cv2.cvtColor(rows[:, :w].reshape(h, w), cv2.COLOR_GRAY2BGR)
+
+    def _store_camera_frame(self, jpeg: bytes, now_t: float, topic: str) -> None:
+        with self._lock:
+            self._latest_jpeg = jpeg
+            self._latest_jpeg_time = now_t
+            self._last_camera_image_time = now_t
+            self._camera_timestamps.append(now_t)
+            while self._camera_timestamps and (now_t - self._camera_timestamps[0]) > 1.0:
+                self._camera_timestamps.pop(0)
+            self._topic_counts[topic] = self._topic_counts.get(topic, 0) + 1
+
     def _on_camera_debug_image(self, msg: Any) -> None:
         """Handle incoming annotated camera debug frame (YOLO bounding boxes) and encode as JPEG."""
         try:
             import cv2
-            import numpy as np
 
-            h = int(msg.height)
-            w = int(msg.width)
-            if h <= 0 or w <= 0:
+            frame = self._ros_image_to_bgr(msg)
+            if frame is None:
                 return
 
-            enc = getattr(msg, "encoding", "bgr8").lower()
-            data = np.frombuffer(msg.data, dtype=np.uint8)
-
-            if "bgr" in enc:
-                frame = data.reshape((h, w, 3))
-            elif "rgb" in enc:
-                frame_rgb = data.reshape((h, w, 3))
-                frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-            elif "mono" in enc or "8uc1" in enc:
-                frame = data.reshape((h, w))
-            else:
-                frame = data.reshape((h, w, -1))
-
-            # Encode to JPEG
             success, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if success:
                 now_t = time.time()
                 with self._lock:
-                    self._latest_jpeg = jpeg_buf.tobytes()
-                    self._latest_jpeg_time = now_t
                     self._latest_debug_jpeg_time = now_t
-                    self._last_camera_image_time = now_t
-                    self._camera_timestamps.append(now_t)
-                    while self._camera_timestamps and (now_t - self._camera_timestamps[0]) > 1.0:
-                        self._camera_timestamps.pop(0)
-                    self._topic_counts["camera_debug_image"] = self._topic_counts.get("camera_debug_image", 0) + 1
+                self._store_camera_frame(jpeg_buf.tobytes(), now_t, "camera_debug_image")
         except Exception:
             pass
 
@@ -913,37 +970,15 @@ class Ros2Bridge:
 
         try:
             import cv2
-            import numpy as np
 
-            h = int(msg.height)
-            w = int(msg.width)
-            if h <= 0 or w <= 0:
+            frame = self._ros_image_to_bgr(msg)
+            if frame is None:
                 return
-
-            enc = getattr(msg, "encoding", "bgr8").lower()
-            data = np.frombuffer(msg.data, dtype=np.uint8)
-
-            if "bgr" in enc:
-                frame = data.reshape((h, w, 3))
-            elif "rgb" in enc:
-                frame_rgb = data.reshape((h, w, 3))
-                frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-            elif "mono" in enc or "8uc1" in enc:
-                frame = data.reshape((h, w))
-            else:
-                frame = data.reshape((h, w, -1))
 
             success, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if success:
                 now_t = time.time()
-                with self._lock:
-                    self._latest_jpeg = jpeg_buf.tobytes()
-                    self._latest_jpeg_time = now_t
-                    self._last_camera_image_time = now_t
-                    self._camera_timestamps.append(now_t)
-                    while self._camera_timestamps and (now_t - self._camera_timestamps[0]) > 1.0:
-                        self._camera_timestamps.pop(0)
-                    self._topic_counts["camera_raw_image"] = self._topic_counts.get("camera_raw_image", 0) + 1
+                self._store_camera_frame(jpeg_buf.tobytes(), now_t, "camera_raw_image")
         except Exception:
             pass
 

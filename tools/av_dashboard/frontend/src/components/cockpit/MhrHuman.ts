@@ -14,8 +14,8 @@ import type { MhrHumanPayload } from '../../types/can';
  * mesh remains authoritative.
  */
 
-/** Vite dev server runs on :5173 with the backend on :8000. */
-const API_BASE = window.location.port === '5173' ? 'http://127.0.0.1:8000' : '';
+/** Vite dev server runs on :5173 with the dashboard backend on :8080. */
+const API_BASE = window.location.port === '5173' ? 'http://127.0.0.1:8080' : '';
 const TOPOLOGY_URL = `${API_BASE}/api/v1/mhr/topology`;
 
 /** MHR's native mesh faces +Z; the cockpit actor forward is -Z. */
@@ -68,6 +68,8 @@ export class MhrHuman {
         this.topology = new Uint32Array(buf);
       })
       .catch((err) => {
+        // Allow a later frame to retry (backend may still be starting up).
+        this.topologyRequested = false;
         console.warn('[MhrHuman] topology unavailable, using procedural pedestrians:', err);
       });
   }
