@@ -757,6 +757,10 @@ class YoloPerceptionNode(LifecycleNode):
                     kinematics.pose_with_covariance.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
                     det_obj.kinematics = kinematics
 
+                    # Reject weak noise detections and tiny clutter bounding boxes
+                    if is_ped and (conf < 0.40 or bh < 45 or bw < 20):
+                        continue
+
                     shape = Shape()
                     shape.type = Shape.BOUNDING_BOX
                     shape.dimensions = Vector3(x=0.8, y=0.8, z=1.7) if is_ped else Vector3(x=1.8, y=1.5, z=1.5)
@@ -767,6 +771,8 @@ class YoloPerceptionNode(LifecycleNode):
                     # Top-Down RTMPose-s Pose Estimation Branch for Pedestrians
                     posture_str = "STANDING"
                     is_seated = False
+                    is_truncated = False
+                    yaw_base = 0.0
                     keypoints_dict: Dict[str, Dict[str, float]] = {}
 
                     if is_ped and self._pose_context is not None and bw > 15 and bh > 20:
@@ -820,30 +826,35 @@ class YoloPerceptionNode(LifecycleNode):
                             sh_y = (kpts_list[5][1] + kpts_list[6][1]) / 2.0
                             sh_x = (kpts_list[5][0] + kpts_list[6][0]) / 2.0
                             hip_y = (kpts_list[11][1] + kpts_list[12][1]) / 2.0
+                            hip_x = (kpts_list[11][0] + kpts_list[12][0]) / 2.0
                             knee_y = (kpts_list[13][1] + kpts_list[14][1]) / 2.0
+                            knee_x = (kpts_list[13][0] + kpts_list[14][0]) / 2.0
                             ankle_y = (kpts_list[15][1] + kpts_list[16][1]) / 2.0
 
                             torso_dy = max(20.0, abs(hip_y - sh_y))
                             thigh_dy = abs(knee_y - hip_y)
+                            thigh_dx = abs(knee_x - hip_x)
                             shin_dy = abs(ankle_y - knee_y)
                             leg_dy = abs(ankle_y - hip_y)
                             aspect_ratio = float(bh) / max(1.0, float(bw))
 
                             # Lower-body truncation: feet outside bottom margin of camera frame
                             is_truncated = bool(
-                                (by + bh) >= int(0.93 * h_orig)
+                                (by + bh) >= int(0.92 * h_orig)
                                 or shin_dy < 18.0
-                                or knee_y >= (0.94 * h_orig)
+                                or knee_y >= (0.93 * h_orig)
                             )
 
-                            # Robust Posture Classification:
-                            # 1. STANDING: legs fully extended vertically (leg_dy/torso_dy > 1.25 and thigh_dy/torso_dy > 0.55)
-                            # 2. SEATED: thighs horizontal (thigh_dy/torso_dy < 0.40) or truncated squarish torso
-                            is_standing = bool(shin_dy > 25.0 and (leg_dy / torso_dy) > 1.25 and (thigh_dy / torso_dy) > 0.55)
-                            if not is_standing and is_truncated:
-                                # When lower legs cut off: check if visible thighs project straight down
-                                if (thigh_dy / torso_dy) > 0.60 and aspect_ratio > 1.40:
-                                    is_standing = True
+                            # Robust Anatomical Posture Classification:
+                            # Standing: Thighs and shins descend vertically (thigh_dy / torso_dy >= 0.46)
+                            # or full legs extended (leg_dy / torso_dy >= 1.05) or tall upright truncation
+                            # Seated: Thighs horizontal (thigh_dy / torso_dy < 0.40) or lap extends forward
+                            if (leg_dy / torso_dy >= 1.05 and shin_dy > 18.0) or (thigh_dy / torso_dy >= 0.46):
+                                is_standing = True
+                            elif is_truncated and (thigh_dy / torso_dy >= 0.38 or aspect_ratio >= 1.35):
+                                is_standing = True
+                            else:
+                                is_standing = False
 
                             is_seated = not is_standing
                             posture_str = "SEATED" if is_seated else ("STANDING (TRUNCATED)" if is_truncated else "STANDING")
@@ -852,14 +863,13 @@ class YoloPerceptionNode(LifecycleNode):
                             # COCO: 5=Left Shoulder, 6=Right Shoulder, 0=Nose
                             # When facing camera: Left Shoulder is at viewer's right (x5 > x6)
                             # When facing away: Right Shoulder is at viewer's right (x6 > x5)
+                            # Base_link: +X forward (yaw=0), +Y left (yaw=+pi/2), -Y right (yaw=-pi/2)
                             dx_sh = float(kpts_list[6][0] - kpts_list[5][0])  # right.x - left.x
                             dx_nose = float(kpts_list[0][0] - sh_x)
 
-                            # In base_link: +X is forward (facing away from vehicle, yaw=0)
-                            # -X is backward (facing towards vehicle, yaw=pi)
-                            nz = 1.0 if dx_sh > 20.0 else (-1.0 if dx_sh < -20.0 else 0.0)
-                            ny = -dx_nose / max(15.0, torso_dy * 0.3)
-                            ny = max(-1.0, min(1.0, ny))
+                            w_torso = max(25.0, torso_dy * 0.65)
+                            nz = max(-1.0, min(1.0, dx_sh / w_torso))
+                            ny = max(-1.0, min(1.0, -dx_nose / max(15.0, torso_dy * 0.35)))
 
                             yaw_base = math.atan2(ny, nz)
                             cy = math.cos(yaw_base * 0.5)
@@ -874,22 +884,23 @@ class YoloPerceptionNode(LifecycleNode):
                                     cv2.line(annotated_bgr, kpts_list[p1], kpts_list[p2], (0, 220, 255), 2)
                                 for pt in kpts_list:
                                     cv2.circle(annotated_bgr, pt, 3, (0, 255, 255), -1)
+
+                            # Append human pose with deterministic det_{idx} ID matching
+                            human_poses_list.append({
+                                "id": f"det_{len(out_msg.objects)-1}",
+                                "x_base": round(x_base, 2),
+                                "y_base": round(y_base, 2),
+                                "z_base": round(z_base, 2),
+                                "yaw": round(yaw_base, 3),
+                                "est_z": round(est_z, 2),
+                                "posture": posture_str,
+                                "is_seated": is_seated,
+                                "is_truncated": is_truncated,
+                                "confidence": round(conf, 2),
+                                "keypoints": keypoints_dict,
+                            })
                         except Exception as pe:
                             self.get_logger().warn(f"RTMPose inference error: {pe}")
-
-                        human_poses_list.append({
-                            "id": f"ped_{len(out_msg.objects)-1}",
-                            "x_base": round(x_base, 2),
-                            "y_base": round(y_base, 2),
-                            "z_base": round(z_base, 2),
-                            "yaw": round(yaw_base, 3),
-                            "est_z": round(est_z, 2),
-                            "posture": posture_str,
-                            "is_seated": is_seated,
-                            "is_truncated": is_truncated,
-                            "confidence": round(conf, 2),
-                            "keypoints": keypoints_dict,
-                        })
 
                     # Annotate debug visualization
                     if annotated_bgr is not None:

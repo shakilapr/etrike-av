@@ -681,7 +681,7 @@ class Ros2Bridge:
                 speed_kmh = round(math.sqrt(vx * vx + vy * vy) * 3.6, 1)
 
             converted.append({
-                "id": self._object_id(obj),
+                "id": self._object_id(obj) or f"det_{len(converted)}",
                 "label": label,
                 "x": tx,
                 "y": ty,

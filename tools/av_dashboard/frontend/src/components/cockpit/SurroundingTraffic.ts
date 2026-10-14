@@ -1142,9 +1142,13 @@ export class SurroundingTraffic {
             if (kpts && kpts.left_shoulder && kpts.right_shoulder) {
               actor.hasLivePose = true;
 
+              // Orientation-aware arm kinematics: account for whether human is facing towards or away from vehicle
+              const isFacingCamera = (kpts.left_shoulder.x > kpts.right_shoulder.x);
+              const armSign = isFacingCamera ? 1.0 : -1.0;
+
               // Left Arm kinematics (resting lap/side vs deliberate gesture)
               if (kpts.left_elbow) {
-                const dxl = kpts.left_elbow.x - kpts.left_shoulder.x;
+                const dxl = (kpts.left_elbow.x - kpts.left_shoulder.x) * armSign;
                 const dyl = kpts.left_elbow.y - kpts.left_shoulder.y;
                 const isLeftRaised = kpts.left_wrist && (kpts.left_wrist.y < kpts.left_elbow.y - 15 || kpts.left_wrist.y < kpts.left_shoulder.y + 15);
 
@@ -1170,7 +1174,7 @@ export class SurroundingTraffic {
 
               // Right Arm kinematics (resting lap/side vs deliberate gesture)
               if (kpts.right_elbow) {
-                const dxr = kpts.right_elbow.x - kpts.right_shoulder.x;
+                const dxr = (kpts.right_elbow.x - kpts.right_shoulder.x) * armSign;
                 const dyr = kpts.right_elbow.y - kpts.right_shoulder.y;
                 const isRightRaised = kpts.right_wrist && (kpts.right_wrist.y < kpts.right_elbow.y - 15 || kpts.right_wrist.y < kpts.right_shoulder.y + 15);
 
@@ -1232,7 +1236,6 @@ export class SurroundingTraffic {
     // Smooth position interpolation and animate walk/seated cycles
     const posLerp = 1 - Math.exp(-step * 12);
     const yawLerp = 1 - Math.exp(-step * 10);
-    const TWO_PI = Math.PI * 2;
 
     for (const [key, actor] of this.actors) {
       const isVisible = seen.has(key);
@@ -1241,10 +1244,10 @@ export class SurroundingTraffic {
         continue;
       }
 
-      // Smooth position & rotation
+      // Smooth position & rotation (canonical circular shortest-delta interpolation)
       actor.group.position.lerp(actor.targetPos, posLerp);
-      const rawDiff = actor.targetYaw - actor.group.rotation.y + Math.PI;
-      const delta = (((rawDiff % TWO_PI) + TWO_PI) % TWO_PI) - Math.PI;
+      const diff = actor.targetYaw - actor.group.rotation.y;
+      const delta = Math.atan2(Math.sin(diff), Math.cos(diff));
       actor.group.rotation.y += delta * yawLerp;
 
       // Update lead hazard badge and proximity highlight
