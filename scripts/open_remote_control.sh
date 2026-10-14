@@ -37,14 +37,27 @@ echo "======================================================================"
 
 # 1. Setup X11 display permissions
 export DISPLAY="${DISPLAY:-:1}"
+if [ ! -e "/tmp/.X11-unix/X${DISPLAY#:}" ]; then
+    for d in 1 0; do
+        if [ -e "/tmp/.X11-unix/X${d}" ]; then
+            DISPLAY=":${d}"
+            break
+        fi
+    done
+fi
 if [ -z "$XAUTHORITY" ]; then
-    if [ -f "/run/user/1000/gdm/Xauthority" ]; then
+    if [ -f "/run/user/$(id -u)/gdm/Xauthority" ]; then
+        export XAUTHORITY="/run/user/$(id -u)/gdm/Xauthority"
+    elif [ -f "/run/user/1000/gdm/Xauthority" ]; then
         export XAUTHORITY="/run/user/1000/gdm/Xauthority"
     elif [ -f "$HOME/.Xauthority" ]; then
         export XAUTHORITY="$HOME/.Xauthority"
+    elif [ -f "/home/med1/.Xauthority" ]; then
+        export XAUTHORITY="/home/med1/.Xauthority"
     fi
 fi
 xhost +local:docker >/dev/null 2>&1 || true
+xhost +SI:localuser:root >/dev/null 2>&1 || true
 
 # 2. Setup CAN Interface
 echo "--> Initializing CAN adapter ($CAN_IFACE)..."
@@ -84,6 +97,12 @@ else
     echo "  Container started."
 fi
 
+# Provision host X11 authority into container so Qt GUI can connect reliably
+if [ -n "$XAUTHORITY" ] && [ -f "$XAUTHORITY" ]; then
+    docker cp "$XAUTHORITY" "$CONTAINER":/tmp/.docker.xauth >/dev/null 2>&1 || true
+    docker exec "$CONTAINER" chmod 644 /tmp/.docker.xauth >/dev/null 2>&1 || true
+fi
+
 # 4. Clean up any conflicting GUI or simulator instances
 echo "--> Checking existing ROS nodes inside container..."
 BRIDGE_ALREADY_RUNNING=false
@@ -92,11 +111,10 @@ if docker exec "$CONTAINER" pgrep -f "vehicle_bridge_node" >/dev/null 2>&1; then
     echo "  [INFO] Detected existing vehicle_bridge_node already running. Will attach GUI to it."
 fi
 
-# Stop previous cockpit GUI or conflicting simulators
+# Stop previous cockpit GUI (and stop planning_simulator if active to prevent dual /control_cmd publisher collision, while keeping RViz2 alive)
 docker exec "$CONTAINER" bash -c "
     pkill -9 -f 'remote_control_gui' 2>/dev/null || true
     pkill -9 -f 'planning_simulator' 2>/dev/null || true
-    pkill -9 -f 'rviz2' 2>/dev/null || true
 " || true
 
 sleep 0.5
@@ -114,7 +132,7 @@ fi
 
 docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$DISPLAY
-    export XAUTHORITY=$XAUTHORITY
+    if [ -f /tmp/.docker.xauth ]; then export XAUTHORITY=/tmp/.docker.xauth; else export XAUTHORITY=$XAUTHORITY; fi
     source /opt/autoware/setup.bash 2>/dev/null || source /opt/ros/humble/setup.bash
     if [ -f /workspace/autoware/install/setup.bash ]; then
         source /workspace/autoware/install/setup.bash
