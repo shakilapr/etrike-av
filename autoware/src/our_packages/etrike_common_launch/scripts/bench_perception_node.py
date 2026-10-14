@@ -90,6 +90,10 @@ class BenchPerceptionNode(LifecycleNode):
         self.declare_parameter("roi_z_min", 0.05)
         self.declare_parameter("roi_z_max", 2.20)
         self.declare_parameter("enable_hog_person_detector", True)
+        # Dedicated isolated topics to prevent interfering with Autoware simulation/planning
+        self.declare_parameter("output_objects_topic", "/bench_perception/objects")
+        self.declare_parameter("output_clusters_topic", "/bench_perception/clusters")
+        self.declare_parameter("output_status_topic", "/bench_perception/status")
 
         # Camera mount extrinsics relative to base_link (x=1.2m fwd, y=0.0m, z=1.0m up)
         self._cam_x = 1.20
@@ -148,21 +152,26 @@ class BenchPerceptionNode(LifecycleNode):
             depth=1,
         )
 
+        output_objects_topic = str(self.get_parameter("output_objects_topic").value)
+        output_clusters_topic = str(self.get_parameter("output_clusters_topic").value)
+        output_status_topic = str(self.get_parameter("output_status_topic").value)
+
         self._pub_objects = self.create_lifecycle_publisher(
             DetectedObjects,
-            "/perception/object_recognition/detection/objects",
+            output_objects_topic,
             qos_pub,
         )
         self._pub_clusters = self.create_lifecycle_publisher(
             DetectedObjects,
-            "/perception/object_recognition/detection/clustering/objects",
+            output_clusters_topic,
             qos_pub,
         )
         self._pub_status = self.create_lifecycle_publisher(
             String,
-            "/bench_perception/status",
+            output_status_topic,
             qos_pub,
         )
+        self.get_logger().info(f"Publishing isolated bench detections to: {output_objects_topic}")
 
         # 1. LiDAR PointCloud Subscription
         self._sub_lidar = self.create_subscription(
