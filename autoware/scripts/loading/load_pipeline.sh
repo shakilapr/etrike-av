@@ -174,6 +174,14 @@ start_container() {
 start_universe() {
   say "Autoware Universe (planning simulator + RViz) on the monitor"
   ensure_x11_access
+  # Enforce mutual exclusion: stop any active remote cockpit / manual teleop nodes
+  docker exec "$CONTAINER" bash -c "
+    pkill -9 -f 'remote_control_node' 2>/dev/null || true
+    pkill -9 -f 'remote_control_gui' 2>/dev/null || true
+    pkill -9 -f 'bench_remote_control' 2>/dev/null || true
+  " 2>/dev/null || true
+  pkill -9 -f "remote_control_gui" 2>/dev/null || true
+
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
     if [ -f /tmp/.docker.xauth ]; then export XAUTHORITY=/tmp/.docker.xauth; else export XAUTHORITY=$XAUTH; fi;
@@ -201,6 +209,14 @@ start_live_autoware() {
   say "Autoware Universe LIVE (Hesai LiDAR + Kinect v2 + CenterPoint Perception + NDT Localization + RViz)"
   ensure_x11_access
   detect_can
+  # Enforce mutual exclusion: stop any active remote cockpit / manual teleop nodes
+  docker exec "$CONTAINER" bash -c "
+    pkill -9 -f 'remote_control_node' 2>/dev/null || true
+    pkill -9 -f 'remote_control_gui' 2>/dev/null || true
+    pkill -9 -f 'bench_remote_control' 2>/dev/null || true
+  " 2>/dev/null || true
+  pkill -9 -f "remote_control_gui" 2>/dev/null || true
+
   docker exec -d "$CONTAINER" bash -c "
     export DISPLAY=$X_DISPLAY;
     if [ -f /tmp/.docker.xauth ]; then export XAUTHORITY=/tmp/.docker.xauth; else export XAUTHORITY=$XAUTH; fi;
@@ -285,6 +301,11 @@ start_bridge() {
   local sim_flag="${1:-true}"
   detect_can
   say "Vehicle bridge (sim_mode=$sim_flag) on $CAN_IFACE"
+  # Terminate any previously running bridge instance to prevent duplicate CAN bus binding
+  docker exec "$CONTAINER" bash -c "
+    pkill -9 -f 'vehicle_bridge' 2>/dev/null || true
+  " 2>/dev/null || true
+  sleep 0.5
   docker exec -d "$CONTAINER" bash -c "
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
     if [ -f /home/aw/cyclonedds.xml ]; then export CYCLONEDDS_URI=file:///home/aw/cyclonedds.xml; fi;
