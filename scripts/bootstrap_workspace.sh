@@ -83,6 +83,13 @@ else
     echo "  [SKIP] $PATCH_SPEED_SCRIPT not found"
 fi
 
+PATCH_CUDA_SCRIPT="$SCRIPT_DIR/../patches/apply_cuda_blackboard_jetson_patch.sh"
+if [ -f "$PATCH_CUDA_SCRIPT" ]; then
+    bash "$PATCH_CUDA_SCRIPT"
+else
+    echo "  [SKIP] $PATCH_CUDA_SCRIPT not found"
+fi
+
 # --- 5. Verify our_packages exist ---
 echo ""
 echo "[STEP 4] Verifying E-Trike packages ..."
