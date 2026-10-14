@@ -23,7 +23,8 @@ Write-Host " Starting AV Dashboard on port $Port" -ForegroundColor Cyan
 Write-Host " URL: http://localhost:$Port" -ForegroundColor Green
 Write-Host "======================================================================" -ForegroundColor Cyan
 
-$simArg = if ($Sim) { "--sim" } else { "" }
+$serverArgs = @("--interface", $Interface, "--port", $Port)
+if ($Sim) { $serverArgs += "--sim" }
 
 # Auto-open browser after 2 seconds
 Start-Job -ScriptBlock {
@@ -33,4 +34,4 @@ Start-Job -ScriptBlock {
 } -ArgumentList $Port | Out-Null
 
 $pythonExe = if (Test-Path "E:\miniconda\python.exe") { "E:\miniconda\python.exe" } else { "python" }
-& $pythonExe -m tools.av_dashboard.backend.server --interface $Interface --port $Port $simArg
+& $pythonExe -m tools.av_dashboard.backend.server @serverArgs
