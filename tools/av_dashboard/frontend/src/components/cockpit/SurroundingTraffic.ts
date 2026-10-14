@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { PerceptionObject, HumanPosesPayload, HumanPoseItem, MhrHumanPayload } from '../../types/can';
 import { MhrHuman } from './MhrHuman';
@@ -78,6 +79,11 @@ interface Actor {
   smplMesh?: THREE.Object3D;
   smplBones?: Record<string, THREE.Bone>;
   proceduralMesh?: THREE.Object3D;
+  humanObjMesh?: THREE.Object3D;
+  pedBoxMesh?: THREE.Mesh;
+  pedEdgesMesh?: THREE.LineSegments;
+  pedRingMesh?: THREE.Mesh;
+  sensorProvenance?: string;
   lastPoseItem?: HumanPoseItem;
 }
 
@@ -102,6 +108,8 @@ export class SurroundingTraffic {
   private animTime = 0;
   private smplTemplate: THREE.Group | null = null;
   private isSmplLoaded = false;
+  private humanModelTemplate: THREE.Group | null = null;
+  private isHumanModelLoaded = false;
   private mhr: MhrHuman;
 
   // Shared Materials
@@ -110,6 +118,11 @@ export class SurroundingTraffic {
   private pedVisorMat: THREE.MeshStandardMaterial;
   private pedShadowMat: THREE.MeshBasicMaterial;
   private pedHazardMat: THREE.MeshBasicMaterial;
+
+  // RViz Multi-Modal Semantic Materials
+  private pedFusedMat: THREE.MeshStandardMaterial;
+  private pedLidarMat: THREE.MeshStandardMaterial;
+  private pedCameraMat: THREE.MeshStandardMaterial;
 
   // RTMPose-s 17-Keypoint Glowing Emissive Materials
   private jointCyanMat: THREE.MeshBasicMaterial;
@@ -209,6 +222,29 @@ export class SurroundingTraffic {
       side: THREE.DoubleSide,
     });
 
+    // RViz Multi-Modal Semantic Materials
+    this.pedFusedMat = new THREE.MeshStandardMaterial({
+      color: 0x00e5ff, // Vivid Cyan / Teal (#00E5FF)
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x003344,
+      emissiveIntensity: 0.4,
+    });
+    this.pedLidarMat = new THREE.MeshStandardMaterial({
+      color: 0xff8c00, // High-vis Highway Orange (#FF8C00)
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x442200,
+      emissiveIntensity: 0.4,
+    });
+    this.pedCameraMat = new THREE.MeshStandardMaterial({
+      color: 0xffe600, // Electric Yellow (#FFE600)
+      roughness: 0.35,
+      metalness: 0.25,
+      emissive: 0x443b00,
+      emissiveIntensity: 0.4,
+    });
+
     this.carPaintMat = new THREE.MeshStandardMaterial({
       color: 0x94a3b8, // Satin metallic slate/silver
       roughness: 0.25,
@@ -305,11 +341,125 @@ export class SurroundingTraffic {
     this.coneBodyGeo = new THREE.CylinderGeometry(0.035, 0.18, 0.65, 20);
     this.coneReflectGeo = new THREE.CylinderGeometry(0.08, 0.13, 0.16, 20);
 
+    // Load authentic 3D human body mesh (human_model.obj) matching RViz2
+    this.loadHumanModelTemplate();
+
     // Load the rigged SMPL/MHR pedestrian mesh (bones named m_avg_*). The
     // procedural avatar (clothed ADAS silhouette + 17-joint RTMPose-s rig) is the
     // immediate fallback; any actor built before the asset resolves is upgraded
     // in place, so exactly one pedestrian renderer is ever active per actor.
     this.loadSmplTemplate();
+  }
+
+  /**
+   * Loads the authentic 3D human body mesh (human_model.obj) used by RViz2.
+   * Maps ROS coordinates (+X forward, +Y left, +Z up) into Three.js (-Z forward, -X left, +Y up).
+   */
+  private loadHumanModelTemplate(): void {
+    const loader = new OBJLoader();
+    loader.load(
+      '/models/human_model.obj',
+      (group) => {
+        // Map ROS (+X fwd, +Y left, +Z up) to Three.js (-Z fwd, -X left, +Y up):
+        // X_three = -Y_ros, Y_three = +Z_ros, Z_three = -X_ros
+        const rotMat = new THREE.Matrix4().set(
+          0, -1,  0, 0,
+          0,  0,  1, 0,
+         -1,  0,  0, 0,
+          0,  0,  0, 1
+        );
+        group.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const m = child as THREE.Mesh;
+            m.geometry.applyMatrix4(rotMat);
+            m.geometry.computeVertexNormals();
+            m.castShadow = true;
+            m.receiveShadow = true;
+            m.material = this.pedFusedMat;
+          }
+        });
+        group.name = 'HumanModel_OBJ';
+        this.humanModelTemplate = group;
+        this.isHumanModelLoaded = true;
+
+        for (const actor of this.actors.values()) {
+          if (actor.currentLabel === 'PEDESTRIAN') {
+            this.upgradeActorHumanMesh(actor);
+          }
+        }
+      },
+      undefined,
+      (err) => {
+        console.warn('[SurroundingTraffic] human_model.obj load error:', err);
+      }
+    );
+  }
+
+  private upgradeActorHumanMesh(actor: Actor): void {
+    if (!this.humanModelTemplate) return;
+    const pedRoot = actor.meshes['PEDESTRIAN'] as THREE.Group | undefined;
+    if (!pedRoot) return;
+
+    if (!actor.humanObjMesh) {
+      const cloned = this.humanModelTemplate.clone(true);
+      actor.humanObjMesh = cloned;
+      pedRoot.add(cloned);
+      this.applySemanticThemeToActor(actor, actor.sensorProvenance || 'fused');
+    }
+
+    if (actor.proceduralMesh) {
+      actor.proceduralMesh.visible = false;
+    }
+  }
+
+  /**
+   * Dynamically applies multi-modal semantic colors (Cyan/Fused, Orange/LiDAR, Yellow/Camera)
+   * across the 3D human mesh, volumetric bounding box, wireframe edges, and ground ring.
+   */
+  private applySemanticThemeToActor(actor: Actor, provenance: string) {
+    let mat = this.pedFusedMat;
+    let colorHex = 0x00e5ff;
+    let edgeHex = 0x38bdf8;
+    if (provenance === 'lidar') {
+      mat = this.pedLidarMat;
+      colorHex = 0xff8c00;
+      edgeHex = 0xfba04b;
+    } else if (provenance === 'camera') {
+      mat = this.pedCameraMat;
+      colorHex = 0xffe600;
+      edgeHex = 0xfef08a;
+    }
+
+    if (actor.humanObjMesh) {
+      actor.humanObjMesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          (child as THREE.Mesh).material = mat;
+        }
+      });
+    }
+    if (actor.smplMesh) {
+      actor.smplMesh.traverse((child) => {
+        if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+          (child as THREE.SkinnedMesh).material = mat;
+        }
+      });
+    }
+    if (actor.proceduralMesh) {
+      actor.proceduralMesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh && child.name !== 'Head' && !child.name.includes('Visor')) {
+          (child as THREE.Mesh).material = mat;
+        }
+      });
+    }
+    if (actor.pedBoxMesh) {
+      (actor.pedBoxMesh.material as THREE.MeshStandardMaterial).color.setHex(colorHex);
+    }
+    if (actor.pedEdgesMesh) {
+      (actor.pedEdgesMesh.material as THREE.LineBasicMaterial).color.setHex(edgeHex);
+    }
+    if (actor.pedRingMesh) {
+      (actor.pedRingMesh.material as THREE.MeshBasicMaterial).color.setHex(colorHex);
+    }
   }
 
   /**
@@ -346,7 +496,7 @@ export class SurroundingTraffic {
       actor.group.remove(oldPedMesh);
       this.disposeHierarchy(oldPedMesh);
     }
-    const { mesh: newMesh, limbs, smplMesh, smplBones, proceduralMesh } = this.createPedestrianMesh();
+    const { mesh: newMesh, limbs, smplMesh, smplBones, proceduralMesh, humanObjMesh, pedBox, pedEdges, pedRing } = this.createPedestrianMesh();
     const { group: skelGroup, joints: skelJoints, bones: skelBones } = this.createRTMPoseSkeletonOverlay();
     newMesh.add(skelGroup);
 
@@ -355,11 +505,16 @@ export class SurroundingTraffic {
     actor.smplMesh = smplMesh;
     actor.smplBones = smplBones;
     actor.proceduralMesh = proceduralMesh;
+    actor.humanObjMesh = humanObjMesh;
+    actor.pedBoxMesh = pedBox;
+    actor.pedEdgesMesh = pedEdges;
+    actor.pedRingMesh = pedRing;
     actor.skeletonGroup = skelGroup;
     actor.skeletonJoints = skelJoints;
     actor.skeletonBones = skelBones;
     actor.group.add(newMesh);
     newMesh.visible = actor.currentLabel === 'PEDESTRIAN';
+    this.applySemanticThemeToActor(actor, actor.sensorProvenance || 'fused');
   }
 
   private disposeHierarchy(obj: THREE.Object3D) {
@@ -458,6 +613,10 @@ export class SurroundingTraffic {
     smplMesh?: THREE.Object3D;
     smplBones?: Record<string, THREE.Bone>;
     proceduralMesh?: THREE.Object3D;
+    humanObjMesh?: THREE.Object3D;
+    pedBox?: THREE.Mesh;
+    pedEdges?: THREE.LineSegments;
+    pedRing?: THREE.Mesh;
   } {
     const ped = new THREE.Group();
 
@@ -465,6 +624,52 @@ export class SurroundingTraffic {
     const shadow = new THREE.Mesh(this.shadowCircleGeo, this.pedShadowMat);
     shadow.position.set(0, 0.02, 0);
     ped.add(shadow);
+
+    // 2. Volumetric 3D Bounding Box & Wireframe Edges (RViz-grade)
+    const boxGeo = new THREE.BoxGeometry(0.70, 1.80, 0.70);
+    const boxMat = new THREE.MeshStandardMaterial({
+      color: 0x00e5ff,
+      roughness: 0.25,
+      metalness: 0.75,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+    });
+    const pedBox = new THREE.Mesh(boxGeo, boxMat);
+    pedBox.position.y = 0.90;
+    ped.add(pedBox);
+
+    const edgesGeo = new THREE.EdgesGeometry(boxGeo);
+    const edgesMat = new THREE.LineBasicMaterial({
+      color: 0x38bdf8,
+      linewidth: 2,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const pedEdges = new THREE.LineSegments(edgesGeo, edgesMat);
+    pedEdges.position.y = 0.90;
+    ped.add(pedEdges);
+
+    // 3. Ground Contact Ring
+    const ringGeo = new THREE.RingGeometry(0.35, 0.52, 32);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x00e5ff,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const pedRing = new THREE.Mesh(ringGeo, ringMat);
+    pedRing.position.y = 0.02;
+    ped.add(pedRing);
+
+    // 4. Authentic 3D Human Body Mesh (RViz human_model.obj)
+    let humanObjMesh: THREE.Object3D | undefined;
+    if (this.humanModelTemplate) {
+      humanObjMesh = this.humanModelTemplate.clone(true);
+      ped.add(humanObjMesh);
+    }
 
     // 2. Rigged Skinned SMPL Humanoid Mesh (25 Bones, Linear Blend Skinning)
     let smplMesh: THREE.Object3D | undefined;
@@ -633,6 +838,10 @@ export class SurroundingTraffic {
       smplMesh,
       smplBones,
       proceduralMesh: bodyRoot,
+      humanObjMesh,
+      pedBox,
+      pedEdges,
+      pedRing,
     };
   }
 
@@ -876,17 +1085,33 @@ export class SurroundingTraffic {
     return sprite;
   }
 
-  private updateDistanceBadge(sprite: THREE.Sprite, text: string, isHazard: boolean) {
+  private updateDistanceBadge(sprite: THREE.Sprite, text: string, isHazard: boolean, provenance?: string) {
     const data = sprite.userData;
     if (!data || !data.ctx) return;
-    if (data.lastText === text && data.lastHazard === isHazard) return;
-    data.lastText = text;
-    data.lastHazard = isHazard;
+    const cacheKey = `${text}_${isHazard}_${provenance || ''}`;
+    if (data.lastCacheKey === cacheKey) return;
+    data.lastCacheKey = cacheKey;
 
     const ctx = data.ctx as CanvasRenderingContext2D;
     ctx.clearRect(0, 0, 440, 56);
 
-    ctx.fillStyle = isHazard ? 'rgba(239, 68, 68, 0.92)' : 'rgba(15, 23, 42, 0.88)';
+    let borderColor = '#38bdf8';
+    let tagBgColor = '#0284c7';
+    if (provenance === 'lidar') {
+      borderColor = '#ff8c00';
+      tagBgColor = '#ea580c';
+    } else if (provenance === 'camera') {
+      borderColor = '#ffe600';
+      tagBgColor = '#ca8a04';
+    } else if (provenance === 'fused') {
+      borderColor = '#00e5ff';
+      tagBgColor = '#0891b2';
+    } else if (provenance === 'hazard' || isHazard) {
+      borderColor = '#f87171';
+      tagBgColor = '#ef4444';
+    }
+
+    ctx.fillStyle = isHazard ? 'rgba(220, 38, 38, 0.94)' : 'rgba(10, 18, 30, 0.90)';
     ctx.beginPath();
     const r = 20;
     ctx.moveTo(r, 4);
@@ -898,15 +1123,46 @@ export class SurroundingTraffic {
     ctx.closePath();
     ctx.fill();
 
-    ctx.strokeStyle = isHazard ? '#f87171' : '#38bdf8';
+    ctx.strokeStyle = borderColor;
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 19px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 220, 28);
+    const match = text.match(/^\[(.*?)\]\s*(.*)$/);
+    if (match) {
+      const tag = match[1];
+      const remainder = match[2];
+
+      const tagWidth = tag.length * 11 + 18;
+      ctx.fillStyle = tagBgColor;
+      ctx.beginPath();
+      const tr = 10;
+      ctx.moveTo(14 + tr, 10);
+      ctx.lineTo(14 + tagWidth - tr, 10);
+      ctx.arcTo(14 + tagWidth, 10, 14 + tagWidth, 46, tr);
+      ctx.arcTo(14 + tagWidth, 46, 14, 46, tr);
+      ctx.arcTo(14, 46, 14, 10, tr);
+      ctx.arcTo(14, 10, 14 + tagWidth, 10, tr);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tag, 14 + tagWidth / 2, 28);
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(remainder, 14 + tagWidth + 14, 28);
+    } else {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 19px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 220, 28);
+    }
 
     (data.texture as THREE.CanvasTexture).needsUpdate = true;
   }
@@ -959,7 +1215,7 @@ export class SurroundingTraffic {
     const group = new THREE.Group();
 
     // Create pedestrian
-    const { mesh: pedMesh, limbs, smplMesh, smplBones, proceduralMesh } = this.createPedestrianMesh();
+    const { mesh: pedMesh, limbs, smplMesh, smplBones, proceduralMesh, humanObjMesh, pedBox, pedEdges, pedRing } = this.createPedestrianMesh();
     const { group: skelGroup, joints: skelJoints, bones: skelBones } = this.createRTMPoseSkeletonOverlay();
     pedMesh.add(skelGroup);
 
@@ -984,7 +1240,7 @@ export class SurroundingTraffic {
     meshes['__dist'] = distBadge;
 
     this.group.add(group);
-    return {
+    const actor: Actor = {
       group,
       meshes,
       currentLabel: obj.label,
@@ -1005,7 +1261,18 @@ export class SurroundingTraffic {
       smplMesh,
       smplBones,
       proceduralMesh,
+      humanObjMesh,
+      pedBoxMesh: pedBox,
+      pedEdgesMesh: pedEdges,
+      pedRingMesh: pedRing,
+      sensorProvenance: obj.sensor || (obj.fused ? 'fused' : 'fused'),
     };
+
+    if (obj.label === 'PEDESTRIAN') {
+      this.applySemanticThemeToActor(actor, actor.sensorProvenance || 'fused');
+    }
+
+    return actor;
   }
 
   private resolveActiveModel(obj: PerceptionObject): string | null {
@@ -1209,6 +1476,29 @@ export class SurroundingTraffic {
         actor.targetPos.set(obj.x, targetY, obj.z);
         actor.targetYaw = obj.yaw || 0;
         this.applyClassGeometry(actor, obj);
+
+        // Apply semantic provenance theme (FUSED, LIDAR_ONLY, CAMERA_ONLY)
+        if (obj.label === 'PEDESTRIAN') {
+          const prov = (obj.sensor || (obj.fused ? 'fused' : 'fused')).toLowerCase();
+          actor.sensorProvenance = prov;
+          this.applySemanticThemeToActor(actor, prov);
+
+          // Dynamically scale bounding box & mesh height to LiDAR cluster dimensions if provided
+          if (obj.dz && obj.dz > 0.8 && obj.dz < 2.5) {
+            if (actor.pedBoxMesh) {
+              actor.pedBoxMesh.scale.set(Math.max(0.45, obj.dx || 0.70), obj.dz, Math.max(0.45, obj.dy || 0.70));
+              actor.pedBoxMesh.position.y = obj.dz * 0.5;
+            }
+            if (actor.pedEdgesMesh) {
+              actor.pedEdgesMesh.scale.set(Math.max(0.45, obj.dx || 0.70), obj.dz, Math.max(0.45, obj.dy || 0.70));
+              actor.pedEdgesMesh.position.y = obj.dz * 0.5;
+            }
+            if (actor.humanObjMesh) {
+              const hScale = obj.dz / 1.74;
+              actor.humanObjMesh.scale.set(hScale, hScale, hScale);
+            }
+          }
+        }
 
         // Check for matching human pose from RTMPose-s / YOLO26x-Pose (Unique 1-to-1 assignment)
         if (obj.label === 'PEDESTRIAN' && poses && poses.length > 0) {
@@ -1457,17 +1747,30 @@ export class SurroundingTraffic {
       const delta = Math.atan2(Math.sin(diff), Math.cos(diff));
       actor.group.rotation.y += delta * yawLerp;
 
-      // Update lead hazard badge and proximity highlight (suppressed for human pedestrians)
+      // Update floating HUD distance and provenance telemetry badges
       const distBadge = actor.meshes['__dist'] as THREE.Sprite | undefined;
       const isPedestrian = actor.currentLabel === 'PEDESTRIAN' || Boolean(actor.meshes['PEDESTRIAN']?.visible) || Boolean(actor.skeletonGroup?.visible);
-      const isLead = key === leadKey && closestDist < 8.0;
+      const isLead = key === leadKey && closestDist < 12.0;
+
+      // Planar horizontal distance from ego origin
+      const dHorizontal = Math.sqrt(actor.group.position.x * actor.group.position.x + actor.group.position.z * actor.group.position.z);
+
       if (distBadge) {
-        if (isLead && !isPedestrian) {
+        if (isPedestrian && dHorizontal < 25.0) {
           distBadge.visible = true;
-          const isCritical = closestDist < 3.5;
+          distBadge.position.y = 2.08; // Floating right above head at 2.08m
+          const isHazard = dHorizontal < 3.5 && Math.abs(actor.group.position.x) < 1.6 && actor.group.position.z < -0.3;
+          const prov = (actor.sensorProvenance || 'fused').toLowerCase();
+          const tag = prov === 'fused' ? 'FUSED' : prov === 'lidar' ? 'LIDAR' : prov === 'camera' ? 'CAM' : 'HUMAN';
+          const postStr = actor.postureText && actor.postureText !== 'UNKNOWN' ? ` · ${actor.postureText}` : '';
+          const dStr = `[${tag}] ${dHorizontal.toFixed(1)} m${postStr}`;
+          this.updateDistanceBadge(distBadge, dStr, isHazard, prov);
+        } else if (isLead && !isPedestrian) {
+          distBadge.visible = true;
           distBadge.position.y = 1.35;
-          const dStr = `${closestDist.toFixed(1)} m`;
-          this.updateDistanceBadge(distBadge, dStr, isCritical);
+          const isCritical = closestDist < 3.5;
+          const dStr = `[LEAD] ${closestDist.toFixed(1)} m`;
+          this.updateDistanceBadge(distBadge, dStr, isCritical, 'hazard');
         } else {
           distBadge.visible = false;
         }

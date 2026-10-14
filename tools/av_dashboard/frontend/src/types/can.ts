@@ -97,6 +97,9 @@ export interface PerceptionObject {
   dz?: number; // height (REP-103 Z)
   yaw?: number; // heading in radians
   speed_kmh?: number;
+  sensor?: 'fused' | 'camera' | 'lidar' | string;
+  fused?: boolean;
+  distance?: number;
 }
 
 export interface TrajectoryPoint {

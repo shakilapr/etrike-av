@@ -157,6 +157,9 @@ class Ros2Bridge:
         self._latest_jpeg: Optional[bytes] = None
         self._latest_jpeg_time: float = 0.0
         self._latest_debug_jpeg_time: float = 0.0
+        # Dedicated 3D Multi-modal Fusion tracks (from fusion_mesh_node /perception/fusion/lidar_boxes_3d)
+        self._fusion_tracks: List[Dict[str, Any]] = []
+        self._last_fusion_tracks_time: float = 0.0
         # Dedicated real LiDAR pointcloud streamer
         self.lidar_streamer: LidarStreamer = LidarStreamer()
 
@@ -351,12 +354,16 @@ class Ros2Bridge:
             # 2d. Camera Image Streams (Annotated Debug image prioritized over raw fallback)
             try:
                 from sensor_msgs.msg import Image
-                node.create_subscription(
-                    Image,
+                for cam_img_topic in (
+                    "/perception/fusion/annotated_camera",
                     "/bench_perception/camera/debug_image",
-                    self._on_camera_debug_image,
-                    qos_sensor,
-                )
+                ):
+                    node.create_subscription(
+                        Image,
+                        cam_img_topic,
+                        self._on_camera_debug_image,
+                        qos_sensor,
+                    )
                 node.create_subscription(
                     Image,
                     "/kinect_front/color/image_raw",
@@ -364,7 +371,7 @@ class Ros2Bridge:
                     qos_sensor,
                 )
                 self._mark_subscribed("camera_debug_image", True)
-                print("[ROS 2 Bridge] Subscribed to camera image topics (/bench_perception/camera/debug_image + /kinect_front/color/image_raw)")
+                print("[ROS 2 Bridge] Subscribed to camera image topics (/perception/fusion/annotated_camera + /bench_perception/camera/debug_image + /kinect_front/color/image_raw)")
             except Exception as e:
                 self._mark_subscribed("camera_debug_image", False)
                 print(f"[ROS 2 Bridge] Camera image subscription failed: {e}")
@@ -389,6 +396,21 @@ class Ros2Bridge:
             except Exception as e:
                 self._mark_subscribed("lidar_pointcloud", False)
                 print(f"[ROS 2 Bridge] LiDAR pointcloud subscription failed: {e}")
+
+            # 2f. 3D Multi-Modal Fusion Markers & Tracks from fusion_mesh_node
+            try:
+                from visualization_msgs.msg import MarkerArray
+                node.create_subscription(
+                    MarkerArray,
+                    "/perception/fusion/lidar_boxes_3d",
+                    self._on_fusion_boxes_marker_array,
+                    qos_sensor,
+                )
+                self._mark_subscribed("fusion_boxes", True)
+                print("[ROS 2 Bridge] Subscribed to /perception/fusion/lidar_boxes_3d")
+            except Exception as e:
+                self._mark_subscribed("fusion_boxes", False)
+                print(f"[ROS 2 Bridge] Fusion boxes subscription failed: {e}")
 
             # 3. Planned Trajectory from Planning (Multiple candidate topics)
             try:
@@ -757,8 +779,10 @@ class Ros2Bridge:
 
         with self._lock:
             self._sources[source] = converted
-            if source == "detection" and not self._camera_objects:
-                self._camera_objects = list(converted)
+            # CONFLICT GUARD: _camera_objects must only be set by _process_camera_objects_batch
+            # (which handles /bench_perception/objects from YOLO). Do NOT let the generic
+            # _on_detected_objects path (BEVFusion / Autoware detectors) overwrite it, as that
+            # would cause ID collisions and break MHR's det_N actor-ID matching.
             self._source_time[source] = now
             self._source_frame[source] = frame_id
             self._source_pose_ok[source] = pose_ok
@@ -968,6 +992,58 @@ class Ros2Bridge:
                 self._human_poses = data
                 self._human_poses_time = time.time()
                 self._topic_counts["human_poses"] = self._topic_counts.get("human_poses", 0) + 1
+        except Exception:
+            pass
+
+    def _on_fusion_boxes_marker_array(self, msg: Any) -> None:
+        """Handle incoming 3D multi-modal fusion bounding boxes from fusion_mesh_node."""
+        now = time.time()
+        tracks: List[Dict[str, Any]] = []
+        try:
+            for m in getattr(msg, "markers", []):
+                m_type = getattr(m, "type", -1)
+                m_act = getattr(m, "action", -1)
+                if m_type == 1 and m_act == 0:  # Marker.CUBE = 1, Marker.ADD = 0
+                    pos = m.pose.position
+                    ori = m.pose.orientation
+                    scale = m.scale
+                    color = m.color
+                    yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
+
+                    # Determine provenance from semantic color (Cyan vs Orange vs Yellow)
+                    if color.b > 0.7 and color.r < 0.4:
+                        sensor_type = "fused"
+                        is_fused = True
+                    elif color.r > 0.7 and color.g < 0.7:
+                        sensor_type = "lidar"
+                        is_fused = False
+                    else:
+                        sensor_type = "camera"
+                        is_fused = False
+
+                    tx, ty, tz, rel_yaw = self._relative_transform(float(pos.x), float(pos.y), float(pos.z), yaw)
+                    dist = round(math.hypot(float(pos.x), float(pos.y)), 1)
+
+                    tracks.append({
+                        "id": f"fuse_{m.id}",
+                        "label": "PEDESTRIAN",
+                        "x": tx,
+                        "y": ty,
+                        "z": tz,
+                        "dx": round(float(scale.x), 2),
+                        "dy": round(float(scale.y), 2),
+                        "dz": round(float(scale.z), 2),
+                        "yaw": rel_yaw,
+                        "speed_kmh": 0.0,
+                        "sensor": sensor_type,
+                        "fused": is_fused,
+                        "distance": dist,
+                    })
+
+            with self._lock:
+                self._fusion_tracks = tracks
+                self._last_fusion_tracks_time = now
+                self._topic_counts["fusion_boxes"] = self._topic_counts.get("fusion_boxes", 0) + 1
         except Exception:
             pass
 
@@ -1239,8 +1315,41 @@ class Ros2Bridge:
             else:
                 active_mode = "OFFLINE"
 
+            # If fusion_mesh_node is actively publishing 3D fused tracks, prioritize them.
+            # CONFLICT RESOLUTION: Both YOLO camera (det_N IDs) and BEVFusion (fuse_N IDs) may
+            # run simultaneously. The MHR system needs camera pedestrian objects with det_N IDs
+            # to bind its posed meshes. So when fusion is active, we start with fusion tracks
+            # for spatial accuracy but also inject any fresh YOLO camera pedestrian objects that
+            # do NOT spatially overlap with an existing fusion track, preserving their det_N IDs.
+            fusion_mesh_active = (now - getattr(self, "_last_fusion_tracks_time", 0.0)) < SOURCE_STALE_SEC and bool(getattr(self, "_fusion_tracks", None))
+            if fusion_mesh_active:
+                objects = list(self._fusion_tracks)
+                source = "fusion_mesh_node"
+                frame_id = "base_link"
+                pose_ok = True
+                active_mode = "COMBINED"
+
+                # Inject camera-detected pedestrians that aren't already covered by a fusion
+                # track, so MHR det_N IDs remain resolvable in the frontend actor map.
+                if cam_online and cam_objs:
+                    for c_obj in cam_objs:
+                        if c_obj.get("label") != "PEDESTRIAN":
+                            continue
+                        cx = float(c_obj.get("x", 0.0))
+                        cz = float(c_obj.get("z", 0.0))
+                        # Check 1.5 m overlap against any existing fusion track
+                        already_covered = any(
+                            math.hypot(cx - float(f.get("x", 0.0)), cz - float(f.get("z", 0.0))) < 1.5
+                            for f in self._fusion_tracks
+                        )
+                        if not already_covered:
+                            cam_copy = dict(c_obj)
+                            cam_copy["sensor"] = "camera"
+                            cam_copy["fused"] = False
+                            objects.append(cam_copy)
+
             # Merge real-time sensor detection
-            if active_mode == "COMBINED":
+            elif active_mode == "COMBINED":
                 fused_objects: List[Dict[str, Any]] = []
                 matched_lidar_indices = set()
 
@@ -1270,14 +1379,21 @@ class Ros2Bridge:
                         merged["dy"] = l_obj.get("dy") or c_obj.get("dy")
                         merged["dz"] = l_obj.get("dz") or c_obj.get("dz")
                         merged["fused"] = True
+                        merged["sensor"] = "fused"
                         fused_objects.append(merged)
                     else:
-                        fused_objects.append(c_obj)
+                        c_copy = dict(c_obj)
+                        c_copy["sensor"] = "camera"
+                        c_copy["fused"] = False
+                        fused_objects.append(c_copy)
 
                 # Append non-overlapping LiDAR clusters (360° coverage, obstacles, rear targets)
                 for l_idx, l_obj in enumerate(lidar_objs):
                     if l_idx not in matched_lidar_indices:
-                        fused_objects.append(l_obj)
+                        l_copy = dict(l_obj)
+                        l_copy["sensor"] = "lidar"
+                        l_copy["fused"] = False
+                        fused_objects.append(l_copy)
 
                 objects = fused_objects
                 source = "bench_fused"

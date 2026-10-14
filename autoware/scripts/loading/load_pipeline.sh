@@ -187,7 +187,10 @@ start_universe() {
 
   # Pre-Flight Sanitization: Terminate lingering Autoware/ROS nodes inside container to avoid duplicates
   docker exec -u root "$CONTAINER" bash -c "
-    pkill -9 -f 'ros2|rviz2|planning_simulator|autoware|robot_state_publisher' 2>/dev/null || true
+    pkill -9 -f 'ros2 launch' 2>/dev/null || true
+    pkill -9 -f 'rviz2' 2>/dev/null || true
+    pkill -9 -f 'planning_simulator' 2>/dev/null || true
+    pkill -9 -f 'robot_state_publisher' 2>/dev/null || true
   " 2>/dev/null || true
   sleep 1
 
@@ -231,7 +234,10 @@ start_live_autoware() {
 
   # Pre-Flight Sanitization: Terminate lingering Autoware/ROS nodes inside container to avoid duplicates
   docker exec -u root "$CONTAINER" bash -c "
-    pkill -9 -f 'ros2|rviz2|planning_simulator|autoware|robot_state_publisher' 2>/dev/null || true
+    pkill -9 -f 'ros2 launch' 2>/dev/null || true
+    pkill -9 -f 'rviz2' 2>/dev/null || true
+    pkill -9 -f 'planning_simulator' 2>/dev/null || true
+    pkill -9 -f 'robot_state_publisher' 2>/dev/null || true
   " 2>/dev/null || true
   sleep 1
 
