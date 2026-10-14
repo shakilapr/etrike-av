@@ -23,16 +23,34 @@ CAMERA_NAME="${3:-front}"
 CONTAINER="autoware_test"
 
 export DISPLAY="${DISPLAY:-:1}"
+if [ ! -e "/tmp/.X11-unix/X${DISPLAY#:}" ]; then
+    for d in 1 0; do
+        if [ -e "/tmp/.X11-unix/X${d}" ]; then
+            DISPLAY=":${d}"
+            break
+        fi
+    done
+fi
 if [ -z "$XAUTHORITY" ]; then
-    if [ -f "/run/user/1000/gdm/Xauthority" ]; then
+    if [ -f "/run/user/$(id -u)/gdm/Xauthority" ]; then
+        export XAUTHORITY="/run/user/$(id -u)/gdm/Xauthority"
+    elif [ -f "/run/user/1000/gdm/Xauthority" ]; then
         export XAUTHORITY="/run/user/1000/gdm/Xauthority"
     elif [ -f "$HOME/.Xauthority" ]; then
         export XAUTHORITY="$HOME/.Xauthority"
+    elif [ -f "/home/med1/.Xauthority" ]; then
+        export XAUTHORITY="/home/med1/.Xauthority"
     fi
 fi
 
 xhost +local:docker >/dev/null 2>&1 || true
 xhost +SI:localuser:root >/dev/null 2>&1 || true
+if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    if [ -n "$XAUTHORITY" ] && [ -f "$XAUTHORITY" ]; then
+        docker cp "$XAUTHORITY" "$CONTAINER":/tmp/.docker.xauth >/dev/null 2>&1 || true
+        docker exec "$CONTAINER" chmod 644 /tmp/.docker.xauth >/dev/null 2>&1 || true
+    fi
+fi
 
 echo "======================================================================"
 echo " Starting Standalone Bench Perception Pipeline"
