@@ -318,7 +318,7 @@ class Ros2Bridge:
                 self._mark_subscribed("human_poses", False)
                 print(f"[ROS 2 Bridge] Human poses subscription failed: {e}")
 
-            # 2d. Camera Debug Image Stream
+            # 2d. Camera Image Streams (Annotated Debug image prioritized over raw fallback)
             try:
                 from sensor_msgs.msg import Image
                 node.create_subscription(
@@ -330,11 +330,11 @@ class Ros2Bridge:
                 node.create_subscription(
                     Image,
                     "/kinect_front/color/image_raw",
-                    self._on_camera_debug_image,
+                    self._on_camera_raw_image,
                     qos_sensor,
                 )
                 self._mark_subscribed("camera_debug_image", True)
-                print("[ROS 2 Bridge] Subscribed to camera image topics (/bench_perception/camera/debug_image)")
+                print("[ROS 2 Bridge] Subscribed to camera image topics (/bench_perception/camera/debug_image + /kinect_front/color/image_raw)")
             except Exception as e:
                 self._mark_subscribed("camera_debug_image", False)
                 print(f"[ROS 2 Bridge] Camera image subscription failed: {e}")
@@ -748,7 +748,7 @@ class Ros2Bridge:
             pass
 
     def _on_camera_debug_image(self, msg: Any) -> None:
-        """Handle incoming annotated camera debug frame and encode as JPEG."""
+        """Handle incoming annotated camera debug frame (YOLO bounding boxes) and encode as JPEG."""
         try:
             import cv2
             import numpy as np
@@ -777,7 +777,45 @@ class Ros2Bridge:
                 with self._lock:
                     self._latest_jpeg = jpeg_buf.tobytes()
                     self._latest_jpeg_time = time.time()
+                    self._latest_debug_jpeg_time = time.time()
                     self._topic_counts["camera_debug_image"] = self._topic_counts.get("camera_debug_image", 0) + 1
+        except Exception:
+            pass
+
+    def _on_camera_raw_image(self, msg: Any) -> None:
+        """Handle incoming raw camera frame as fallback only if annotated stream is absent."""
+        # If fresh annotated debug frames are being received, do not overwrite with raw
+        if (time.time() - getattr(self, "_latest_debug_jpeg_time", 0.0)) < 1.0:
+            return
+
+        try:
+            import cv2
+            import numpy as np
+
+            h = int(msg.height)
+            w = int(msg.width)
+            if h <= 0 or w <= 0:
+                return
+
+            enc = getattr(msg, "encoding", "bgr8").lower()
+            data = np.frombuffer(msg.data, dtype=np.uint8)
+
+            if "bgr" in enc:
+                frame = data.reshape((h, w, 3))
+            elif "rgb" in enc:
+                frame_rgb = data.reshape((h, w, 3))
+                frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+            elif "mono" in enc or "8uc1" in enc:
+                frame = data.reshape((h, w))
+            else:
+                frame = data.reshape((h, w, -1))
+
+            success, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if success:
+                with self._lock:
+                    self._latest_jpeg = jpeg_buf.tobytes()
+                    self._latest_jpeg_time = time.time()
+                    self._topic_counts["camera_raw_image"] = self._topic_counts.get("camera_raw_image", 0) + 1
         except Exception:
             pass
 
