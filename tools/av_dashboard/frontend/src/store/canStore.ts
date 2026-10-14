@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { FrameSnapshot, MessageDef, TelemetrySummary, PerceptionObject, TrajectoryPoint, RosStatus, HumanPosesPayload } from '../types/can';
+import { FrameSnapshot, MessageDef, TelemetrySummary, PerceptionObject, TrajectoryPoint, RosStatus, HumanPosesPayload, MhrHumanPayload } from '../types/can';
 
 interface CanState {
   catalog: MessageDef[];
@@ -12,6 +12,7 @@ interface CanState {
   plannedTrajectory: TrajectoryPoint[];
   rosStatus: RosStatus;
   humanPoses: HumanPosesPayload | null;
+  mhrHuman: MhrHumanPayload | null;
   totalFrames: number;
   uptimeSec: number;
   isConnected: boolean;
@@ -81,6 +82,7 @@ export const useCanStore = create<CanState>((set, get) => ({
     last_error: null,
   },
   humanPoses: null,
+  mhrHuman: null,
   totalFrames: 0,
   uptimeSec: 0,
   isConnected: false,
@@ -202,6 +204,9 @@ export const useCanStore = create<CanState>((set, get) => ({
             }
             if (data.human_poses) {
               updates.humanPoses = data.human_poses;
+            }
+            if (data.mhr_human) {
+              updates.mhrHuman = data.mhr_human;
             }
 
             set(updates);

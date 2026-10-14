@@ -135,7 +135,8 @@ export const DriveCockpit3D: React.FC = () => {
         state.rosStatus.active,
         dt,
         state.humanPoses || state.rosStatus.human_poses,
-        state.demoPedestrian
+        state.demoPedestrian,
+        state.mhrHuman
       );
 
       // Camera Management based on cameraMode

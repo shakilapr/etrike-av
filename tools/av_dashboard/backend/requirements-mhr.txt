@@ -1,0 +1,13 @@
+# Optional Python dependencies for the Meta Momentum Human Rig (MHR) sidecar.
+#
+# The base AV dashboard runs without these; install only to enable the MHR
+# high-fidelity pedestrian mesh in the cockpit:
+#
+#   pip install -r tools/av_dashboard/backend/requirements-mhr.txt
+#   mhr-download-assets            # fetches assets/mhr_model.pt (Apache-2.0)
+#   set MHR_MODEL_PATH=<path>\mhr_model.pt
+#
+# TorchScript-only path (LOD1): avoids the heavier pymomentum/FBX toolchain.
+torch>=2.2
+numpy>=1.24,<3
+mhr>=0.1.0

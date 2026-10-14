@@ -15,6 +15,7 @@ import math
 import os
 import struct
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -26,12 +27,17 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from tools.av_dashboard.backend.contracts import ContractRegistry
+from tools.av_dashboard.backend.mhr_service import MhrService
 from tools.av_dashboard.backend.ros2_bridge import Ros2Bridge
 from tools.av_dashboard.backend.transport import BaseCanTransport, CanFrame, create_transport
 
 app = FastAPI(title="AV Dashboard API", version="2.0.0")
 
 ros_bridge = Ros2Bridge()
+
+# Optional Meta Momentum Human Rig (MHR) sidecar. Fail-closed: if the TorchScript
+# model or PyTorch is missing, the cockpit falls back to its procedural mesh.
+mhr_service = MhrService()
 
 # Enable CORS for Vite dev server during development
 app.add_middleware(
@@ -75,6 +81,7 @@ def _ros_snapshot() -> Dict[str, Any]:
         "perception_objects": ros_data["objects"],
         "planned_trajectory": ros_data["trajectory"],
         "human_poses": ros_data.get("human_poses", {}),
+        "mhr_human": mhr_service.current_payload(),
     }
 
 
@@ -491,6 +498,25 @@ async def startup_event() -> None:
     ros_bridge.start()
     asyncio.create_task(ingest_can_loop())
     asyncio.create_task(broadcast_ros_loop())
+    if mhr_service.available:
+        threading.Thread(target=mhr_worker_loop, name="mhr-worker", daemon=True).start()
+        print(f"[MHR] Sidecar active ({mhr_service.describe().get('num_joints')} joints, "
+              f"{mhr_service.describe().get('num_faces')} faces)")
+    else:
+        print(f"[MHR] Disabled: {mhr_service.reason}")
+
+
+def mhr_worker_loop() -> None:
+    """Evaluate MHR off the event loop so heavy inference never blocks the WS send."""
+    while True:
+        try:
+            data = ros_bridge.get_latest_data()
+            human_poses = data.get("human_poses") or {}
+            poses = human_poses.get("poses", []) if isinstance(human_poses, dict) else []
+            mhr_service.update(poses)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[MHR] worker recovering: {exc}")
+        time.sleep(0.08)
 
 
 # Canonical REST /api/v1 endpoints
@@ -532,6 +558,26 @@ async def get_status() -> JSONResponse:
 async def get_ros_data() -> JSONResponse:
     """Return live ROS 2 perception and planning bridge state."""
     return JSONResponse(ros_bridge.get_latest_data())
+
+
+@app.get("/api/v1/mhr/meta")
+async def get_mhr_meta() -> JSONResponse:
+    """Return MHR availability and static topology metadata (joints, rest skeleton)."""
+    meta = mhr_service.topology_meta()
+    meta.update(mhr_service.describe())
+    return JSONResponse(meta)
+
+
+@app.get("/api/v1/mhr/topology")
+async def get_mhr_topology() -> Response:
+    """Return packed little-endian uint32 triangle indices for the MHR mesh."""
+    if not mhr_service.available:
+        return JSONResponse({"error": mhr_service.reason}, status_code=503)
+    return Response(
+        content=mhr_service.topology_payload(),
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/v1/camera/stream")

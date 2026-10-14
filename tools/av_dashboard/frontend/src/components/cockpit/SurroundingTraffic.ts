@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { PerceptionObject, HumanPosesPayload } from '../../types/can';
+import { PerceptionObject, HumanPosesPayload, MhrHumanPayload } from '../../types/can';
+import { MhrHuman } from './MhrHuman';
 
 interface ActorLimbs {
   bodyRoot: THREE.Object3D;
@@ -100,6 +101,7 @@ export class SurroundingTraffic {
   private animTime = 0;
   private smplTemplate: THREE.Group | null = null;
   private isSmplLoaded = false;
+  private mhr: MhrHuman;
 
   // Shared Materials
   private pedMat: THREE.MeshStandardMaterial;
@@ -166,6 +168,11 @@ export class SurroundingTraffic {
 
   constructor() {
     this.group = new THREE.Group();
+
+    // Optional Meta Momentum Human Rig (MHR) renderer; fail-soft if the backend
+    // has no MHR assets (procedural pedestrian meshes remain authoritative).
+    this.mhr = new MhrHuman();
+    this.group.add(this.mhr.group);
 
     // 1. Shared Materials (Automotive Digital Cockpit Palette)
     // Sleek automotive ADAS pedestrian avatar palette (clothed athletic styling, zero nudity)
@@ -1058,7 +1065,8 @@ export class SurroundingTraffic {
     _rosActive: boolean,
     dt: number,
     humanPoses?: HumanPosesPayload | null,
-    demoPedestrian: boolean = false
+    demoPedestrian: boolean = false,
+    mhrHuman?: MhrHumanPayload | null
   ) {
     const now = performance.now() / 1000;
     const step = Math.min(dt > 0 ? dt : 0.016, 0.1);
@@ -1493,6 +1501,24 @@ export class SurroundingTraffic {
           this.group.remove(actor.group);
           this.disposeActor(actor);
           this.actors.delete(key);
+        }
+      }
+    }
+
+    // MHR overlay: when the backend streams posed MHR meshes, render them and
+    // suppress the procedural pedestrian mesh for the same actor ids.
+    const mhrActive = this.mhr.update(mhrHuman, (id) => {
+      const actor = this.actors.get(id);
+      if (!actor || !actor.group.visible) return null;
+      return { position: actor.group.position, yaw: actor.group.rotation.y, visible: true };
+    });
+    if (mhrActive.size > 0) {
+      for (const [key, actor] of this.actors) {
+        const pedMesh = actor.meshes['PEDESTRIAN'];
+        if (!pedMesh) continue;
+        if (mhrActive.has(String(key))) {
+          pedMesh.visible = false;
+          if (actor.skeletonGroup) actor.skeletonGroup.visible = false;
         }
       }
     }

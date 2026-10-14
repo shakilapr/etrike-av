@@ -127,6 +127,24 @@ export interface HumanPosesPayload {
   poses?: HumanPoseItem[];
 }
 
+/** One streamed Meta Momentum Human Rig (MHR) actor, Base64 float32 buffers. */
+export interface MhrHumanActor {
+  id: string;
+  /** Base64 little-endian float32 posed vertices (metres, Y-up), Nx3. */
+  vertices: string;
+  /** Base64 little-endian float32 joint positions (metres, Y-up), Jx3. */
+  joints: string;
+}
+
+export interface MhrHumanPayload {
+  available: boolean;
+  reason?: string;
+  hz?: number;
+  vertex_count?: number;
+  revision?: number;
+  actors?: MhrHumanActor[];
+}
+
 export interface RosStatus {
   active: boolean;
   hz: number;
