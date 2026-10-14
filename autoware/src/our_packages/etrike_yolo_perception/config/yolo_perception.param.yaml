@@ -1,0 +1,13 @@
+/**:
+  ros__parameters:
+    engine_path: "/workspace/data/ml_models/yolov8x_fp16.engine"
+    publish_mode: "bench"  # "bench" (strict isolation) or "vehicle" (Autoware autonomous stack)
+    input_image_topic: "/kinect_front/color/image_raw"
+    input_depth_topic: "/kinect_front/depth/image_raw"
+    confidence_threshold: 0.35
+    nms_threshold: 0.45
+    sensor_timeout_sec: 1.2
+    publish_debug_image: true
+    auto_start: true
+    enable_pose_estimation: true
+    pose_engine_path: "/workspace/data/ml_models/rtmpose_s_fp16.engine"
