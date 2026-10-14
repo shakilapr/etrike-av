@@ -675,7 +675,8 @@ class YoloPerceptionNode(LifecycleNode):
                     det_boxes.append([int(x1), int(y1), int(bw), int(bh)])
                     final_confidences.append(score)
                     final_class_ids.append(cid)
-                indices = list(range(len(det_boxes)))
+                indices_arr = cv2.dnn.NMSBoxes(det_boxes, final_confidences, conf_thresh, nms_thresh)
+                indices = indices_arr.flatten().tolist() if len(indices_arr) > 0 else []
             else:
                 # Standard YOLOv8x: output shape (1, 84, 8400)
                 preds = np.transpose(h_output[0], (1, 0))
@@ -815,11 +816,26 @@ class YoloPerceptionNode(LifecycleNode):
                                             x=x_base, y=y_base, z=z_base
                                         )
 
-                            # Seated analysis (vertical thigh span relative to box height)
+                            # Lower-body truncation analysis (camera frustum near-field cut-off)
                             hip_y = (kpts_list[11][1] + kpts_list[12][1]) / 2.0
                             knee_y = (kpts_list[13][1] + kpts_list[14][1]) / 2.0
+                            ankle_y = (kpts_list[15][1] + kpts_list[16][1]) / 2.0
                             thigh_dy = abs(knee_y - hip_y)
-                            is_seated = (thigh_dy / max(1.0, float(bh))) < 0.35
+                            shin_dy = abs(ankle_y - knee_y)
+
+                            # Truncation: feet/ankles outside camera view or collapsed to bottom margin
+                            is_truncated = bool(
+                                (by + bh) >= int(0.93 * h_orig)
+                                or shin_dy < 18.0
+                                or knee_y >= (0.94 * h_orig)
+                            )
+
+                            # Seated classification robust to truncation
+                            aspect_ratio = float(bh) / max(1.0, float(bw))
+                            is_seated = bool(
+                                (thigh_dy / max(1.0, float(bh))) < 0.35
+                                or (is_truncated and aspect_ratio < 1.75)
+                            )
                             posture_str = "SEATED" if is_seated else "STANDING"
 
                             # Draw skeleton on debug frame
@@ -839,6 +855,7 @@ class YoloPerceptionNode(LifecycleNode):
                             "est_z": round(est_z, 2),
                             "posture": posture_str,
                             "is_seated": is_seated,
+                            "is_truncated": is_truncated,
                             "confidence": round(conf, 2),
                             "keypoints": keypoints_dict,
                         })

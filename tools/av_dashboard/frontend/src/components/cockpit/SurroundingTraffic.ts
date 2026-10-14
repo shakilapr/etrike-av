@@ -463,7 +463,7 @@ export class SurroundingTraffic {
       smplMesh = SkeletonUtils.clone(this.smplTemplate);
       smplMesh.name = 'SMPL_Rigged_Mesh';
       smplMesh.scale.setScalar(0.0096);
-      smplMesh.rotation.y = Math.PI;
+      smplMesh.rotation.y = 0;
 
       const bones: Record<string, THREE.Bone> = {};
       smplMesh.traverse((child) => {
@@ -1097,17 +1097,19 @@ export class SurroundingTraffic {
         const key = String(obj.id || `anon-${index}`);
         seen.add(key);
 
+        const targetY = obj.label === 'PEDESTRIAN' ? 0.0 : (obj.y || 0);
+
         let actor = this.actors.get(key);
         if (!actor) {
           actor = this.buildActor(obj, index);
-          actor.group.position.set(obj.x, obj.y || 0, obj.z);
+          actor.group.position.set(obj.x, targetY, obj.z);
           actor.group.rotation.y = obj.yaw || 0;
           this.actors.set(key, actor);
         }
 
         actor.lastSeen = now;
         actor.group.visible = true;
-        actor.targetPos.set(obj.x, obj.y || 0, obj.z);
+        actor.targetPos.set(obj.x, targetY, obj.z);
         actor.targetYaw = obj.yaw || 0;
         this.applyClassGeometry(actor, obj);
 
@@ -1137,50 +1139,62 @@ export class SurroundingTraffic {
             if (kpts && kpts.left_shoulder && kpts.right_shoulder) {
               actor.hasLivePose = true;
 
-              // Left Arm kinematics
+              // Left Arm kinematics (resting lap/side vs deliberate gesture)
               if (kpts.left_elbow) {
                 const dxl = kpts.left_elbow.x - kpts.left_shoulder.x;
                 const dyl = kpts.left_elbow.y - kpts.left_shoulder.y;
-                const rawRollL = Math.atan2(dxl, Math.max(0.1, dyl));
-                actor.poseTarget.rollL = THREE.MathUtils.clamp(rawRollL, -0.4, 2.5);
+                const isLeftRaised = kpts.left_wrist && (kpts.left_wrist.y < kpts.left_elbow.y - 15 || kpts.left_wrist.y < kpts.left_shoulder.y + 15);
 
-                if (kpts.left_wrist) {
-                  const dxw = kpts.left_wrist.x - kpts.left_elbow.x;
-                  const dyw = kpts.left_wrist.y - kpts.left_elbow.y;
-                  const dot = dxl * dxw + dyl * dyw;
-                  const mag1 = Math.hypot(dxl, dyl);
-                  const mag2 = Math.hypot(dxw, dyw);
-                  if (mag1 > 3 && mag2 > 3) {
-                    const cosA = THREE.MathUtils.clamp(dot / (mag1 * mag2), -1, 1);
-                    actor.poseTarget.elbowL = Math.acos(cosA);
+                if (isLeftRaised) {
+                  const rawRollL = Math.atan2(dxl, Math.max(0.1, dyl));
+                  actor.poseTarget.rollL = THREE.MathUtils.clamp(rawRollL * 0.7, -0.3, 1.6);
+                  if (kpts.left_wrist) {
+                    const dxw = kpts.left_wrist.x - kpts.left_elbow.x;
+                    const dyw = kpts.left_wrist.y - kpts.left_elbow.y;
+                    const dot = dxl * dxw + dyl * dyw;
+                    const mag1 = Math.hypot(dxl, dyl);
+                    const mag2 = Math.hypot(dxw, dyw);
+                    if (mag1 > 3 && mag2 > 3) {
+                      const cosA = THREE.MathUtils.clamp(dot / (mag1 * mag2), -1, 1);
+                      actor.poseTarget.elbowL = Math.acos(cosA);
+                    }
                   }
+                } else {
+                  actor.poseTarget.rollL = 0.0;
+                  actor.poseTarget.elbowL = 0.0;
                 }
               }
 
-              // Right Arm kinematics
+              // Right Arm kinematics (resting lap/side vs deliberate gesture)
               if (kpts.right_elbow) {
                 const dxr = kpts.right_elbow.x - kpts.right_shoulder.x;
                 const dyr = kpts.right_elbow.y - kpts.right_shoulder.y;
-                const rawRollR = Math.atan2(-dxr, Math.max(0.1, dyr));
-                actor.poseTarget.rollR = THREE.MathUtils.clamp(rawRollR, -0.4, 2.5);
+                const isRightRaised = kpts.right_wrist && (kpts.right_wrist.y < kpts.right_elbow.y - 15 || kpts.right_wrist.y < kpts.right_shoulder.y + 15);
 
-                if (kpts.right_wrist) {
-                  const dxwr = kpts.right_wrist.x - kpts.right_elbow.x;
-                  const dywr = kpts.right_wrist.y - kpts.right_elbow.y;
-                  const dotR = dxr * dxwr + dyr * dywr;
-                  const mag1R = Math.hypot(dxr, dyr);
-                  const mag2R = Math.hypot(dxwr, dywr);
-                  if (mag1R > 3 && mag2R > 3) {
-                    const cosAR = THREE.MathUtils.clamp(dotR / (mag1R * mag2R), -1, 1);
-                    actor.poseTarget.elbowR = Math.acos(cosAR);
+                if (isRightRaised) {
+                  const rawRollR = Math.atan2(-dxr, Math.max(0.1, dyr));
+                  actor.poseTarget.rollR = THREE.MathUtils.clamp(rawRollR * 0.7, -0.3, 1.6);
+                  if (kpts.right_wrist) {
+                    const dxwr = kpts.right_wrist.x - kpts.right_elbow.x;
+                    const dywr = kpts.right_wrist.y - kpts.right_elbow.y;
+                    const dotR = dxr * dxwr + dyr * dywr;
+                    const mag1R = Math.hypot(dxr, dyr);
+                    const mag2R = Math.hypot(dxwr, dywr);
+                    if (mag1R > 3 && mag2R > 3) {
+                      const cosAR = THREE.MathUtils.clamp(dotR / (mag1R * mag2R), -1, 1);
+                      actor.poseTarget.elbowR = Math.acos(cosAR);
+                    }
                   }
+                } else {
+                  actor.poseTarget.rollR = 0.0;
+                  actor.poseTarget.elbowR = 0.0;
                 }
               }
 
-              // Torso roll
+              // Torso roll (clamped to realistic seated posture bounds)
               const dshX = kpts.left_shoulder.x - kpts.right_shoulder.x;
               const dshY = kpts.left_shoulder.y - kpts.right_shoulder.y;
-              actor.poseTarget.torsoRoll = Math.atan2(dshY, Math.max(10, dshX)) * 0.7;
+              actor.poseTarget.torsoRoll = THREE.MathUtils.clamp(Math.atan2(dshY, Math.max(10, Math.abs(dshX))) * 0.4, -0.20, 0.20);
 
               // Head yaw
               if (kpts.nose) {
@@ -1237,7 +1251,7 @@ export class SurroundingTraffic {
         if (isLead) {
           distBadge.visible = true;
           const isCritical = closestDist < 3.5;
-          distBadge.position.y = actor.meshes['PEDESTRIAN']?.visible ? (actor.isSeated ? 1.7 : 2.1) : 1.35;
+          distBadge.position.y = actor.meshes['PEDESTRIAN']?.visible ? (actor.isSeated ? 1.45 : 1.95) : 1.35;
           const postureTag = actor.meshes['PEDESTRIAN']?.visible ? ` • SMPL ${actor.postureText} [YOLO + RTMPose-s]` : '';
           const dStr = `${closestDist.toFixed(1)} m${postureTag}`;
           this.updateDistanceBadge(distBadge, dStr, isCritical);
@@ -1268,9 +1282,10 @@ export class SurroundingTraffic {
           if (actor.proceduralMesh) actor.proceduralMesh.visible = false;
           if (actor.skeletonGroup) actor.skeletonGroup.visible = false;
 
-          // Pelvis height (rest = 97.27 cm; drops down ~35 cm when seated)
+          // Pelvis height (rest = 97.27 cm; drops down ~36 cm when seated)
           if (b['m_avg_Pelvis']) {
-            b['m_avg_Pelvis'].position.y = 97.27 - 35 * sb;
+            b['m_avg_Pelvis'].position.y = 97.27 - 36 * sb;
+            b['m_avg_Pelvis'].position.z = 2.86 - 5 * sb;
             b['m_avg_Pelvis'].rotation.x = 0.08 * sb;
           }
 
@@ -1284,17 +1299,20 @@ export class SurroundingTraffic {
           const kneeFlexR = Math.max(0, walkAngle * 0.75) * walkWeight;
 
           // Hips & Legs articulation (thighs bend forward onto seat, shins bend down)
-          const seatedHip = -1.48 * sb;
+          const seatedHip = -1.45 * sb;
           const seatedKnee = 1.45 * sb;
+          const seatedAnkle = -0.15 * sb;
           if (b['m_avg_L_Hip']) b['m_avg_L_Hip'].rotation.x = seatedHip - walkAngle * 0.7;
           if (b['m_avg_R_Hip']) b['m_avg_R_Hip'].rotation.x = seatedHip + walkAngle * 0.7;
           if (b['m_avg_L_Knee']) b['m_avg_L_Knee'].rotation.x = seatedKnee + kneeFlexL;
           if (b['m_avg_R_Knee']) b['m_avg_R_Knee'].rotation.x = seatedKnee + kneeFlexR;
+          if (b['m_avg_L_Ankle']) b['m_avg_L_Ankle'].rotation.x = seatedAnkle;
+          if (b['m_avg_R_Ankle']) b['m_avg_R_Ankle'].rotation.x = seatedAnkle;
 
           // Shoulders & Arms: natural arms-down resting posture (z = -1.25 / +1.25)
-          // When seated: arms pitch forward onto lap with relaxed elbows
-          const seatedArmPitch = -0.35 * sb;
-          const seatedElbowFlex = 0.5 * sb;
+          // When seated: arms pitch forward onto lap with relaxed elbows (y = 1.35)
+          const seatedArmPitch = -0.45 * sb;
+          const seatedElbowFlex = 1.35 * sb;
 
           if (actor.hasLivePose) {
             if (b['m_avg_L_Shoulder']) {

@@ -10,7 +10,7 @@
     frame_id_color: "kinect_front_rgb_optical_frame"
     frame_id_depth: "kinect_front_depth_optical_frame"
     frame_id_ir: "kinect_front_ir_optical_frame"
-    depth_pipeline: "auto"
+    depth_pipeline: "cudakde"
     depth_bilateral_filter: true
     depth_edge_aware_filter: true
     depth_min_m: 0.5
