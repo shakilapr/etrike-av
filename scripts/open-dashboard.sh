@@ -25,6 +25,8 @@ INTERFACE="${INTERFACE:-can2}"
 # 1. Parse Command Line Arguments
 REQ_MODE="auto"
 
+ALLOW_SIM=0
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --cam|-c|cam)
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
             REQ_MODE="bevfusion"
             shift
             ;;
+        --sim|--synthetic)
+            ALLOW_SIM=1
+            shift
+            ;;
         --port|-p)
             PORT="$2"
             shift 2
@@ -52,7 +58,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --help|-h)
-            echo "Usage: $0 [--cam | --lidar | --fusion | --fuision] [--port <PORT>] [--interface <CAN>]"
+            echo "Usage: $0 [--cam | --lidar | --fusion | --fuision] [--sim] [--port <PORT>] [--interface <CAN>]"
             echo ""
             echo "Options:"
             echo "  (no args)       Auto-detect connected hardware (Camera, LiDAR, or Fused)"
@@ -60,6 +66,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --lidar         Force LiDAR-only perception & 3D HUD"
             echo "  --fusion        Force Camera + LiDAR Multi-Modal Fusion HUD"
             echo "  --fuision       Alias for --fusion"
+            echo "  --sim           Allow synthetic sensor fallback if physical hardware is offline (fails closed by default)"
             echo "  --port <8080>   AV Dashboard web server port (default 8080)"
             echo "  --interface     CAN interface name (default can2)"
             exit 0
