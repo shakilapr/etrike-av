@@ -105,6 +105,28 @@ export interface TrajectoryPoint {
   z: number;
 }
 
+export interface KeypointCoord {
+  x: number;
+  y: number;
+}
+
+export interface HumanPoseItem {
+  id: string;
+  x_base: number;
+  y_base: number;
+  z_base: number;
+  posture: 'SEATED' | 'STANDING' | string;
+  is_seated: boolean;
+  confidence: number;
+  keypoints?: Record<string, KeypointCoord>;
+}
+
+export interface HumanPosesPayload {
+  timestamp?: number;
+  count?: number;
+  poses?: HumanPoseItem[];
+}
+
 export interface RosStatus {
   active: boolean;
   hz: number;
@@ -130,5 +152,6 @@ export interface RosStatus {
     lidar_connected?: boolean;
     timestamp?: number;
   };
+  human_poses?: HumanPosesPayload;
 }
 

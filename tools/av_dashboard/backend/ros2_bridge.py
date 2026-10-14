@@ -133,6 +133,12 @@ class Ros2Bridge:
             "timestamp": 0.0,
         }
         self._bench_perception_time: float = 0.0
+        # Human skeletal poses (RTMPose-s)
+        self._human_poses: Dict[str, Any] = {}
+        self._human_poses_time: float = 0.0
+        # Camera debug stream
+        self._latest_jpeg: Optional[bytes] = None
+        self._latest_jpeg_time: float = 0.0
 
     def start(self) -> None:
         """Start the ROS 2 node in a background daemon thread."""
@@ -296,6 +302,42 @@ class Ros2Bridge:
             except Exception as e:
                 self._mark_subscribed("bench_perception_status", False)
                 print(f"[ROS 2 Bridge] Bench perception status subscription failed: {e}")
+
+            # 2c. Human Skeletal Poses from RTMPose-s
+            try:
+                from std_msgs.msg import String
+                node.create_subscription(
+                    String,
+                    "/bench_perception/human_poses",
+                    self._on_human_poses,
+                    qos_sensor,
+                )
+                self._mark_subscribed("human_poses", True)
+                print("[ROS 2 Bridge] Subscribed to /bench_perception/human_poses")
+            except Exception as e:
+                self._mark_subscribed("human_poses", False)
+                print(f"[ROS 2 Bridge] Human poses subscription failed: {e}")
+
+            # 2d. Camera Debug Image Stream
+            try:
+                from sensor_msgs.msg import Image
+                node.create_subscription(
+                    Image,
+                    "/bench_perception/camera/debug_image",
+                    self._on_camera_debug_image,
+                    qos_sensor,
+                )
+                node.create_subscription(
+                    Image,
+                    "/kinect_front/color/image_raw",
+                    self._on_camera_debug_image,
+                    qos_sensor,
+                )
+                self._mark_subscribed("camera_debug_image", True)
+                print("[ROS 2 Bridge] Subscribed to camera image topics (/bench_perception/camera/debug_image)")
+            except Exception as e:
+                self._mark_subscribed("camera_debug_image", False)
+                print(f"[ROS 2 Bridge] Camera image subscription failed: {e}")
 
             # 3. Planned Trajectory from Planning (Multiple candidate topics)
             try:
@@ -693,6 +735,59 @@ class Ros2Bridge:
         except Exception:
             pass
 
+    def _on_human_poses(self, msg: Any) -> None:
+        """Handle incoming human skeletal pose keypoints from RTMPose-s."""
+        try:
+            import json
+            data = json.loads(msg.data)
+            with self._lock:
+                self._human_poses = data
+                self._human_poses_time = time.time()
+                self._topic_counts["human_poses"] = self._topic_counts.get("human_poses", 0) + 1
+        except Exception:
+            pass
+
+    def _on_camera_debug_image(self, msg: Any) -> None:
+        """Handle incoming annotated camera debug frame and encode as JPEG."""
+        try:
+            import cv2
+            import numpy as np
+
+            h = int(msg.height)
+            w = int(msg.width)
+            if h <= 0 or w <= 0:
+                return
+
+            enc = getattr(msg, "encoding", "bgr8").lower()
+            data = np.frombuffer(msg.data, dtype=np.uint8)
+
+            if "bgr" in enc:
+                frame = data.reshape((h, w, 3))
+            elif "rgb" in enc:
+                frame_rgb = data.reshape((h, w, 3))
+                frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+            elif "mono" in enc or "8uc1" in enc:
+                frame = data.reshape((h, w))
+            else:
+                frame = data.reshape((h, w, -1))
+
+            # Encode to JPEG
+            success, jpeg_buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if success:
+                with self._lock:
+                    self._latest_jpeg = jpeg_buf.tobytes()
+                    self._latest_jpeg_time = time.time()
+                    self._topic_counts["camera_debug_image"] = self._topic_counts.get("camera_debug_image", 0) + 1
+        except Exception:
+            pass
+
+    def get_latest_jpeg(self) -> Optional[bytes]:
+        """Return the latest encoded JPEG camera frame, if fresh (<2.0s)."""
+        with self._lock:
+            if (time.time() - getattr(self, "_latest_jpeg_time", 0.0)) < 2.0:
+                return getattr(self, "_latest_jpeg", None)
+            return None
+
     def _on_trajectory(self, msg: Any) -> None:
         """Handle incoming planned trajectory points from Autoware."""
         now = time.time()
@@ -912,6 +1007,7 @@ class Ros2Bridge:
                 "bridge_available": self.is_available,
                 "subscribed": dict(self._subscribed),
                 "topic_counts": dict(self._topic_counts),
+                "human_poses": dict(self._human_poses) if (now - self._human_poses_time) < SOURCE_STALE_SEC else {},
                 "last_error": self._last_error,
             }
 

@@ -3,6 +3,7 @@ import { useCanStore } from '../../store/canStore';
 import {
   Eye,
   Camera,
+  ExternalLink,
   Layers,
   Activity,
   ChevronLeft,
@@ -541,6 +542,23 @@ export const CockpitHud: React.FC = () => {
                 MPH
               </button>
             </div>
+
+            {/* Pop out dedicated Camera Window */}
+            <button
+              onClick={() => {
+                window.open(
+                  '/camera',
+                  'ETrikeLiveCamera',
+                  'width=1024,height=640,menubar=no,toolbar=no,location=no,status=no'
+                );
+              }}
+              className="flex items-center gap-2 bg-[#080808]/95 hover:bg-neutral-900 text-cyan-300 border border-cyan-500/40 px-3.5 h-11 rounded-xl text-xs font-black transition-all shadow-xl"
+              title="Open Live Camera in a separate window"
+            >
+              <Camera className="w-4 h-4 text-cyan-400" />
+              <span>LIVE CAMERA</span>
+              <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
+            </button>
 
             {/* Quick return to CAN Monitor */}
             <button

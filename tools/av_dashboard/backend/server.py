@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Set
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from tools.av_dashboard.backend.contracts import ContractRegistry
@@ -70,9 +70,11 @@ def _ros_snapshot() -> Dict[str, Any]:
             "subscribed": ros_data["subscribed"],
             "last_error": ros_data["last_error"],
             "bench_perception": ros_data.get("bench_perception", {}),
+            "human_poses": ros_data.get("human_poses", {}),
         },
         "perception_objects": ros_data["objects"],
         "planned_trajectory": ros_data["trajectory"],
+        "human_poses": ros_data.get("human_poses", {}),
     }
 
 
@@ -530,6 +532,196 @@ async def get_status() -> JSONResponse:
 async def get_ros_data() -> JSONResponse:
     """Return live ROS 2 perception and planning bridge state."""
     return JSONResponse(ros_bridge.get_latest_data())
+
+
+@app.get("/api/v1/camera/stream")
+async def camera_stream():
+    """MJPEG live camera stream from perception debug image."""
+    async def frame_generator():
+        while True:
+            jpeg = ros_bridge.get_latest_jpeg()
+            if jpeg:
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
+                )
+            await asyncio.sleep(0.04)  # ~25 FPS
+    return StreamingResponse(
+        frame_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+@app.get("/camera")
+async def standalone_camera_page():
+    """Serve a dedicated standalone live camera viewer window."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Trike Perception • Live Camera Stream</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #080808;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      background: #0f172a;
+      border-bottom: 1px solid #1e293b;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #38bdf8;
+      font-family: monospace;
+    }
+    .badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 11px;
+      font-family: monospace;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+    }
+    .badge.cyan {
+      color: #38bdf8;
+      border-color: #0284c7;
+      background: rgba(14, 165, 233, 0.1);
+    }
+    .btn {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: #334155;
+      color: #fff;
+    }
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      position: relative;
+      overflow: hidden;
+    }
+    img.stream {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .status-overlay {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #38bdf8;
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="pulse-dot"></div>
+      <div class="title">E-TRIKE • KINECT v2 PERCEPTION STREAM</div>
+    </div>
+    <div class="badges">
+      <span class="badge cyan">YOLOv8x + RTMPose-s (SimCC)</span>
+      <span class="badge">1080p @ 25 Hz</span>
+      <button class="btn" onclick="toggleFullscreen()">Fullscreen (F)</button>
+    </div>
+  </header>
+  <main id="mainViewer">
+    <img id="streamImg" class="stream" src="/api/v1/camera/stream" alt="Live Perception Stream" />
+    <div class="status-overlay">
+      <span>● LIVE</span>
+      <span>17 COCO Keypoints</span>
+      <span id="timestamp"></span>
+    </div>
+  </main>
+  <script>
+    function updateClock() {
+      document.getElementById('timestamp').innerText = new Date().toLocaleTimeString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    function toggleFullscreen() {
+      const elem = document.documentElement;
+      if (!document.fullscreenElement) {
+        elem.requestFullscreen().catch(err => alert(err.message));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+    });
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+@app.get("/api/v1/camera/snapshot")
+async def camera_snapshot():
+    """Return single fresh JPEG snapshot."""
+    jpeg = ros_bridge.get_latest_jpeg()
+    if jpeg:
+        return Response(content=jpeg, media_type="image/jpeg")
+    return JSONResponse({"status": "no_frame"}, status_code=404)
 
 
 # Canonical WebSocket /ws/v1/stream endpoint

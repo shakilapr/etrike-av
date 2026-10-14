@@ -133,7 +133,8 @@ export const DriveCockpit3D: React.FC = () => {
         telemetry.speed_act_kmh,
         poseOk ? state.perceptionObjects : [],
         state.rosStatus.active,
-        dt
+        dt,
+        state.humanPoses || state.rosStatus.human_poses
       );
 
       // Camera Management based on cameraMode

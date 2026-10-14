@@ -1,11 +1,17 @@
 import * as THREE from 'three';
-import { PerceptionObject } from '../../types/can';
+import { PerceptionObject, HumanPosesPayload } from '../../types/can';
 
 interface ActorLimbs {
-  armL?: THREE.Group;
-  armR?: THREE.Group;
-  legL?: THREE.Group;
-  legR?: THREE.Group;
+  bodyRoot: THREE.Group;
+  torsoGroup: THREE.Group;
+  armL: THREE.Group;
+  elbowL: THREE.Group;
+  armR: THREE.Group;
+  elbowR: THREE.Group;
+  legL: THREE.Group;
+  kneeL: THREE.Group;
+  legR: THREE.Group;
+  kneeR: THREE.Group;
 }
 
 interface Actor {
@@ -17,6 +23,8 @@ interface Actor {
   targetYaw: number;
   limbs?: ActorLimbs;
   animSeed: number;
+  isSeated: boolean;
+  seatedBlend: number;
 }
 
 const CLASS_COLORS: Record<string, number> = {
@@ -25,7 +33,7 @@ const CLASS_COLORS: Record<string, number> = {
   BUS: 0x64748b,
   MOTORCYCLE: 0x34d399,
   BICYCLE: 0x34d399,
-  PEDESTRIAN: 0xd4d4d8,
+  PEDESTRIAN: 0x94a3b8, // SMPL slate-grey
   CONE: 0xf97316,
   BOX: 0xf97316,
   UNKNOWN: 0x9ca3af,
@@ -41,6 +49,8 @@ export class SurroundingTraffic {
 
   // Shared Materials
   private pedMat: THREE.MeshStandardMaterial;
+  private pedAccentMat: THREE.MeshStandardMaterial;
+  private pedVisorMat: THREE.MeshStandardMaterial;
   private pedShadowMat: THREE.MeshBasicMaterial;
   private pedHazardMat: THREE.MeshBasicMaterial;
 
@@ -65,16 +75,19 @@ export class SurroundingTraffic {
   private wheelTireGeo: THREE.CylinderGeometry;
   private wheelRimGeo: THREE.CylinderGeometry;
 
-  // Pedestrian Geometries
+  // Pedestrian Geometries (SMPL-derived Anatomical Humanoid Mesh)
   private pedHeadGeo: THREE.SphereGeometry;
+  private pedVisorGeo: THREE.BoxGeometry;
   private pedNeckGeo: THREE.CylinderGeometry;
-  private pedTorsoGeo: THREE.BoxGeometry;
+  private pedChestGeo: THREE.BoxGeometry;
+  private pedAbdomenGeo: THREE.BoxGeometry;
   private pedPelvisGeo: THREE.BoxGeometry;
-  private pedUpperArmGeo: THREE.CylinderGeometry;
-  private pedForeArmGeo: THREE.CylinderGeometry;
+  private pedUpperArmGeo: THREE.CapsuleGeometry;
+  private pedForeArmGeo: THREE.CapsuleGeometry;
+  private pedJointGeo: THREE.SphereGeometry;
   private pedHandGeo: THREE.SphereGeometry;
-  private pedThighGeo: THREE.CylinderGeometry;
-  private pedShinGeo: THREE.CylinderGeometry;
+  private pedThighGeo: THREE.CapsuleGeometry;
+  private pedShinGeo: THREE.CapsuleGeometry;
   private pedFootGeo: THREE.BoxGeometry;
 
   // Cone Geometries
@@ -86,10 +99,23 @@ export class SurroundingTraffic {
     this.group = new THREE.Group();
 
     // 1. Shared Materials (Automotive Digital Cockpit Palette)
+    // SMPL neutral slate-grey humanoid styling
     this.pedMat = new THREE.MeshStandardMaterial({
-      color: 0xd4d4d8,
-      roughness: 0.32,
-      metalness: 0.28,
+      color: 0x94a3b8, // Slate-400 anatomical neutral grey
+      roughness: 0.45,
+      metalness: 0.15,
+    });
+    this.pedAccentMat = new THREE.MeshStandardMaterial({
+      color: 0x64748b, // Slate-500 joints and footwear
+      roughness: 0.50,
+      metalness: 0.20,
+    });
+    this.pedVisorMat = new THREE.MeshStandardMaterial({
+      color: 0x38bdf8, // Sky-400 subtle sensor visor
+      roughness: 0.25,
+      metalness: 0.75,
+      emissive: 0x0284c7,
+      emissiveIntensity: 0.4,
     });
     this.pedShadowMat = new THREE.MeshBasicMaterial({
       color: 0x000000,
@@ -161,19 +187,20 @@ export class SurroundingTraffic {
     this.wheelRimGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.23, 16);
     this.wheelRimGeo.rotateZ(Math.PI / 2);
 
-    // Pedestrian Geometries (Humanoid Articulated Skeleton)
-    this.pedHeadGeo = new THREE.SphereGeometry(0.12, 16, 16);
+    // Pedestrian Geometries (SMPL-derived Anatomical Humanoid Mesh)
+    this.pedHeadGeo = new THREE.SphereGeometry(0.11, 16, 16);
+    this.pedVisorGeo = new THREE.BoxGeometry(0.13, 0.04, 0.08);
     this.pedNeckGeo = new THREE.CylinderGeometry(0.045, 0.055, 0.08, 12);
-    this.pedTorsoGeo = new THREE.BoxGeometry(0.32, 0.44, 0.18);
-    this.pedPelvisGeo = new THREE.BoxGeometry(0.26, 0.14, 0.16);
-
-    this.pedUpperArmGeo = new THREE.CylinderGeometry(0.038, 0.034, 0.32, 10);
-    this.pedForeArmGeo = new THREE.CylinderGeometry(0.032, 0.028, 0.28, 10);
-    this.pedHandGeo = new THREE.SphereGeometry(0.032, 8, 8);
-
-    this.pedThighGeo = new THREE.CylinderGeometry(0.065, 0.052, 0.42, 12);
-    this.pedShinGeo = new THREE.CylinderGeometry(0.05, 0.042, 0.42, 12);
-    this.pedFootGeo = new THREE.BoxGeometry(0.09, 0.07, 0.2);
+    this.pedChestGeo = new THREE.BoxGeometry(0.32, 0.24, 0.18);
+    this.pedAbdomenGeo = new THREE.BoxGeometry(0.26, 0.18, 0.16);
+    this.pedPelvisGeo = new THREE.BoxGeometry(0.28, 0.14, 0.17);
+    this.pedUpperArmGeo = new THREE.CapsuleGeometry(0.042, 0.22, 6, 12);
+    this.pedForeArmGeo = new THREE.CapsuleGeometry(0.036, 0.20, 6, 12);
+    this.pedJointGeo = new THREE.SphereGeometry(0.045, 10, 10);
+    this.pedHandGeo = new THREE.SphereGeometry(0.035, 8, 8);
+    this.pedThighGeo = new THREE.CapsuleGeometry(0.065, 0.30, 8, 14);
+    this.pedShinGeo = new THREE.CapsuleGeometry(0.052, 0.30, 8, 14);
+    this.pedFootGeo = new THREE.BoxGeometry(0.09, 0.06, 0.18);
 
     // Traffic Cone Geometries
     this.coneBaseGeo = new THREE.BoxGeometry(0.38, 0.04, 0.38);
@@ -187,88 +214,151 @@ export class SurroundingTraffic {
   private createPedestrianMesh(): { mesh: THREE.Group; limbs: ActorLimbs } {
     const ped = new THREE.Group();
 
-    // 1. Head & Neck
-    const head = new THREE.Mesh(this.pedHeadGeo, this.pedMat);
-    head.position.set(0, 1.58, 0);
-    ped.add(head);
-
-    const neck = new THREE.Mesh(this.pedNeckGeo, this.pedMat);
-    neck.position.set(0, 1.45, 0);
-    ped.add(neck);
-
-    // 2. Torso & Pelvis
-    const torso = new THREE.Mesh(this.pedTorsoGeo, this.pedMat);
-    torso.position.set(0, 1.2, 0);
-    ped.add(torso);
-
-    const pelvis = new THREE.Mesh(this.pedPelvisGeo, this.pedMat);
-    pelvis.position.set(0, 0.93, 0);
-    ped.add(pelvis);
-
-    // 3. Left Arm with shoulder pivot
-    const armL = new THREE.Group();
-    armL.position.set(-0.21, 1.38, 0);
-    const upperArmL = new THREE.Mesh(this.pedUpperArmGeo, this.pedMat);
-    upperArmL.position.set(0, -0.16, 0);
-    armL.add(upperArmL);
-    const foreArmL = new THREE.Mesh(this.pedForeArmGeo, this.pedMat);
-    foreArmL.position.set(0, -0.42, 0.03);
-    armL.add(foreArmL);
-    const handL = new THREE.Mesh(this.pedHandGeo, this.pedMat);
-    handL.position.set(0, -0.58, 0.05);
-    armL.add(handL);
-    ped.add(armL);
-
-    // 4. Right Arm with shoulder pivot
-    const armR = new THREE.Group();
-    armR.position.set(0.21, 1.38, 0);
-    const upperArmR = new THREE.Mesh(this.pedUpperArmGeo, this.pedMat);
-    upperArmR.position.set(0, -0.16, 0);
-    armR.add(upperArmR);
-    const foreArmR = new THREE.Mesh(this.pedForeArmGeo, this.pedMat);
-    foreArmR.position.set(0, -0.42, 0.03);
-    armR.add(foreArmR);
-    const handR = new THREE.Mesh(this.pedHandGeo, this.pedMat);
-    handR.position.set(0, -0.58, 0.05);
-    armR.add(handR);
-    ped.add(armR);
-
-    // 5. Left Leg with hip pivot
-    const legL = new THREE.Group();
-    legL.position.set(-0.09, 0.86, 0);
-    const thighL = new THREE.Mesh(this.pedThighGeo, this.pedMat);
-    thighL.position.set(0, -0.21, 0);
-    legL.add(thighL);
-    const shinL = new THREE.Mesh(this.pedShinGeo, this.pedMat);
-    shinL.position.set(0, -0.6, 0);
-    legL.add(shinL);
-    const footL = new THREE.Mesh(this.pedFootGeo, this.pedMat);
-    footL.position.set(0, -0.83, 0.04);
-    legL.add(footL);
-    ped.add(legL);
-
-    // 6. Right Leg with hip pivot
-    const legR = new THREE.Group();
-    legR.position.set(0.09, 0.86, 0);
-    const thighR = new THREE.Mesh(this.pedThighGeo, this.pedMat);
-    thighR.position.set(0, -0.21, 0);
-    legR.add(thighR);
-    const shinR = new THREE.Mesh(this.pedShinGeo, this.pedMat);
-    shinR.position.set(0, -0.6, 0);
-    legR.add(shinR);
-    const footR = new THREE.Mesh(this.pedFootGeo, this.pedMat);
-    footR.position.set(0, -0.83, 0.04);
-    legR.add(footR);
-    ped.add(legR);
-
-    // 7. Ground Contact Shadow
+    // 1. Ground Contact Shadow
     const shadow = new THREE.Mesh(this.shadowCircleGeo, this.pedShadowMat);
     shadow.position.set(0, 0.02, 0);
     ped.add(shadow);
 
+    // 2. Body Root (translates downward when sitting down)
+    const bodyRoot = new THREE.Group();
+    bodyRoot.position.set(0, 0, 0);
+    ped.add(bodyRoot);
+
+    // Pelvis
+    const pelvis = new THREE.Mesh(this.pedPelvisGeo, this.pedAccentMat);
+    pelvis.position.set(0, 0.88, 0);
+    bodyRoot.add(pelvis);
+
+    // Torso Group (spine pivot above pelvis)
+    const torsoGroup = new THREE.Group();
+    torsoGroup.position.set(0, 0.94, 0);
+    bodyRoot.add(torsoGroup);
+
+    // Abdomen
+    const abdomen = new THREE.Mesh(this.pedAbdomenGeo, this.pedMat);
+    abdomen.position.set(0, 0.08, 0);
+    torsoGroup.add(abdomen);
+
+    // Chest
+    const chest = new THREE.Mesh(this.pedChestGeo, this.pedMat);
+    chest.position.set(0, 0.28, 0);
+    torsoGroup.add(chest);
+
+    // Neck
+    const neck = new THREE.Mesh(this.pedNeckGeo, this.pedAccentMat);
+    neck.position.set(0, 0.44, 0);
+    torsoGroup.add(neck);
+
+    // Head + Visor
+    const head = new THREE.Mesh(this.pedHeadGeo, this.pedMat);
+    head.position.set(0, 0.56, 0);
+    const visor = new THREE.Mesh(this.pedVisorGeo, this.pedVisorMat);
+    visor.position.set(0, 0.01, -0.08);
+    head.add(visor);
+    torsoGroup.add(head);
+
+    // Left Arm (shoulder pivot)
+    const armL = new THREE.Group();
+    armL.position.set(-0.21, 0.38, 0);
+    const shoulderJointL = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    armL.add(shoulderJointL);
+    const upperArmL = new THREE.Mesh(this.pedUpperArmGeo, this.pedMat);
+    upperArmL.position.set(0, -0.14, 0);
+    armL.add(upperArmL);
+
+    const elbowL = new THREE.Group();
+    elbowL.position.set(0, -0.28, 0);
+    const elbowJointL = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    elbowL.add(elbowJointL);
+    const foreArmL = new THREE.Mesh(this.pedForeArmGeo, this.pedMat);
+    foreArmL.position.set(0, -0.13, 0);
+    elbowL.add(foreArmL);
+    const handL = new THREE.Mesh(this.pedHandGeo, this.pedAccentMat);
+    handL.position.set(0, -0.27, 0);
+    elbowL.add(handL);
+    armL.add(elbowL);
+    torsoGroup.add(armL);
+
+    // Right Arm (shoulder pivot)
+    const armR = new THREE.Group();
+    armR.position.set(0.21, 0.38, 0);
+    const shoulderJointR = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    armR.add(shoulderJointR);
+    const upperArmR = new THREE.Mesh(this.pedUpperArmGeo, this.pedMat);
+    upperArmR.position.set(0, -0.14, 0);
+    armR.add(upperArmR);
+
+    const elbowR = new THREE.Group();
+    elbowR.position.set(0, -0.28, 0);
+    const elbowJointR = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    elbowR.add(elbowJointR);
+    const foreArmR = new THREE.Mesh(this.pedForeArmGeo, this.pedMat);
+    foreArmR.position.set(0, -0.13, 0);
+    elbowR.add(foreArmR);
+    const handR = new THREE.Mesh(this.pedHandGeo, this.pedAccentMat);
+    handR.position.set(0, -0.27, 0);
+    elbowR.add(handR);
+    armR.add(elbowR);
+    torsoGroup.add(armR);
+
+    // Left Leg (hip pivot on bodyRoot)
+    const legL = new THREE.Group();
+    legL.position.set(-0.10, 0.84, 0);
+    const hipJointL = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    legL.add(hipJointL);
+    const thighL = new THREE.Mesh(this.pedThighGeo, this.pedMat);
+    thighL.position.set(0, -0.20, 0);
+    legL.add(thighL);
+
+    const kneeL = new THREE.Group();
+    kneeL.position.set(0, -0.40, 0);
+    const kneeJointL = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    kneeL.add(kneeJointL);
+    const shinL = new THREE.Mesh(this.pedShinGeo, this.pedMat);
+    shinL.position.set(0, -0.18, 0);
+    kneeL.add(shinL);
+    const footL = new THREE.Mesh(this.pedFootGeo, this.pedAccentMat);
+    footL.position.set(0, -0.37, 0.04);
+    kneeL.add(footL);
+    legL.add(kneeL);
+    bodyRoot.add(legL);
+
+    // Right Leg (hip pivot on bodyRoot)
+    const legR = new THREE.Group();
+    legR.position.set(0.10, 0.84, 0);
+    const hipJointR = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    legR.add(hipJointR);
+    const thighR = new THREE.Mesh(this.pedThighGeo, this.pedMat);
+    thighR.position.set(0, -0.20, 0);
+    legR.add(thighR);
+
+    const kneeR = new THREE.Group();
+    kneeR.position.set(0, -0.40, 0);
+    const kneeJointR = new THREE.Mesh(this.pedJointGeo, this.pedAccentMat);
+    kneeR.add(kneeJointR);
+    const shinR = new THREE.Mesh(this.pedShinGeo, this.pedMat);
+    shinR.position.set(0, -0.18, 0);
+    kneeR.add(shinR);
+    const footR = new THREE.Mesh(this.pedFootGeo, this.pedAccentMat);
+    footR.position.set(0, -0.37, 0.04);
+    kneeR.add(footR);
+    legR.add(kneeR);
+    bodyRoot.add(legR);
+
     return {
       mesh: ped,
-      limbs: { armL, armR, legL, legR },
+      limbs: {
+        bodyRoot,
+        torsoGroup,
+        armL,
+        elbowL,
+        armR,
+        elbowR,
+        legL,
+        kneeL,
+        legR,
+        kneeR,
+      },
     };
   }
 
@@ -480,7 +570,7 @@ export class SurroundingTraffic {
     two.add(frame);
 
     // Rider
-    const torso = new THREE.Mesh(this.pedTorsoGeo, this.pedMat);
+    const torso = new THREE.Mesh(this.pedChestGeo, this.pedMat);
     torso.position.set(0, 1.1, -0.05);
     torso.rotation.x = 0.25;
     torso.scale.setScalar(0.85);
@@ -584,6 +674,8 @@ export class SurroundingTraffic {
       targetYaw: 0,
       limbs,
       animSeed: seedIndex * 1.618,
+      isSeated: false,
+      seatedBlend: 0,
     };
   }
 
@@ -650,18 +742,20 @@ export class SurroundingTraffic {
 
   /**
    * Main per-frame update loop.
-   * Renders real-world perception objects with smooth 60 FPS motion and articulated gait cycles.
+   * Renders real-world perception objects with smooth 60 FPS motion and articulated gait/posture cycles.
    */
   public update(
     _egoSpeedKmh: number,
     perceptionList: PerceptionObject[] | undefined,
     _rosActive: boolean,
-    dt: number
+    dt: number,
+    humanPoses?: HumanPosesPayload | null
   ) {
     const now = performance.now() / 1000;
     const step = Math.min(dt > 0 ? dt : 0.016, 0.1);
     this.animTime += step;
 
+    const poses = humanPoses?.poses;
     const seen = new Set<string>();
     if (perceptionList && perceptionList.length > 0) {
       perceptionList.forEach((obj, index) => {
@@ -681,6 +775,30 @@ export class SurroundingTraffic {
         actor.targetPos.set(obj.x, obj.y || 0, obj.z);
         actor.targetYaw = obj.yaw || 0;
         this.applyClassGeometry(actor, obj);
+
+        // Check for matching human pose from RTMPose-s
+        if (obj.label === 'PEDESTRIAN' && poses && poses.length > 0) {
+          let matchedPose = poses.find((p) => p.id === String(obj.id));
+          if (!matchedPose && poses.length === 1 && perceptionList.filter((o) => o.label === 'PEDESTRIAN').length === 1) {
+            matchedPose = poses[0];
+          }
+          if (!matchedPose) {
+            // Nearest spatial detection (Three.js: x ≈ -y_base, z ≈ -x_base)
+            let bestDist = Infinity;
+            for (const p of poses) {
+              const dx = obj.x - (-p.y_base);
+              const dz = obj.z - (-p.x_base);
+              const d = Math.sqrt(dx * dx + dz * dz);
+              if (d < 2.5 && d < bestDist) {
+                bestDist = d;
+                matchedPose = p;
+              }
+            }
+          }
+          if (matchedPose) {
+            actor.isSeated = Boolean(matchedPose.is_seated);
+          }
+        }
       });
     }
 
@@ -700,7 +818,7 @@ export class SurroundingTraffic {
       }
     }
 
-    // Smooth position interpolation and animate walk cycles
+    // Smooth position interpolation and animate walk/seated cycles
     const posLerp = 1 - Math.exp(-step * 12);
     const yawLerp = 1 - Math.exp(-step * 10);
     const TWO_PI = Math.PI * 2;
@@ -725,25 +843,53 @@ export class SurroundingTraffic {
         if (isLead) {
           distBadge.visible = true;
           const isCritical = closestDist < 3.5;
-          distBadge.position.y = actor.meshes['PEDESTRIAN']?.visible ? 2.1 : 1.35;
-          const dStr = `${closestDist.toFixed(1)} m`;
+          distBadge.position.y = actor.meshes['PEDESTRIAN']?.visible ? (actor.isSeated ? 1.7 : 2.1) : 1.35;
+          const postureTag = actor.isSeated ? ' • SEATED' : '';
+          const dStr = `${closestDist.toFixed(1)} m${actor.meshes['PEDESTRIAN']?.visible ? postureTag : ''}`;
           this.updateDistanceBadge(distBadge, dStr, isCritical);
         } else {
           distBadge.visible = false;
         }
       }
 
-      // Dynamic humanoid walking animation
+      // Dynamic humanoid walking & seated kinematics (SMPL observed posture)
       if (actor.limbs && actor.meshes['PEDESTRIAN']?.visible) {
-        const walkFreq = 5.2; // Natural pedestrian cadence
-        const walkPhase = this.animTime * walkFreq + actor.animSeed;
-        const walkAngle = Math.sin(walkPhase) * 0.42;
-        const armAngle = Math.sin(walkPhase) * 0.35;
+        const targetBlend = actor.isSeated ? 1.0 : 0.0;
+        actor.seatedBlend = THREE.MathUtils.lerp(actor.seatedBlend, targetBlend, 1 - Math.exp(-step * 10));
+        const sb = actor.seatedBlend;
 
-        if (actor.limbs.legL) actor.limbs.legL.rotation.x = walkAngle;
-        if (actor.limbs.legR) actor.limbs.legR.rotation.x = -walkAngle;
-        if (actor.limbs.armL) actor.limbs.armL.rotation.x = -armAngle;
-        if (actor.limbs.armR) actor.limbs.armR.rotation.x = armAngle;
+        // Seated vertical pelvis drop
+        actor.limbs.bodyRoot.position.y = -0.34 * sb;
+
+        // Ergonomic forward lean when seated
+        actor.limbs.torsoGroup.rotation.x = 0.08 * sb;
+
+        // Kinematic joint angles
+        const seatedHip = 1.48 * sb;
+        const seatedKnee = -1.40 * sb;
+        const seatedArm = -0.55 * sb;
+        const seatedElbow = 0.75 * sb;
+
+        // Walk cycle dynamics (weighted by standing ratio)
+        const walkWeight = Math.max(0, 1.0 - sb);
+        const walkFreq = 5.2;
+        const walkPhase = this.animTime * walkFreq + actor.animSeed;
+        const walkAngle = Math.sin(walkPhase) * 0.42 * walkWeight;
+        const armAngle = Math.sin(walkPhase) * 0.35 * walkWeight;
+        const kneeFlexL = Math.max(0, -walkAngle * 0.75) * walkWeight;
+        const kneeFlexR = Math.max(0, walkAngle * 0.75) * walkWeight;
+
+        // Leg articulation (hips & knees)
+        actor.limbs.legL.rotation.x = seatedHip + walkAngle;
+        actor.limbs.kneeL.rotation.x = seatedKnee - kneeFlexL;
+        actor.limbs.legR.rotation.x = seatedHip - walkAngle;
+        actor.limbs.kneeR.rotation.x = seatedKnee - kneeFlexR;
+
+        // Arm articulation (shoulders & elbows)
+        actor.limbs.armL.rotation.x = seatedArm - armAngle;
+        actor.limbs.elbowL.rotation.x = seatedElbow + (0.2 + Math.abs(armAngle) * 0.3) * walkWeight;
+        actor.limbs.armR.rotation.x = seatedArm + armAngle;
+        actor.limbs.elbowR.rotation.x = seatedElbow + (0.2 + Math.abs(armAngle) * 0.3) * walkWeight;
       }
     }
 
