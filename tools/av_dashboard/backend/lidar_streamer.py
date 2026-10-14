@@ -21,15 +21,17 @@ class LidarStreamer:
 
     def __init__(
         self,
-        target_points: int = 15000,
+        target_points: int = 6000,
         min_range_m: float = 0.35,
         max_range_m: float = 60.0,
         lidar_z_offset_m: float = 1.7464,
+        decimation_stride: int = 2,
     ) -> None:
         self.target_points = target_points
         self.min_range_m = min_range_m
         self.max_range_m = max_range_m
         self.lidar_z_offset_m = lidar_z_offset_m
+        self.decimation_stride = max(1, decimation_stride)
 
         self._lock = threading.Lock()
         self._latest_bytes: Optional[bytes] = None
@@ -183,7 +185,15 @@ class LidarStreamer:
             if n_clean == 0:
                 return
 
-            # 6. Decimate if needed to stay within WebGL 60 FPS rendering budget
+            # 6. Decimate point cloud density: apply initial stride for clean spacing
+            if self.decimation_stride > 1 and n_clean > 0:
+                clean_x = clean_x[::self.decimation_stride]
+                clean_y = clean_y[::self.decimation_stride]
+                clean_z = clean_z[::self.decimation_stride]
+                clean_i = clean_i[::self.decimation_stride]
+                n_clean = len(clean_x)
+
+            # Cap to target_points if needed
             if n_clean > self.target_points:
                 stride = int(np.ceil(n_clean / self.target_points))
                 clean_x = clean_x[::stride]
@@ -219,6 +229,13 @@ class LidarStreamer:
         except Exception as err:
             pass
 
+    def set_density(self, stride: int, target_points: Optional[int] = None) -> None:
+        """Set decimation stride and target points thread-safely."""
+        with self._lock:
+            self.decimation_stride = max(1, stride)
+            if target_points is not None:
+                self.target_points = max(500, target_points)
+
     def get_latest_frame(self) -> Tuple[Optional[bytes], int, float]:
         """Return (packed_bytes, point_count, timestamp) thread-safely."""
         with self._lock:
@@ -236,6 +253,8 @@ class LidarStreamer:
                 "point_count": self._latest_point_count,
                 "raw_count": self._latest_raw_count,
                 "filter_mode": self._filter_mode,
+                "decimation_stride": self.decimation_stride,
+                "target_points": self.target_points,
                 "scan_age_ms": round(age_ms, 1),
                 "total_frames": self._total_frames_received,
                 "timestamp": self._latest_timestamp,

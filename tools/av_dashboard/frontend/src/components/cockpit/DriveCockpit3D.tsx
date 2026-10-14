@@ -220,12 +220,34 @@ export const DriveCockpit3D: React.FC = () => {
   }, []);
 
   const [filterMode, setFilterMode] = useState<'filtered' | 'raw' | 'inspection'>('filtered');
+  const [opacity, setOpacity] = useState<number>(0.40);
+  const [density, setDensity] = useState<'med' | 'low' | 'high'>('med');
 
   const cycleFilterMode = async () => {
     const nextMode = filterMode === 'filtered' ? 'raw' : filterMode === 'raw' ? 'inspection' : 'filtered';
     setFilterMode(nextMode);
     try {
       await fetch(`/api/v1/lidar/mode?mode=${nextMode}`, { method: 'POST' });
+    } catch {
+      // Backend may be offline during development
+    }
+  };
+
+  const cycleOpacity = () => {
+    const next = opacity === 0.40 ? 0.25 : opacity === 0.25 ? 0.70 : 0.40;
+    setOpacity(next);
+    if (lidarCloudInstance) {
+      lidarCloudInstance.setOpacity(next);
+    }
+  };
+
+  const cycleDensity = async () => {
+    const next = density === 'med' ? 'low' : density === 'low' ? 'high' : 'med';
+    setDensity(next);
+    const stride = next === 'low' ? 3 : next === 'med' ? 2 : 1;
+    const target = next === 'low' ? 3500 : next === 'med' ? 6000 : 15000;
+    try {
+      await fetch(`/api/v1/lidar/density?stride=${stride}&target_points=${target}`, { method: 'POST' });
     } catch {
       // Backend may be offline during development
     }
@@ -255,9 +277,11 @@ export const DriveCockpit3D: React.FC = () => {
           </>
         )}
         <span className="text-neutral-600">|</span>
+
+        {/* Filter Mode Toggle */}
         <button
           onClick={cycleFilterMode}
-          title="Click to cycle: Filtered (Clean) -> Raw (All 360°) -> Inspection (Red Body Strikes)"
+          title="Filter Mode: Click to cycle: Filtered (Clean) -> Raw (All 360°) -> Inspection (Red Body Strikes)"
           className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all border ${
             filterMode === 'filtered'
               ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60 hover:bg-emerald-900/60'
@@ -267,6 +291,24 @@ export const DriveCockpit3D: React.FC = () => {
           }`}
         >
           {filterMode}
+        </button>
+
+        {/* Density Toggle */}
+        <button
+          onClick={cycleDensity}
+          title="Density: Click to cycle: MED (6k pts) -> LOW (3.5k pts) -> HIGH (15k pts)"
+          className="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider transition-all border bg-cyan-950/60 text-cyan-300 border-cyan-700/60 hover:bg-cyan-900/60"
+        >
+          {density} DENS
+        </button>
+
+        {/* Opacity Toggle */}
+        <button
+          onClick={cycleOpacity}
+          title="Opacity: Click to cycle: 40% -> 25% -> 70%"
+          className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider transition-all border bg-slate-900/80 text-neutral-300 border-slate-700/60 hover:bg-slate-800/80"
+        >
+          {Math.round(opacity * 100)}% α
         </button>
       </div>
 

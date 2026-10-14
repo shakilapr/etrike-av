@@ -845,6 +845,18 @@ async def set_lidar_mode(mode: str) -> JSONResponse:
     return JSONResponse({"success": False, "error": "lidar_streamer unavailable"}, status_code=503)
 
 
+@app.post("/api/v1/lidar/density")
+async def set_lidar_density(stride: int = 2, target_points: Optional[int] = None) -> JSONResponse:
+    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
+        ros_bridge.lidar_streamer.set_density(stride=stride, target_points=target_points)
+        return JSONResponse({
+            "success": True,
+            "stride": ros_bridge.lidar_streamer.decimation_stride,
+            "target_points": ros_bridge.lidar_streamer.target_points,
+        })
+    return JSONResponse({"success": False, "error": "lidar_streamer unavailable"}, status_code=503)
+
+
 
 # Serve built React frontend if dist exists
 if FRONTEND_DIST.is_dir():

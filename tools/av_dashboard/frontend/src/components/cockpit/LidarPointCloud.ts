@@ -15,13 +15,14 @@ const lidarVertexShader = `
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     vDist = -mvPosition.z;
 
-    // Perspective point attenuation: larger near camera, smaller at distance
-    gl_PointSize = clamp(pointSize * (40.0 / max(-mvPosition.z, 0.5)), 1.5, 8.0);
+  // Perspective point attenuation: finer dots with lower max size
+    gl_PointSize = clamp(pointSize * (28.0 / max(-mvPosition.z, 0.5)), 1.0, 4.2);
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
 
 const lidarFragmentShader = `
+  uniform float opacity;
   varying float vElevation;
   varying float vIntensity;
   varying float vDist;
@@ -79,7 +80,7 @@ const lidarFragmentShader = `
     float fogFactor = smoothstep(65.0, 40.0, vDist);
 
     vec3 col = getLidarColor(vElevation, vIntensity);
-    gl_FragColor = vec4(col, alpha * fogFactor * 0.95);
+    gl_FragColor = vec4(col, alpha * fogFactor * opacity);
   }
 `;
 
@@ -115,7 +116,8 @@ export class LidarPointCloud {
       vertexShader: lidarVertexShader,
       fragmentShader: lidarFragmentShader,
       uniforms: {
-        pointSize: { value: 3.5 },
+        pointSize: { value: 2.0 },
+        opacity: { value: 0.42 },
       },
       transparent: true,
       depthWrite: false,
@@ -166,6 +168,12 @@ export class LidarPointCloud {
   public setPointSize(size: number): void {
     if (this.material.uniforms.pointSize) {
       this.material.uniforms.pointSize.value = size;
+    }
+  }
+
+  public setOpacity(opacity: number): void {
+    if (this.material.uniforms.opacity) {
+      this.material.uniforms.opacity.value = Math.max(0.05, Math.min(1.0, opacity));
     }
   }
 
