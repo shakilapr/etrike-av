@@ -149,6 +149,9 @@ def _limb_channel_angles(kpts: np.ndarray, is_seated: bool) -> Dict[str, float]:
 
     channels: Dict[str, float] = {}
 
+    # For 2D planar angles (shoulders, hips, spine, neck), project to 2D
+    kpts_2d = kpts[:, :2] if kpts.ndim == 2 and kpts.shape[1] > 2 else kpts
+
     def interior(a: int, b: int, c: int) -> Optional[float]:
         angle = _angle_at(kpts[a], kpts[b], kpts[c])
         return angle if angle is not None else None
@@ -165,8 +168,8 @@ def _limb_channel_angles(kpts: np.ndarray, is_seated: bool) -> Dict[str, float]:
     down = np.array([0.0, 1.0])
     for side, (sh, el) in (("l", (L_SHOULDER, L_ELBOW)),
                             ("r", (R_SHOULDER, R_ELBOW))):
-        if np.isfinite(kpts[sh]).all() and np.isfinite(kpts[el]).all():
-            arm = kpts[el] - kpts[sh]
+        if np.isfinite(kpts_2d[sh]).all() and np.isfinite(kpts_2d[el]).all():
+            arm = kpts_2d[el] - kpts_2d[sh]
             channels[f"{side}_shoulder"] = _signed_angle(down, arm)
 
     # Legs: hip-knee-ankle. Seated actors get a fixed flexion when ankles are noisy.
@@ -180,24 +183,24 @@ def _limb_channel_angles(kpts: np.ndarray, is_seated: bool) -> Dict[str, float]:
         else:
             if angle is not None:
                 channels[f"{side}_knee"] = observed_knee
-            if np.isfinite(kpts[hip]).all() and np.isfinite(kpts[knee]).all():
+            if np.isfinite(kpts_2d[hip]).all() and np.isfinite(kpts_2d[knee]).all():
                 down = np.array([0.0, 1.0])
-                thigh = kpts[knee] - kpts[hip]
+                thigh = kpts_2d[knee] - kpts_2d[hip]
                 channels[f"{side}_hip"] = _signed_angle(down, thigh)
 
     # Spine lean from shoulder-midpoint over hip-midpoint.
-    if all(np.isfinite(kpts[i]).all() for i in (L_SHOULDER, R_SHOULDER, L_HIP, R_HIP)):
-        sh_mid = (kpts[L_SHOULDER] + kpts[R_SHOULDER]) / 2.0
-        hip_mid = (kpts[L_HIP] + kpts[R_HIP]) / 2.0
+    if all(np.isfinite(kpts_2d[i]).all() for i in (L_SHOULDER, R_SHOULDER, L_HIP, R_HIP)):
+        sh_mid = (kpts_2d[L_SHOULDER] + kpts_2d[R_SHOULDER]) / 2.0
+        hip_mid = (kpts_2d[L_HIP] + kpts_2d[R_HIP]) / 2.0
         up = np.array([0.0, -1.0])
         axis = sh_mid - hip_mid
         channels["spine"] = _signed_angle(up, axis) * 0.5
 
     # Neck/head: nose vs shoulder midpoint.
-    if all(np.isfinite(kpts[i]).all() for i in (NOSE, L_SHOULDER, R_SHOULDER)):
-        sh_mid = (kpts[L_SHOULDER] + kpts[R_SHOULDER]) / 2.0
+    if all(np.isfinite(kpts_2d[i]).all() for i in (NOSE, L_SHOULDER, R_SHOULDER)):
+        sh_mid = (kpts_2d[L_SHOULDER] + kpts_2d[R_SHOULDER]) / 2.0
         up = np.array([0.0, -1.0])
-        head_vec = kpts[NOSE] - sh_mid
+        head_vec = kpts_2d[NOSE] - sh_mid
         channels["neck"] = _signed_angle(up, head_vec) * 0.5
 
     return channels
@@ -257,7 +260,7 @@ class MhrPoseMapper:
         if not self._param_index:
             return vector
 
-        keypoints = pose.get("keypoints_3d") or pose.get("keypoints") or {}
+        keypoints = pose.get("keypoints") or pose.get("keypoints_3d") or {}
         if not isinstance(keypoints, dict):
             return vector
         kpts = keypoints_to_array(keypoints)  # type: ignore[arg-type]

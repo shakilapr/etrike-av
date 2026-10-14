@@ -1100,10 +1100,40 @@ export class SurroundingTraffic {
 
     const rawPoses = humanPoses?.poses;
     const effectiveList: PerceptionObject[] = [...(perceptionList || [])];
-    let effectivePoses = rawPoses ? [...rawPoses] : [];
-    const hasRealPed = effectiveList.some((o) => o.label === 'PEDESTRIAN');
+    const rawPosesCount = rawPoses ? rawPoses.length : 0;
+    const hasRealPed = effectiveList.some((o) => o.label === 'PEDESTRIAN') || rawPosesCount > 0;
 
-    // Demo Mode: If demoPedestrian is active and no real pedestrians are present, render interactive SMPL + RTMPose model
+    // Ensure every detected human pose from YOLO26x-Pose / RTMPose has a corresponding PEDESTRIAN actor in effectiveList
+    if (rawPoses && rawPoses.length > 0) {
+      rawPoses.forEach((pose, pIdx) => {
+        const targetX = pose.y_base;
+        const targetZ = 1.0 - pose.x_base;
+        const alreadyInList = effectiveList.some((obj) => {
+          if (obj.label !== 'PEDESTRIAN') return false;
+          if (obj.id && pose.id && String(obj.id) === String(pose.id)) return true;
+          return Math.hypot(obj.x - targetX, obj.z - targetZ) < 2.0;
+        });
+
+        if (!alreadyInList) {
+          effectiveList.push({
+            id: pose.id || `yolo-ped-${pIdx}`,
+            label: 'PEDESTRIAN',
+            x: targetX,
+            y: 0.0,
+            z: targetZ,
+            dx: 0.8,
+            dy: 0.8,
+            dz: 1.75,
+            yaw: typeof (pose as any).yaw === 'number' ? (pose as any).yaw : 0.0,
+            speed_kmh: 0.0,
+          });
+        }
+      });
+    }
+
+    let effectivePoses = rawPoses ? [...rawPoses] : [];
+
+    // Demo Mode: If demoPedestrian is active and no real pedestrians or real poses are present, render interactive SMPL + RTMPose model
     if (demoPedestrian && !hasRealPed) {
       const lookPhase = this.animTime * 1.5;
       const wavePhase = this.animTime * 2.8;
@@ -1147,6 +1177,8 @@ export class SurroundingTraffic {
 
     const poses = effectivePoses;
     const seen = new Set<string>();
+    const usedPoseIds = new Set<string>();
+
     if (effectiveList && effectiveList.length > 0) {
       effectiveList.forEach((obj, index) => {
         // Suppress unknown obstacle cylinders and generic boxes from 3D cockpit
@@ -1178,26 +1210,33 @@ export class SurroundingTraffic {
         actor.targetYaw = obj.yaw || 0;
         this.applyClassGeometry(actor, obj);
 
-        // Check for matching human pose from RTMPose-s
+        // Check for matching human pose from RTMPose-s / YOLO26x-Pose (Unique 1-to-1 assignment)
         if (obj.label === 'PEDESTRIAN' && poses && poses.length > 0) {
-          let matchedPose = poses.find((p) => p.id === String(obj.id));
-          if (!matchedPose && poses.length === 1 && effectiveList.filter((o) => o.label === 'PEDESTRIAN').length === 1) {
+          // 1. Exact ID match among unused poses
+          let matchedPose = poses.find((p) => !usedPoseIds.has(p.id) && p.id === String(obj.id));
+
+          // 2. Fallback: single remaining candidate match
+          if (!matchedPose && poses.length === 1 && !usedPoseIds.has(poses[0].id)) {
             matchedPose = poses[0];
           }
+
+          // 3. Nearest spatial detection among remaining unused poses (Three.js: x ≈ +y_base, z ≈ 1.0 - x_base)
           if (!matchedPose) {
-            // Nearest spatial detection (Three.js: x ≈ +y_base, z ≈ 1.0 - x_base)
             let bestDist = Infinity;
             for (const p of poses) {
+              if (usedPoseIds.has(p.id)) continue;
               const dx = obj.x - p.y_base;
               const dz = obj.z - (1.0 - p.x_base);
               const d = Math.sqrt(dx * dx + dz * dz);
-              if (d < 3.0 && d < bestDist) {
+              if (d < 4.0 && d < bestDist) {
                 bestDist = d;
                 matchedPose = p;
               }
             }
           }
+
           if (matchedPose) {
+            usedPoseIds.add(matchedPose.id);
             actor.lastPoseItem = matchedPose;
             actor.isSeated = Boolean(matchedPose.is_seated);
             actor.postureText = matchedPose.posture || (actor.isSeated ? 'SEATED' : 'STANDING');
@@ -1696,7 +1735,16 @@ export class SurroundingTraffic {
     // MHR overlay: when the backend streams posed MHR meshes, render them and
     // suppress the procedural pedestrian mesh for the same actor ids.
     const mhrActive = this.mhr.update(mhrHuman, (id) => {
-      const actor = this.actors.get(id);
+      let actor = this.actors.get(id);
+      if (!actor) {
+        // Fallback: bind to any visible pedestrian actor if IDs differ (e.g. det_0 vs demo-smpl-pedestrian)
+        for (const act of this.actors.values()) {
+          if (act.meshes['PEDESTRIAN'] && act.group.visible) {
+            actor = act;
+            break;
+          }
+        }
+      }
       if (!actor || !actor.group.visible) return null;
       return { position: actor.group.position, yaw: actor.group.rotation.y, visible: true };
     });
@@ -1704,7 +1752,7 @@ export class SurroundingTraffic {
       for (const [key, actor] of this.actors) {
         const pedMesh = actor.meshes['PEDESTRIAN'];
         if (!pedMesh) continue;
-        if (mhrActive.has(String(key))) {
+        if (mhrActive.has(String(key)) || mhrActive.size > 0) {
           pedMesh.visible = false;
           if (actor.skeletonGroup) actor.skeletonGroup.visible = false;
         }

@@ -280,8 +280,18 @@ class Ros2Bridge:
 
             try:
                 from autoware_perception_msgs.msg import DetectedObjects
-                for det_topic in (
+                # Dedicated camera detection topics (YOLO26x / Bench Perception)
+                for cam_topic in (
                     "/bench_perception/objects",
+                    "/perception/camera/objects",
+                ):
+                    node.create_subscription(
+                        DetectedObjects,
+                        cam_topic,
+                        self._on_camera_detected_objects,
+                        qos_sensor,
+                    )
+                for det_topic in (
                     "/perception/object_recognition/detection/objects",
                     "/perception/object_recognition/detection/centerpoint/objects",
                     "/perception/object_recognition/detection/centerpoint/validation/objects",
@@ -303,7 +313,7 @@ class Ros2Bridge:
                         qos_sensor,
                     )
                 self._mark_subscribed("detection", True)
-                print("[ROS 2 Bridge] Subscribed to perception detection topics (including isolated /bench_perception/objects)")
+                print("[ROS 2 Bridge] Subscribed to perception detection topics (camera YOLO + 3D LiDAR detectors)")
             except Exception as e:
                 self._mark_subscribed("detection", False)
                 print(f"[ROS 2 Bridge] DetectedObjects subscription failed: {e}")
@@ -747,7 +757,7 @@ class Ros2Bridge:
 
         with self._lock:
             self._sources[source] = converted
-            if source == "detection":
+            if source == "detection" and not self._camera_objects:
                 self._camera_objects = list(converted)
             self._source_time[source] = now
             self._source_frame[source] = frame_id
@@ -827,8 +837,8 @@ class Ros2Bridge:
         """Handle incoming predicted objects from Autoware."""
         self._process_objects_batch(msg.objects, msg.header.frame_id, "prediction", is_predicted=True)
 
-    def _on_detected_objects(self, msg: Any) -> None:
-        """Handle incoming detected objects from Autoware / Camera YOLO."""
+    def _on_camera_detected_objects(self, msg: Any) -> None:
+        """Handle incoming dedicated camera YOLO detected objects."""
         now = time.time()
         self._last_detection_canonical_time = now
         self._last_camera_det_time = now
@@ -836,6 +846,84 @@ class Ros2Bridge:
             self._camera_timestamps.append(now)
             while self._camera_timestamps and (now - self._camera_timestamps[0]) > 1.0:
                 self._camera_timestamps.pop(0)
+        self._process_camera_objects_batch(msg.objects, msg.header.frame_id)
+
+    def _process_camera_objects_batch(self, objects: List[Any], frame_id: str) -> None:
+        """Process camera YOLO detected objects into Three.js coordinates."""
+        now = time.time()
+        is_map_frame = ("map" in frame_id) or ("odom" in frame_id)
+        sensor_tf = None if is_map_frame else self._lookup_sensor_to_base_link(frame_id)
+
+        with self._lock:
+            pose_ok = (not is_map_frame) or (self._has_ego_pose and (now - self._ego_time) < SOURCE_STALE_SEC)
+            ego_snapshot = (self._ego_x, self._ego_y, self._ego_z, self._ego_yaw)
+
+        converted: List[Dict[str, Any]] = []
+        for obj in objects:
+            pose = self._extract_pose(obj, is_predicted=False)
+            if pose is None:
+                continue
+
+            pos = pose.position
+            ori = pose.orientation
+            yaw = quaternion_to_yaw(ori.x, ori.y, ori.z, ori.w)
+            tx, ty, tz, rel_yaw = self._convert_pose(
+                float(pos.x),
+                float(pos.y),
+                float(pos.z),
+                yaw,
+                is_map_frame,
+                pose_ok,
+                ego_pose=ego_snapshot,
+                sensor_tf=sensor_tf,
+            )
+
+            label = self._classify(obj)
+
+            dx, dy, dz = (0.8, 0.8, 1.7) if label == "PEDESTRIAN" else (2.0, 1.8, 1.5)
+            if hasattr(obj, "shape") and hasattr(obj.shape, "dimensions"):
+                dx = float(obj.shape.dimensions.x)
+                dy = float(obj.shape.dimensions.y)
+                dz = float(obj.shape.dimensions.z)
+
+            speed_kmh = 0.0
+            twist = self._extract_twist(obj, is_predicted=False)
+            if twist is not None:
+                vx = twist.linear.x
+                vy = twist.linear.y
+                speed_kmh = round(math.sqrt(vx * vx + vy * vy) * 3.6, 1)
+
+            converted.append({
+                "id": self._object_id(obj) or f"det_{len(converted)}",
+                "label": label,
+                "x": tx,
+                "y": ty,
+                "z": tz,
+                "dx": round(dx, 2),
+                "dy": round(dy, 2),
+                "dz": round(dz, 2),
+                "yaw": rel_yaw,
+                "speed_kmh": speed_kmh,
+                "sensor": "camera",
+            })
+
+        with self._lock:
+            self._camera_objects = list(converted)
+            self._sources["detection"] = converted
+            self._source_time["detection"] = now
+            self._source_frame["detection"] = frame_id
+            self._source_pose_ok["detection"] = pose_ok
+            self._topic_counts["camera_detection"] = self._topic_counts.get("camera_detection", 0) + 1
+            self._perception_timestamps.append(now)
+            while self._perception_timestamps and (now - self._perception_timestamps[0]) > 1.0:
+                self._perception_timestamps.pop(0)
+
+    def _on_detected_objects(self, msg: Any) -> None:
+        """Handle incoming detected objects from Autoware / generic detectors."""
+        now = time.time()
+        self._last_detection_canonical_time = now
+        with self._lock:
+            self._topic_counts["detection"] = self._topic_counts.get("detection", 0) + 1
         self._process_objects_batch(msg.objects, msg.header.frame_id, "detection", is_predicted=False)
 
     def _on_clustering_objects(self, msg: Any) -> None:
@@ -1106,6 +1194,33 @@ class Ros2Bridge:
             lidar_hz = round(float(len(self._lidar_timestamps)), 1)
 
             cam_objs = list(self._camera_objects) if cam_online else []
+
+            # Ensure all detected human poses are represented in cam_objs with 3D metric coordinates
+            if self._human_poses and (now - self._human_poses_time) < SOURCE_STALE_SEC:
+                h_poses = self._human_poses.get("poses", []) if isinstance(self._human_poses, dict) else []
+                for p in h_poses:
+                    p_id = str(p.get("id", ""))
+                    p_x = float(p.get("y_base", 0.0))
+                    p_z = round(BASE_LINK_TO_SCENE_Z_OFFSET - float(p.get("x_base", 0.0)), 2)
+                    already = any(
+                        (str(o.get("id")) == p_id or math.hypot(float(o.get("x", 0.0)) - p_x, float(o.get("z", 0.0)) - p_z) < 2.0)
+                        for o in cam_objs if o.get("label") == "PEDESTRIAN"
+                    )
+                    if not already:
+                        cam_objs.append({
+                            "id": p_id or f"ped_{len(cam_objs)}",
+                            "label": "PEDESTRIAN",
+                            "x": p_x,
+                            "y": 0.0,
+                            "z": p_z,
+                            "dx": 0.8,
+                            "dy": 0.8,
+                            "dz": 1.75,
+                            "yaw": float(p.get("yaw", 0.0)),
+                            "speed_kmh": 0.0,
+                            "sensor": "camera",
+                        })
+
             lidar_objs = list(self._lidar_objects) if lidar_online else []
 
             # Check if Standalone Bench Perception is actively publishing
