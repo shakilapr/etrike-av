@@ -3,10 +3,10 @@
 ## Connection Details
 
 * **SSH Host Alias:** `workstation` (configured in `~/.ssh/config` for passwordless login)
-* **IP Address:** `172.16.26.14`
-* **Username:** `user`
+* **IP Address:** `172.16.25.77`
+* **Username:** `med`
 * **Password:** `123456@@`
-* **Sudo:** Full administrative privileges (`echo '123456@@' | sudo -S <cmd>`)
+* **Sudo:** Full administrative privileges (passwordless sudo configured)
 
 ---
 
@@ -19,7 +19,7 @@ ssh workstation
 
 ### 2. Direct via IP & User
 ```bash
-ssh user@172.16.26.14
+ssh med@172.16.25.77
 ```
 
 ### 3. Run Remote Command Directly
@@ -47,12 +47,12 @@ ssh workstation "hostname && whoami && uptime"
 Configured at `C:\Users\logsh\.ssh\config`:
 ```ssh-config
 Host workstation
-    HostName 172.16.26.14
-    User user
+    HostName 172.16.25.77
+    User med
     BatchMode yes
     StrictHostKeyChecking accept-new
 ```
-Public key (`C:\Users\logsh\.ssh\id_ed25519.pub`) is authorized in `/home/user/.ssh/authorized_keys`.
+Public key (`C:\Users\logsh\.ssh\id_ed25519.pub`) is authorized in `/home/med/.ssh/authorized_keys`.
 
 ---
 

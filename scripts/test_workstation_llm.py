@@ -19,7 +19,7 @@ from typing import Any, Dict, Generator
 class WorkstationLLMTester:
     """Tester and benchmark client for the Workstation vLLM OpenAI-compatible server."""
 
-    def __init__(self, host: str = "172.16.26.14", port: int = 8000, model: str = "/models/Qwen3.8-27B-INT4-AWQ-GPTQ") -> None:
+    def __init__(self, host: str = "172.16.25.77", port: int = 8000, model: str = "/models/Qwen3.8-27B-INT4-AWQ-GPTQ") -> None:
         self.host: str = host
         self.port: int = port
         self.model: str = model
@@ -136,7 +136,7 @@ class WorkstationLLMTester:
 def main() -> None:
     """Parse CLI arguments and execute the test."""
     parser = argparse.ArgumentParser(description="Workstation vLLM Benchmark & Test Client")
-    parser.add_argument("--host", default="172.16.26.14", help="Workstation IP address")
+    parser.add_argument("--host", default="172.16.25.77", help="Workstation IP address")
     parser.add_argument("--port", type=int, default=8000, help="vLLM server port")
     parser.add_argument("--model", default="/models/Qwen3.8-27B-INT4-AWQ-GPTQ", help="Model path/identifier")
     parser.add_argument("--prompt", default="Explain how an Ackermann steering model calculates turn radius in ROS 2.", help="Benchmark prompt")
