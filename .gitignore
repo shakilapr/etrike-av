@@ -74,3 +74,14 @@ download/
 node_modules/
 .pnpm-store/
 
+# Colcon / C++ / Python build outputs in root
+/build/
+/install/
+/log/
+/cuda_libs/
+*.pt
+*.engine
+*.onnx
+*.list
+*.asc
+

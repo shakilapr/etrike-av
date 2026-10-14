@@ -220,7 +220,7 @@ The backend bridge ([`tools/av_dashboard/backend/ros2_bridge.py`](file:///e:/wor
 
 | Detected Class | 3D Visual Mesh | Visual Details |
 |---|---|---|
-| `PEDESTRIAN` | Articulated Humanoid Model | Multi-segment limbs (head, torso, pelvis, arms, legs) with dynamic walk-cycle animations synchronized to frame delta. |
+| `PEDESTRIAN` | SMPL-Derived Rigged Humanoid | Game-ready low-poly SMPL rigged mesh in neutral slate-grey PBR (`#94a3b8`), driven by RTMPose-s 17 skeletal keypoints following observed motion (sitting, walking, bending, crouching). |
 | `CAR` | Aerodynamic Passenger Sedan | Lower chassis, sloping hood, curved glass canopy, 4 aerodynamic wheels, front/rear LED light bars, ground contact shadow. |
 | `TRUCK` / `BUS` | Commercial Transit Vehicle | Heavy cargo box, forward cab, windshield, dual-axle wheels, rear safety reflectors. |
 | `MOTORCYCLE` / `BICYCLE` | Two-Wheeler Cyclist | Frame geometry, wheels, handlebars, and rider silhouette. |

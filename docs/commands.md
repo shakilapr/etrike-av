@@ -198,3 +198,43 @@ ros2 topic hz /control/command/control_cmd
   docker ps
   ```
 
+---
+
+## 7. YOLO26x Perception & Live Camera Monitoring
+
+### Start Live Perception + Kinect + Backend Server
+```bash
+bash scripts/start_live_bench_perception.sh 8080 can2
+```
+*Windows:* `ssh med1@172.16.25.67 "bash ~/av_project/scripts/start_live_bench_perception.sh 8080 can2"`
+* **Opens**: Kinect v2 camera driver, YOLO26x FP16 (46.8 FPS) + RTMPose-s (17 COCO joints) perception node, and Dashboard backend on port 8080.
+
+### Open Cockpit HUD + Dedicated Camera Stream on Jetson Monitor
+```bash
+bash scripts/open_cockpit_and_camera_monitor.sh 8080
+```
+*Windows:* `ssh med1@172.16.25.67 "bash ~/av_project/scripts/open_cockpit_and_camera_monitor.sh 8080"`
+* **Opens**: Two synchronized Chromium windows on Jetson physical display (`DISPLAY=:1`):
+  * **Window 1**: Full 3D Cockpit & Radar HUD (`http://localhost:8080`)
+  * **Window 2**: Dedicated Full-Window Camera Stream with real-time annotations (`http://localhost:8080/camera`)
+
+### Camera Health Diagnostics & Instant Recovery
+```bash
+bash scripts/check_camera_health.sh
+```
+* **Checks**:
+  * USB 3.0 bus connection (`045e:02c4` Microsoft Corp. Xbox NUI Sensor).
+  * Video topic rate (`/kinect_front/rgb/image_raw` and `/bench_perception/camera/debug_image`).
+  * Process status of `kinect2_node_exec` and `yolo_perception_node.py`.
+* **Instant Recovery (if Kinect USB drops/stalls)**:
+  ```bash
+  docker exec autoware_test pkill -9 -f kinect2_node_exec
+  docker exec -d autoware_test bash -c "
+      source /opt/ros/humble/setup.bash
+      source /workspace/autoware/install/setup.bash
+      export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      ros2 launch etrike_kinect2 single_kinect.launch.py camera:=front > /tmp/kinect_front.log 2>&1
+  "
+  ```
+
+
