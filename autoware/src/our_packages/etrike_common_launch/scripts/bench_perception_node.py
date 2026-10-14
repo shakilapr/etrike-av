@@ -211,31 +211,47 @@ class BenchPerceptionNode(LifecycleNode):
 
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info("Activating BenchPerceptionNode...")
-        if self._pub_objects:
-            self._pub_objects.on_activate()
-        if self._pub_clusters:
-            self._pub_clusters.on_activate()
-        if self._pub_status:
-            self._pub_status.on_activate()
+        try:
+            if self._pub_objects:
+                self._pub_objects.on_activate(state)
+            if self._pub_clusters:
+                self._pub_clusters.on_activate(state)
+            if self._pub_status:
+                self._pub_status.on_activate(state)
+        except TypeError:
+            if self._pub_objects:
+                self._pub_objects.on_activate()
+            if self._pub_clusters:
+                self._pub_clusters.on_activate()
+            if self._pub_status:
+                self._pub_status.on_activate()
 
         rate_hz = float(self.get_parameter("publish_rate_hz").value)
         timer_period = 1.0 / max(1.0, rate_hz)
         self._timer = self.create_timer(timer_period, self._on_timer)
 
-        return super().on_activate(state)
+        return TransitionCallbackReturn.SUCCESS
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info("Deactivating BenchPerceptionNode...")
         if self._timer:
             self._timer.cancel()
             self._timer = None
-        if self._pub_objects:
-            self._pub_objects.on_deactivate()
-        if self._pub_clusters:
-            self._pub_clusters.on_deactivate()
-        if self._pub_status:
-            self._pub_status.on_deactivate()
-        return super().on_deactivate(state)
+        try:
+            if self._pub_objects:
+                self._pub_objects.on_deactivate(state)
+            if self._pub_clusters:
+                self._pub_clusters.on_deactivate(state)
+            if self._pub_status:
+                self._pub_status.on_deactivate(state)
+        except TypeError:
+            if self._pub_objects:
+                self._pub_objects.on_deactivate()
+            if self._pub_clusters:
+                self._pub_clusters.on_deactivate()
+            if self._pub_status:
+                self._pub_status.on_deactivate()
+        return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info("Cleaning up BenchPerceptionNode...")
