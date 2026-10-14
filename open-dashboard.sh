@@ -276,6 +276,7 @@ if ! curl -s "http://127.0.0.1:${PORT}/api/v1/status" >/dev/null 2>&1; then
         source /workspace/autoware/install/setup.bash 2>/dev/null || true
         export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
         export PYTHONPATH=/workspace/av_project:/host_local/lib/python3.10/site-packages:/host_dist_packages:\$PYTHONPATH
+        export MHR_MODEL_PATH=/workspace/av_project/tools/av_dashboard/data/mhr_assets/mhr_model.pt
         python3 -m tools.av_dashboard.backend.server --interface '$INTERFACE' --host 0.0.0.0 --port '$PORT' > /tmp/av_dashboard.log 2>&1
     "
     for i in {1..20}; do

@@ -231,6 +231,7 @@ export class LidarPointCloud {
 
     this.pointsMesh = new THREE.Points(this.geometry, this.material);
     this.pointsMesh.frustumCulled = false;
+    this.pointsMesh.renderOrder = 10;
     this.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 2000.0);
     this.geometry.setDrawRange(0, 0);
     this.group.add(this.pointsMesh);

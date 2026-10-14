@@ -104,7 +104,15 @@ export const useCanStore = create<CanState>((set, get) => ({
   })(),
   zoomToast: null,
   activeView: 'cockpit',
-  cameraMode: 'chase',
+  cameraMode: (() => {
+    try {
+      const mode = localStorage.getItem('av_dashboard_camera_mode');
+      if (mode === 'cabin' || mode === 'orbit' || mode === 'chase') return mode;
+      return 'chase';
+    } catch {
+      return 'chase';
+    }
+  })(),
   speedUnit: 'km/h',
   demoPedestrian: true,
 
@@ -123,7 +131,12 @@ export const useCanStore = create<CanState>((set, get) => ({
     } catch {}
     set({ activeView: next });
   },
-  setCameraMode: (cameraMode) => set({ cameraMode }),
+  setCameraMode: (cameraMode) => {
+    try {
+      localStorage.setItem('av_dashboard_camera_mode', cameraMode);
+    } catch {}
+    set({ cameraMode });
+  },
   setSpeedUnit: (speedUnit) => set({ speedUnit }),
 
   setCatalog: (catalog, source) => {

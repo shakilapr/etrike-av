@@ -154,6 +154,7 @@ export const DriveCockpit3D: React.FC = () => {
       // Camera Management based on cameraMode
       const activeCameraMode = state.cameraMode;
       if (activeCameraMode === 'orbit') {
+        tuktuk.group.visible = true;
         orbitControls.enabled = true;
         orbitControls.target.set(0, 0.75, 0.2);
         orbitControls.update();
@@ -161,10 +162,12 @@ export const DriveCockpit3D: React.FC = () => {
         orbitControls.enabled = false;
 
         if (activeCameraMode === 'cabin') {
-          // Inside cabin looking forward over handlebars through windshield
-          camera.position.set(0, 1.25, 0.0);
-          camera.lookAt(0, 1.0, -25);
+          // Inside cabin: hide ego vehicle exterior mesh to give clean driver windshield perspective
+          tuktuk.group.visible = false;
+          camera.position.set(0, 1.30, -0.40);
+          camera.lookAt(0, 1.05, -25);
         } else {
+          tuktuk.group.visible = true;
           // Chase Cam: smoothly follow behind vehicle with stable framing
           const targetCamX = 0;
           const targetCamY = 2.5;

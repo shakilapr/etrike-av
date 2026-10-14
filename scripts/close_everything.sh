@@ -89,7 +89,7 @@ echo "======================================================================"
 echo "--> 1. Requesting graceful shutdown for control nodes & bridges..."
 
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    docker exec "$CONTAINER" bash -c "
+    docker exec -u root "$CONTAINER" bash -c "
         pkill -INT -f 'vehicle_bridge' 2>/dev/null || true
         pkill -INT -f 'etrike_remote_control' 2>/dev/null || true
         pkill -INT -f 'remote_control_node' 2>/dev/null || true
@@ -112,73 +112,32 @@ sleep 0.8
 echo "--> 2. Stopping all processes inside Docker container ($CONTAINER)..."
 
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    docker exec "$CONTAINER" bash -c "
+    docker exec -u root "$CONTAINER" bash -c '
         # Autoware & ROS 2 Core (Universe, Planning, Control, Sim)
-        pkill -9 -f 'ros2' 2>/dev/null || true
-        pkill -9 -f 'rviz2' 2>/dev/null || true
-        pkill -9 -f 'component_container' 2>/dev/null || true
-        pkill -9 -f 'planning_simulator' 2>/dev/null || true
-        pkill -9 -f 'simple_planning_simulator' 2>/dev/null || true
-        pkill -9 -f 'autoware.launch' 2>/dev/null || true
-        pkill -9 -f 'autoware_launch' 2>/dev/null || true
-        pkill -9 -f 'control.launch' 2>/dev/null || true
-        pkill -9 -f 'planning.launch' 2>/dev/null || true
-        pkill -9 -f 'localization.launch' 2>/dev/null || true
-        pkill -9 -f 'sensing.launch' 2>/dev/null || true
-        pkill -9 -f 'vehicle_cmd_gate' 2>/dev/null || true
-        pkill -9 -f 'trajectory_follower' 2>/dev/null || true
-        pkill -9 -f 'behavior_path_planner' 2>/dev/null || true
-        pkill -9 -f 'behavior_velocity_planner' 2>/dev/null || true
-        pkill -9 -f 'obstacle_stop_planner' 2>/dev/null || true
-        pkill -9 -f 'motion_velocity_smoother' 2>/dev/null || true
-        pkill -9 -f 'robot_state_publisher' 2>/dev/null || true
-        pkill -9 -f 'topic_tools' 2>/dev/null || true
+        pkill -9 -f "ros2" 2>/dev/null || true
+        pkill -9 -f "rviz" 2>/dev/null || true
+        pkill -9 -f "component_container" 2>/dev/null || true
+        pkill -9 -f "planning" 2>/dev/null || true
+        pkill -9 -f "control" 2>/dev/null || true
+        pkill -9 -f "autoware" 2>/dev/null || true
+        pkill -9 -f "vehicle_bridge" 2>/dev/null || true
+        pkill -9 -f "remote_control" 2>/dev/null || true
+        pkill -9 -f "kinect" 2>/dev/null || true
+        pkill -9 -f "hesai" 2>/dev/null || true
+        pkill -9 -f "perception" 2>/dev/null || true
+        pkill -9 -f "robot_state_publisher" 2>/dev/null || true
+        pkill -9 -f "tools.av_dashboard" 2>/dev/null || true
+        pkill -9 -f "tools.can_watcher" 2>/dev/null || true
 
-        # Vehicle Bridge & Remote Cockpit
-        pkill -9 -f 'vehicle_bridge' 2>/dev/null || true
-        pkill -9 -f 'vehicle_bridge_node' 2>/dev/null || true
-        pkill -9 -f 'autoware_vehicle_bridge' 2>/dev/null || true
-        pkill -9 -f 'etrike_remote_control' 2>/dev/null || true
-        pkill -9 -f 'bench_remote_control' 2>/dev/null || true
-        pkill -9 -f 'remote_control_gui' 2>/dev/null || true
-        pkill -9 -f 'remote_control_node' 2>/dev/null || true
-        pkill -9 -f 'etrike_stability_guard' 2>/dev/null || true
-        pkill -9 -f 'autoware_teleop' 2>/dev/null || true
-        pkill -9 -f 'open_remote_control' 2>/dev/null || true
-
-        # Sensors & Bench Perception & YOLO Perception
-        pkill -9 -f 'kinect2_node' 2>/dev/null || true
-        pkill -9 -f 'kinect2_bridge' 2>/dev/null || true
-        pkill -9 -f 'single_kinect' 2>/dev/null || true
-        pkill -9 -f 'hesai_ros_wrapper_node' 2>/dev/null || true
-        pkill -9 -f 'hesai_lidar' 2>/dev/null || true
-        pkill -9 -f 'bench_perception_node' 2>/dev/null || true
-        pkill -9 -f 'yolo_perception_node' 2>/dev/null || true
-        pkill -9 -f 'etrike_yolo_perception' 2>/dev/null || true
-        pkill -9 -f 'run_bench_perception' 2>/dev/null || true
-        pkill -9 -f 'hybrid_bench_sensing' 2>/dev/null || true
-        pkill -9 -f 'start_live_bench_perception' 2>/dev/null || true
-        pkill -9 -f 'start_bench_node_container' 2>/dev/null || true
-        pkill -9 -f 'test_bench_lifecycle' 2>/dev/null || true
-        pkill -9 -f 'test_yolo_live' 2>/dev/null || true
-        pkill -9 -f 'verify_trt_inference' 2>/dev/null || true
-
-        # SLAM, Mapping, Bags
-        pkill -9 -f 'lidarslam' 2>/dev/null || true
-        pkill -9 -f 'scanmatcher' 2>/dev/null || true
-        pkill -9 -f 'graph_based_slam' 2>/dev/null || true
-        pkill -9 -f 'loop_mapping' 2>/dev/null || true
-        pkill -9 -f 'record_slam' 2>/dev/null || true
-        pkill -9 -f 'rosbag2' 2>/dev/null || true
-        pkill -9 -f 'rosbridge' 2>/dev/null || true
-
-        # Container Web Servers
-        pkill -9 -f 'tools.av_dashboard.backend.server' 2>/dev/null || true
-        pkill -9 -f 'tools.can_watcher.backend.server' 2>/dev/null || true
-
-        # Stop ROS 2 daemon
+        # Clean all remaining processes inside container except PID 1 and current shell
+        for p in $(ps -eo pid=); do
+            p_trimmed=$(echo "$p" | tr -d " ")
+            if [ "$p_trimmed" -gt 1 ] && [ "$p_trimmed" -ne $$ ]; then
+                kill -9 "$p_trimmed" 2>/dev/null || true
+            fi
+        done
         ros2 daemon stop 2>/dev/null || true
-    " 2>/dev/null || true
+    ' 2>/dev/null || true
     echo "  [OK] In-container processes terminated."
 else
     echo "  [INFO] Container $CONTAINER is not running."
@@ -194,15 +153,12 @@ pkill -9 -f "tools.can_watcher.backend.server" 2>/dev/null || true
 pkill -9 -f "tools.av_dashboard.backend.server" 2>/dev/null || true
 pkill -9 -f "autoware_teleop_web" 2>/dev/null || true
 pkill -9 -f "autoware_teleop" 2>/dev/null || true
-pkill -9 -f "canalyst_socketcan_daemon.py" 2>/dev/null || true
 pkill -9 -f "vite" 2>/dev/null || true
 
-# Host GUI / Display windows
-pkill -9 -f "chromium.*8080" 2>/dev/null || true
-pkill -9 -f "chromium.*8000" 2>/dev/null || true
-pkill -9 -f "chromium.*5173" 2>/dev/null || true
+# Host GUI / Display windows (matches snap, deb, and native chrome/chromium/epiphany)
 pkill -9 -f "chromium" 2>/dev/null || true
-pkill -9 -f "chromium-browser" 2>/dev/null || true
+pkill -9 -f "chrome" 2>/dev/null || true
+pkill -9 -f "epiphany" 2>/dev/null || true
 pkill -9 -f "electron" 2>/dev/null || true
 pkill -9 -f "rviz2" 2>/dev/null || true
 pkill -9 -f "remote_control_gui" 2>/dev/null || true
@@ -226,7 +182,7 @@ echo "  [OK] Host servers and UI windows stopped."
 # Clean orphaned ROS 2 DDS shared memory segments (safe targeted cleanup)
 echo "--> Cleaning orphaned ROS 2 DDS shared memory mutexes..."
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    docker exec "$CONTAINER" bash -c "rm -rf /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* /dev/shm/cyclonedds_* 2>/dev/null || true" 2>/dev/null || true
+    docker exec -u root "$CONTAINER" bash -c "rm -rf /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* /dev/shm/cyclonedds_* 2>/dev/null || true" 2>/dev/null || true
 fi
 rm -rf /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* /dev/shm/cyclonedds_* 2>/dev/null || true
 
@@ -237,6 +193,7 @@ if [ "$RESET_CAN" = "true" ]; then
     echo "--> 4. Bringing down CAN interfaces and bridge daemons (--reset-can requested)..."
 
     # CANalyst-II bridge daemon teardown
+    pkill -9 -f "canalyst_socketcan_daemon.py" 2>/dev/null || true
     if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
         bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" down "can2" >/dev/null 2>&1 || true
     fi
