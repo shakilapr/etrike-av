@@ -1,6 +1,10 @@
 # Quick Command Reference
 
 > **Important**: Never run Remote Cockpit and Autoware Universe together. They fight for control of the vehicle. Always run `close_everything` first when switching.
+>
+> **Two Independent Systems on Bench**:
+> 1. **Simulation System**: Controls virtual map driving and bench wheel/steering movement.
+> 2. **Physical Sensors (LiDAR + Camera)**: Run independently to display live room telemetry on the Dashboard only. They do not interfere with driving or localization. See [Bench Sensor Isolation Architecture](reference/BENCH_SENSOR_SIMULATION_ISOLATION.md).
 
 ---
 
