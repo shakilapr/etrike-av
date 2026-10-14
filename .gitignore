@@ -84,4 +84,6 @@ node_modules/
 *.onnx
 *.list
 *.asc
+*~syncthing~*
+*.tmp
 
