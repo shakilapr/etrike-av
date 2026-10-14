@@ -171,7 +171,7 @@ class YoloPerceptionNode(LifecycleNode):
         super().__init__(node_name)
 
         # Declare parameters
-        self.declare_parameter("engine_path", "/workspace/data/ml_models/yolo26x_fp16.engine")
+        self.declare_parameter("engine_path", "/workspace/data/ml_models/yolo26x_pose_fp16.engine")
         self.declare_parameter("publish_mode", "bench")  # 'bench' (isolated) or 'vehicle'
         self.declare_parameter("input_image_topic", "/kinect_front/color/image_raw")
         self.declare_parameter("input_depth_topic", "/kinect_front/depth/image_raw")
@@ -256,13 +256,19 @@ class YoloPerceptionNode(LifecycleNode):
         publish_mode = str(self.get_parameter("publish_mode").value).lower()
 
         if not os.path.exists(engine_path):
-            fallback_engine = "/workspace/data/ml_models/yolo26x_fp16.engine"
-            if os.path.exists(fallback_engine):
-                self.get_logger().warn(
-                    f"Specified engine '{engine_path}' not found on disk. "
-                    f"Falling back to existing compiled engine: '{fallback_engine}'"
-                )
-                engine_path = fallback_engine
+            candidates = [
+                "/workspace/data/ml_models/yolo26x_pose_fp16.engine",
+                "/workspace/data/ml_models/yolo26x_fp16.engine",
+                "/workspace/data/ml_models/yolov8x_fp16.engine",
+            ]
+            for cand in candidates:
+                if os.path.exists(cand):
+                    self.get_logger().warn(
+                        f"Specified engine '{engine_path}' not found on disk. "
+                        f"Falling back to existing compiled engine: '{cand}'"
+                    )
+                    engine_path = cand
+                    break
             else:
                 self.get_logger().error(f"TensorRT engine not found at: {engine_path}")
                 return TransitionCallbackReturn.FAILURE
@@ -663,15 +669,61 @@ class YoloPerceptionNode(LifecycleNode):
             _cudaStreamSynchronize(self._stream)
             self._last_infer_ms = (time.time() - t_start) * 1000.0
 
-            # Postprocess: dynamically handle YOLO26x (1, 300, 6) vs YOLOv8x (1, 84, 8400)
+            # Postprocess: dynamically handle YOLO26x-pose (1, 300, 57), YOLO26x (1, 300, 6) vs YOLOv8x (1, 84, 8400)
             det_boxes: List[List[int]] = []
             final_confidences: List[float] = []
             final_class_ids: List[int] = []
+            det_kpts_all: List[List[Tuple[int, int]]] = []
+            det_kpts_dicts: List[Dict[str, Dict[str, float]]] = []
 
             conf_thresh = float(self.get_parameter("confidence_threshold").value)
             nms_thresh = float(self.get_parameter("nms_threshold").value)
 
-            if len(self._output_shape) == 3 and self._output_shape[-1] == 6:
+            is_yolo_pose = bool(len(self._output_shape) == 3 and self._output_shape[-1] == 57)
+
+            if is_yolo_pose:
+                # YOLO26x-pose end-to-end NMS-free predictions: [x1, y1, x2, y2, score, class_id, 17*(kx, ky, kconf)]
+                preds = h_output[0]  # shape: (300, 57)
+                for i in range(len(preds)):
+                    score = float(preds[i, 4])
+                    if score < conf_thresh or not np.isfinite(score):
+                        continue
+                    px1 = float(preds[i, 0])
+                    py1 = float(preds[i, 1])
+                    px2 = float(preds[i, 2])
+                    py2 = float(preds[i, 3])
+                    cid = int(preds[i, 5])
+
+                    x1 = max(0.0, min(float(w_orig), (px1 - pad_w) / ratio))
+                    y1 = max(0.0, min(float(h_orig), (py1 - pad_h) / ratio))
+                    x2 = max(0.0, min(float(w_orig), (px2 - pad_w) / ratio))
+                    y2 = max(0.0, min(float(h_orig), (py2 - pad_h) / ratio))
+                    bw = max(0.0, x2 - x1)
+                    bh = max(0.0, y2 - y1)
+
+                    det_boxes.append([int(x1), int(y1), int(bw), int(bh)])
+                    final_confidences.append(score)
+                    final_class_ids.append(cid)
+
+                    # 17 COCO keypoints directly from YOLO26x-pose single-stage forward pass
+                    kpts_raw = preds[i, 6:57].reshape((17, 3))
+                    curr_kpts_list: List[Tuple[int, int]] = []
+                    curr_kpts_dict: Dict[str, Dict[str, float]] = {}
+                    for k in range(17):
+                        kx = max(0.0, min(float(w_orig), (float(kpts_raw[k, 0]) - pad_w) / ratio))
+                        ky = max(0.0, min(float(h_orig), (float(kpts_raw[k, 1]) - pad_h) / ratio))
+                        kconf = float(kpts_raw[k, 2])
+                        curr_kpts_list.append((int(round(kx)), int(round(ky))))
+                        curr_kpts_dict[COCO_KEYPOINTS[k]] = {
+                            "x": round(float(kx), 1),
+                            "y": round(float(ky), 1),
+                            "conf": round(float(kconf), 2),
+                        }
+                    det_kpts_all.append(curr_kpts_list)
+                    det_kpts_dicts.append(curr_kpts_dict)
+
+                indices = list(range(len(det_boxes)))
+            elif len(self._output_shape) == 3 and self._output_shape[-1] == 6:
                 # YOLO26x end-to-end NMS-free direct predictions: [x1, y1, x2, y2, score, class_id]
                 preds = h_output[0]  # shape: (N, 6)
                 for i in range(len(preds)):
@@ -701,6 +753,46 @@ class YoloPerceptionNode(LifecycleNode):
                 # YOLO26x end-to-end output is already NMS-free; re-running NMS here would
                 # merge genuinely distinct overlapping detections (e.g. two nearby people).
                 indices = list(range(len(det_boxes)))
+            elif len(self._output_shape) == 3 and (self._output_shape[1] == 56 or self._output_shape[-1] == 56):
+                # YOLOv8-pose: output shape (1, 56, 8400) -> transpose to (8400, 56)
+                is_yolo_pose = True
+                preds = np.transpose(h_output[0], (1, 0)) if self._output_shape[1] == 56 else h_output[0]
+                boxes = preds[:, :4]
+                raw_confidences = preds[:, 4]
+                conf_mask = raw_confidences >= conf_thresh
+
+                boxes = boxes[conf_mask]
+                raw_confidences = raw_confidences[conf_mask]
+                valid_preds = preds[conf_mask]
+
+                for i in range(len(boxes)):
+                    cx, cy, bw, bh = boxes[i]
+                    x1 = max(0.0, min(float(w_orig), (cx - bw / 2.0 - pad_w) / ratio))
+                    y1 = max(0.0, min(float(h_orig), (cy - bh / 2.0 - pad_h) / ratio))
+                    x2 = max(0.0, min(float(w_orig), (cx + bw / 2.0 - pad_w) / ratio))
+                    y2 = max(0.0, min(float(h_orig), (cy + bh / 2.0 - pad_h) / ratio))
+                    det_boxes.append([int(x1), int(y1), int(x2 - x1), int(y2 - y1)])
+                    final_confidences.append(float(raw_confidences[i]))
+                    final_class_ids.append(0)  # Person
+
+                    kpts_raw = valid_preds[i, 5:56].reshape((17, 3))
+                    curr_kpts_list: List[Tuple[int, int]] = []
+                    curr_kpts_dict: Dict[str, Dict[str, float]] = {}
+                    for k in range(17):
+                        kx = max(0.0, min(float(w_orig), (float(kpts_raw[k, 0]) - pad_w) / ratio))
+                        ky = max(0.0, min(float(h_orig), (float(kpts_raw[k, 1]) - pad_h) / ratio))
+                        kconf = float(kpts_raw[k, 2])
+                        curr_kpts_list.append((int(round(kx)), int(round(ky))))
+                        curr_kpts_dict[COCO_KEYPOINTS[k]] = {
+                            "x": round(float(kx), 1),
+                            "y": round(float(ky), 1),
+                            "conf": round(float(kconf), 2),
+                        }
+                    det_kpts_all.append(curr_kpts_list)
+                    det_kpts_dicts.append(curr_kpts_dict)
+
+                indices_arr = cv2.dnn.NMSBoxes(det_boxes, final_confidences, conf_thresh, nms_thresh)
+                indices = indices_arr.flatten().tolist() if len(indices_arr) > 0 else []
             else:
                 # Standard YOLOv8x: output shape (1, 84, 8400)
                 preds = np.transpose(h_output[0], (1, 0))
@@ -792,47 +884,54 @@ class YoloPerceptionNode(LifecycleNode):
                     if autoware_class != ObjectClassification.UNKNOWN:
                         out_msg.objects.append(det_obj)
 
-                    # Top-Down RTMPose-s Pose Estimation Branch for Pedestrians
+                    # Human Pose Estimation Branch for Pedestrians
                     posture_str = "STANDING"
                     is_seated = False
                     is_truncated = False
                     yaw_base = 0.0
                     keypoints_dict: Dict[str, Dict[str, float]] = {}
+                    kpts_list: List[Tuple[int, int]] = []
 
-                    if is_ped and self._pose_context is not None and bw > 15 and bh > 20:
-                        try:
-                            crop, inv_trans = crop_and_pad(bgr, (bx, by, bx + bw, by + bh), (192, 256))
-                            crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB).astype(np.float32)
-                            crop_mean = np.array([123.675, 116.28, 103.53], dtype=np.float32)
-                            crop_std = np.array([58.395, 57.12, 57.375], dtype=np.float32)
-                            crop_norm = (crop_rgb - crop_mean) / crop_std
-                            crop_chw = np.transpose(crop_norm, (2, 0, 1))[None, ...]
-                            crop_blob = np.ascontiguousarray(crop_chw, dtype=np.float32)
+                    if is_ped:
+                        if is_yolo_pose and idx < len(det_kpts_all):
+                            kpts_list = det_kpts_all[idx]
+                            keypoints_dict = det_kpts_dicts[idx]
+                        elif self._pose_context is not None and bw > 15 and bh > 20:
+                            try:
+                                crop, inv_trans = crop_and_pad(bgr, (bx, by, bx + bw, by + bh), (192, 256))
+                                crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB).astype(np.float32)
+                                crop_mean = np.array([123.675, 116.28, 103.53], dtype=np.float32)
+                                crop_std = np.array([58.395, 57.12, 57.375], dtype=np.float32)
+                                crop_norm = (crop_rgb - crop_mean) / crop_std
+                                crop_chw = np.transpose(crop_norm, (2, 0, 1))[None, ...]
+                                crop_blob = np.ascontiguousarray(crop_chw, dtype=np.float32)
 
-                            _cudaMemcpyAsync(self._d_pose_in, crop_blob.ctypes.data_as(ctypes.c_void_p), self._pose_in_size, CUDA_MEMCPY_H2D, self._stream)
-                            self._pose_context.set_tensor_address("input", self._d_pose_in.value)
-                            self._pose_context.set_tensor_address("simcc_x", self._d_pose_out_x.value)
-                            self._pose_context.set_tensor_address("simcc_y", self._d_pose_out_y.value)
-                            self._pose_context.execute_async_v3(self._stream.value)
+                                _cudaMemcpyAsync(self._d_pose_in, crop_blob.ctypes.data_as(ctypes.c_void_p), self._pose_in_size, CUDA_MEMCPY_H2D, self._stream)
+                                self._pose_context.set_tensor_address("input", self._d_pose_in.value)
+                                self._pose_context.set_tensor_address("simcc_x", self._d_pose_out_x.value)
+                                self._pose_context.set_tensor_address("simcc_y", self._d_pose_out_y.value)
+                                self._pose_context.execute_async_v3(self._stream.value)
 
-                            h_p_out_x = np.empty((1, 17, 384), dtype=np.float32)
-                            h_p_out_y = np.empty((1, 17, 512), dtype=np.float32)
-                            _cudaMemcpyAsync(h_p_out_x.ctypes.data_as(ctypes.c_void_p), self._d_pose_out_x, self._pose_out_x_size, CUDA_MEMCPY_D2H, self._stream)
-                            _cudaMemcpyAsync(h_p_out_y.ctypes.data_as(ctypes.c_void_p), self._d_pose_out_y, self._pose_out_y_size, CUDA_MEMCPY_D2H, self._stream)
-                            _cudaStreamSynchronize(self._stream)
+                                h_p_out_x = np.empty((1, 17, 384), dtype=np.float32)
+                                h_p_out_y = np.empty((1, 17, 512), dtype=np.float32)
+                                _cudaMemcpyAsync(h_p_out_x.ctypes.data_as(ctypes.c_void_p), self._d_pose_out_x, self._pose_out_x_size, CUDA_MEMCPY_D2H, self._stream)
+                                _cudaMemcpyAsync(h_p_out_y.ctypes.data_as(ctypes.c_void_p), self._d_pose_out_y, self._pose_out_y_size, CUDA_MEMCPY_D2H, self._stream)
+                                _cudaStreamSynchronize(self._stream)
 
-                            kpts_list: List[Tuple[int, int]] = []
-                            for k in range(17):
-                                kx_sub = float(np.argmax(h_p_out_x[0, k, :]) / 2.0)
-                                ky_sub = float(np.argmax(h_p_out_y[0, k, :]) / 2.0)
-                                orig_pt = inv_trans @ np.array([kx_sub, ky_sub, 1.0])
-                                px_orig = int(orig_pt[0])
-                                py_orig = int(orig_pt[1])
-                                kpts_list.append((px_orig, py_orig))
-                                keypoints_dict[COCO_KEYPOINTS[k]] = {"x": round(float(px_orig), 1), "y": round(float(py_orig), 1)}
+                                for k in range(17):
+                                    kx_sub = float(np.argmax(h_p_out_x[0, k, :]) / 2.0)
+                                    ky_sub = float(np.argmax(h_p_out_y[0, k, :]) / 2.0)
+                                    orig_pt = inv_trans @ np.array([kx_sub, ky_sub, 1.0])
+                                    px_orig = int(orig_pt[0])
+                                    py_orig = int(orig_pt[1])
+                                    kpts_list.append((px_orig, py_orig))
+                                    keypoints_dict[COCO_KEYPOINTS[k]] = {"x": round(float(px_orig), 1), "y": round(float(py_orig), 1)}
+                            except Exception as pe:
+                                self.get_logger().warn(f"RTMPose inference error: {pe}")
 
-                            # Refine distance & localization at detected sternum (midpoint of shoulders)
-                            if len(kpts_list) >= 7:
+                        # Anatomical analysis, posture classification & 3D heading yaw
+                        if len(kpts_list) >= 7:
+                            try:
                                 ls_x, ls_y = kpts_list[5]
                                 rs_x, rs_y = kpts_list[6]
                                 if (bx - 20) <= ls_x <= (bx + bw + 20) and (bx - 20) <= rs_x <= (bx + bw + 20):
@@ -846,93 +945,86 @@ class YoloPerceptionNode(LifecycleNode):
                                             x=x_base, y=y_base, z=z_base
                                         )
 
-                            # Anatomical Segment Length Analysis
-                            sh_y = (kpts_list[5][1] + kpts_list[6][1]) / 2.0
-                            sh_x = (kpts_list[5][0] + kpts_list[6][0]) / 2.0
-                            hip_y = (kpts_list[11][1] + kpts_list[12][1]) / 2.0
-                            hip_x = (kpts_list[11][0] + kpts_list[12][0]) / 2.0
-                            knee_y = (kpts_list[13][1] + kpts_list[14][1]) / 2.0
-                            knee_x = (kpts_list[13][0] + kpts_list[14][0]) / 2.0
-                            ankle_y = (kpts_list[15][1] + kpts_list[16][1]) / 2.0
+                                # Anatomical Segment Length Analysis
+                                sh_y = (kpts_list[5][1] + kpts_list[6][1]) / 2.0
+                                sh_x = (kpts_list[5][0] + kpts_list[6][0]) / 2.0
+                                hip_y = (kpts_list[11][1] + kpts_list[12][1]) / 2.0
+                                hip_x = (kpts_list[11][0] + kpts_list[12][0]) / 2.0
+                                knee_y = (kpts_list[13][1] + kpts_list[14][1]) / 2.0
+                                knee_x = (kpts_list[13][0] + kpts_list[14][0]) / 2.0
+                                ankle_y = (kpts_list[15][1] + kpts_list[16][1]) / 2.0
 
-                            torso_dy = max(20.0, abs(hip_y - sh_y))
-                            thigh_dy = abs(knee_y - hip_y)
-                            thigh_dx = abs(knee_x - hip_x)
-                            shin_dy = abs(ankle_y - knee_y)
-                            leg_dy = abs(ankle_y - hip_y)
-                            aspect_ratio = float(bh) / max(1.0, float(bw))
+                                torso_dy = max(20.0, abs(hip_y - sh_y))
+                                thigh_dy = abs(knee_y - hip_y)
+                                thigh_dx = abs(knee_x - hip_x)
+                                shin_dy = abs(ankle_y - knee_y)
+                                leg_dy = abs(ankle_y - hip_y)
+                                aspect_ratio = float(bh) / max(1.0, float(bw))
 
-                            # Lower-body truncation: feet outside bottom margin of camera frame
-                            is_truncated = bool(
-                                (by + bh) >= int(0.92 * h_orig)
-                                or shin_dy < 18.0
-                                or knee_y >= (0.93 * h_orig)
-                            )
+                                # Lower-body truncation: feet outside bottom margin of camera frame
+                                is_truncated = bool(
+                                    (by + bh) >= int(0.92 * h_orig)
+                                    or shin_dy < 18.0
+                                    or knee_y >= (0.93 * h_orig)
+                                )
 
-                            # Robust Anatomical Posture Classification:
-                            # Standing: Thighs and shins descend vertically (thigh_dy / torso_dy >= 0.46)
-                            # or full legs extended (leg_dy / torso_dy >= 1.05) or tall upright truncation
-                            # Seated: Thighs horizontal (thigh_dy / torso_dy < 0.40) or lap extends forward
-                            if (leg_dy / torso_dy >= 1.05 and shin_dy > 18.0) or (thigh_dy / torso_dy >= 0.46):
-                                is_standing = True
-                            elif is_truncated and (thigh_dy / torso_dy >= 0.38 or aspect_ratio >= 1.35):
-                                is_standing = True
-                            else:
-                                is_standing = False
+                                # Robust Anatomical Posture Classification:
+                                if (leg_dy / torso_dy >= 1.05 and shin_dy > 18.0) or (thigh_dy / torso_dy >= 0.46):
+                                    is_standing = True
+                                elif is_truncated and (thigh_dy / torso_dy >= 0.38 or aspect_ratio >= 1.35):
+                                    is_standing = True
+                                else:
+                                    is_standing = False
 
-                            is_seated = not is_standing
-                            posture_str = "SEATED" if is_seated else ("STANDING (TRUNCATED)" if is_truncated else "STANDING")
+                                is_seated = not is_standing
+                                posture_str = "SEATED" if is_seated else ("STANDING (TRUNCATED)" if is_truncated else "STANDING")
 
-                            # 3D Human Heading Yaw Estimation from Shoulder & Face Vector:
-                            # COCO: 5=Left Shoulder, 6=Right Shoulder, 0=Nose
-                            # When facing camera: Left Shoulder is at viewer's right (x5 > x6)
-                            # When facing away: Right Shoulder is at viewer's right (x6 > x5)
-                            # Base_link: +X forward (yaw=0), +Y left (yaw=+pi/2), -Y right (yaw=-pi/2)
-                            dx_sh = float(kpts_list[6][0] - kpts_list[5][0])  # right.x - left.x
-                            dx_nose = float(kpts_list[0][0] - sh_x)
+                                # 3D Human Heading Yaw Estimation from Shoulder & Face Vector
+                                dx_sh = float(kpts_list[6][0] - kpts_list[5][0])  # right.x - left.x
+                                dx_nose = float(kpts_list[0][0] - sh_x)
 
-                            w_torso = max(25.0, torso_dy * 0.65)
-                            nz = max(-1.0, min(1.0, dx_sh / w_torso))
-                            ny = max(-1.0, min(1.0, -dx_nose / max(15.0, torso_dy * 0.35)))
+                                w_torso = max(25.0, torso_dy * 0.65)
+                                nz = max(-1.0, min(1.0, dx_sh / w_torso))
+                                ny = max(-1.0, min(1.0, -dx_nose / max(15.0, torso_dy * 0.35)))
 
-                            yaw_base = math.atan2(ny, nz)
-                            cy = math.cos(yaw_base * 0.5)
-                            sy = math.sin(yaw_base * 0.5)
-                            det_obj.kinematics.pose_with_covariance.pose.orientation = Quaternion(
-                                x=0.0, y=0.0, z=sy, w=cy
-                            )
+                                yaw_base = math.atan2(ny, nz)
+                                cy = math.cos(yaw_base * 0.5)
+                                sy = math.sin(yaw_base * 0.5)
+                                det_obj.kinematics.pose_with_covariance.pose.orientation = Quaternion(
+                                    x=0.0, y=0.0, z=sy, w=cy
+                                )
 
-                            # Draw skeleton on debug frame
-                            if annotated_bgr is not None:
-                                for (p1, p2) in SKELETON_EDGES:
-                                    cv2.line(annotated_bgr, kpts_list[p1], kpts_list[p2], (0, 220, 255), 2)
-                                for pt in kpts_list:
-                                    cv2.circle(annotated_bgr, pt, 3, (0, 255, 255), -1)
+                                # Draw skeleton on debug frame
+                                if annotated_bgr is not None:
+                                    for (p1, p2) in SKELETON_EDGES:
+                                        cv2.line(annotated_bgr, kpts_list[p1], kpts_list[p2], (0, 220, 255), 2)
+                                    for pt in kpts_list:
+                                        cv2.circle(annotated_bgr, pt, 3, (0, 255, 255), -1)
 
-                            # Append human pose with deterministic det_{idx} ID matching
-                            human_poses_list.append({
-                                "id": f"det_{len(out_msg.objects)-1}",
-                                "x_base": round(x_base, 2),
-                                "y_base": round(y_base, 2),
-                                "z_base": round(z_base, 2),
-                                "yaw": round(yaw_base, 3),
-                                "est_z": round(est_z, 2),
-                                "posture": posture_str,
-                                "is_seated": is_seated,
-                                "is_truncated": is_truncated,
-                                "confidence": round(conf, 2),
-                                "keypoints": keypoints_dict,
-                            })
-                        except Exception as pe:
-                            self.get_logger().warn(f"RTMPose inference error: {pe}")
+                                # Append human pose with deterministic det_{idx} ID matching
+                                human_poses_list.append({
+                                    "id": f"det_{len(out_msg.objects)-1}",
+                                    "x_base": round(x_base, 2),
+                                    "y_base": round(y_base, 2),
+                                    "z_base": round(z_base, 2),
+                                    "yaw": round(yaw_base, 3),
+                                    "est_z": round(est_z, 2),
+                                    "posture": posture_str,
+                                    "is_seated": is_seated,
+                                    "is_truncated": is_truncated,
+                                    "confidence": round(conf, 2),
+                                    "keypoints": keypoints_dict,
+                                })
+                            except Exception as ke:
+                                self.get_logger().warn(f"Skeleton pose calculation error: {ke}")
 
                     # Annotate debug visualization
                     if annotated_bgr is not None:
                         color = (0, 255, 0) if is_ped else (255, 165, 0)
                         cv2.rectangle(annotated_bgr, (bx, by), (bx + bw, by + bh), color, 2)
-                        tag = f"PERSON: {posture_str}" if is_ped else coco_label.upper()
-                        caption = f"{tag} {conf*100:.0f}% ({est_z:.2f}m, y={y_base:+.2f}m)"
-                        cv2.putText(annotated_bgr, caption, (bx, max(22, by - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                        if not is_ped:
+                            caption = f"{coco_label.upper()} {conf*100:.0f}% ({est_z:.2f}m, y={y_base:+.2f}m)"
+                            cv2.putText(annotated_bgr, caption, (bx, max(22, by - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
             self._pub_objects.publish(out_msg)
 

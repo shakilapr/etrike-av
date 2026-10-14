@@ -1279,16 +1279,16 @@ export class SurroundingTraffic {
       const delta = Math.atan2(Math.sin(diff), Math.cos(diff));
       actor.group.rotation.y += delta * yawLerp;
 
-      // Update lead hazard badge and proximity highlight
+      // Update lead hazard badge and proximity highlight (suppressed for human pedestrians)
       const distBadge = actor.meshes['__dist'] as THREE.Sprite | undefined;
+      const isPedestrian = actor.currentLabel === 'PEDESTRIAN' || Boolean(actor.meshes['PEDESTRIAN']?.visible) || Boolean(actor.skeletonGroup?.visible);
       const isLead = key === leadKey && closestDist < 8.0;
       if (distBadge) {
-        if (isLead) {
+        if (isLead && !isPedestrian) {
           distBadge.visible = true;
           const isCritical = closestDist < 3.5;
-          distBadge.position.y = actor.meshes['PEDESTRIAN']?.visible ? (actor.isSeated ? 1.45 : 1.95) : 1.35;
-          const postureTag = actor.meshes['PEDESTRIAN']?.visible ? ` • ${actor.postureText} [YOLO26x + RTMPose-s]` : '';
-          const dStr = `${closestDist.toFixed(1)} m${postureTag}`;
+          distBadge.position.y = 1.35;
+          const dStr = `${closestDist.toFixed(1)} m`;
           this.updateDistanceBadge(distBadge, dStr, isCritical);
         } else {
           distBadge.visible = false;
