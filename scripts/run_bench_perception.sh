@@ -202,8 +202,9 @@ docker exec -d "$CONTAINER" bash -c "
     source /workspace/autoware/install/setup.bash 2>/dev/null || true
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp;
     export PYTHONPATH=/workspace/av_project:\$PYTHONPATH;
-    python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/bench_perception_node.py \
+        python3 /workspace/autoware/src/our_packages/etrike_common_launch/scripts/bench_perception_node.py \
         --ros-args \
+        -p output_objects_topic:=/bench_perception/objects \
         -p publish_rate_hz:=10.0 \
         -p sensor_timeout_sec:=1.2 \
         -p voxel_grid_size_m:=0.28 \
@@ -235,7 +236,7 @@ echo ""
 echo "======================================================================"
 echo " Standalone Bench Perception Pipeline is RUNNING"
 echo " Mode: $([ "$LIDAR_ONLINE" -eq 1 ] && echo 'FUSED (Camera + LiDAR)' || echo 'CAMERA ONLY (LiDAR offline)')"
-echo " Objects published on: /perception/object_recognition/detection/objects"
+echo " Objects published on: /bench_perception/objects (Isolated from Autoware simulation)"
 echo " Live diagnostic status: /bench_perception/status"
 echo " Dashboard URL: http://localhost:${PORT}"
 echo " Press Ctrl+C to safely terminate bench perception."

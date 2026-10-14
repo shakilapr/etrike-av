@@ -255,6 +255,7 @@ class Ros2Bridge:
             try:
                 from autoware_perception_msgs.msg import DetectedObjects
                 for det_topic in (
+                    "/bench_perception/objects",
                     "/perception/object_recognition/detection/objects",
                     "/perception/object_recognition/detection/centerpoint/objects",
                     "/perception/object_recognition/detection/centerpoint/validation/objects",
@@ -265,14 +266,18 @@ class Ros2Bridge:
                         self._on_detected_objects,
                         qos_sensor,
                     )
-                node.create_subscription(
-                    DetectedObjects,
+                for cluster_topic in (
+                    "/bench_perception/clusters",
                     "/perception/object_recognition/detection/clustering/objects",
-                    self._on_clustering_objects,
-                    qos_sensor,
-                )
+                ):
+                    node.create_subscription(
+                        DetectedObjects,
+                        cluster_topic,
+                        self._on_clustering_objects,
+                        qos_sensor,
+                    )
                 self._mark_subscribed("detection", True)
-                print("[ROS 2 Bridge] Subscribed to perception detection topics")
+                print("[ROS 2 Bridge] Subscribed to perception detection topics (including isolated /bench_perception/objects)")
             except Exception as e:
                 self._mark_subscribed("detection", False)
                 print(f"[ROS 2 Bridge] DetectedObjects subscription failed: {e}")
