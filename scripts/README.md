@@ -28,6 +28,8 @@ This directory contains utility scripts for workspace management, testing, diagn
    - [kill_container.sh](file:///E:/work/av_project/scripts/kill_container.sh)
 5. [SSH Remote Commands](#5-ssh-remote-commands)
    - [ssh_connect.ps1](file:///E:/work/av_project/scripts/ssh_connect.ps1)
+   - [open_remote_control.ps1](file:///E:/work/av_project/scripts/open_remote_control.ps1)
+   - [close_everything.ps1](file:///E:/work/av_project/scripts/close_everything.ps1)
    - [ssh_test.py](file:///E:/work/av_project/scripts/ssh_test.py)
 6. [E-Trike Build & Test Runners](#6-e-trike-build--test-runners)
    - [run_tests.py](file:///E:/work/av_project/scripts/run_tests.py)
@@ -429,6 +431,14 @@ This directory contains utility scripts for workspace management, testing, diagn
       WARN "expect not available, manual plink execution required"
   FINALLY:
       DELETE temporary .exp file
+  ```
+
+### [open_remote_control.ps1](file:///E:/work/av_project/scripts/open_remote_control.ps1)
+* **Description**: PowerShell wrapper that invokes `open_remote_control.sh` on the Jetson over SSH (`med1@172.16.25.67`) with configurable CAN interface and simulation mode parameters.
+* **Usage**:
+  ```powershell
+  pwsh scripts/open_remote_control.ps1                     # Default (can2, sim_mode:=true)
+  pwsh scripts/open_remote_control.ps1 -CanInterface can2 -SimMode true
   ```
 
 ### [ssh_test.py](file:///E:/work/av_project/scripts/ssh_test.py)
