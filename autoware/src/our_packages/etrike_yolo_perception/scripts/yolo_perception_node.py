@@ -816,27 +816,57 @@ class YoloPerceptionNode(LifecycleNode):
                                             x=x_base, y=y_base, z=z_base
                                         )
 
-                            # Lower-body truncation analysis (camera frustum near-field cut-off)
+                            # Anatomical Segment Length Analysis
+                            sh_y = (kpts_list[5][1] + kpts_list[6][1]) / 2.0
+                            sh_x = (kpts_list[5][0] + kpts_list[6][0]) / 2.0
                             hip_y = (kpts_list[11][1] + kpts_list[12][1]) / 2.0
                             knee_y = (kpts_list[13][1] + kpts_list[14][1]) / 2.0
                             ankle_y = (kpts_list[15][1] + kpts_list[16][1]) / 2.0
+
+                            torso_dy = max(20.0, abs(hip_y - sh_y))
                             thigh_dy = abs(knee_y - hip_y)
                             shin_dy = abs(ankle_y - knee_y)
+                            leg_dy = abs(ankle_y - hip_y)
+                            aspect_ratio = float(bh) / max(1.0, float(bw))
 
-                            # Truncation: feet/ankles outside camera view or collapsed to bottom margin
+                            # Lower-body truncation: feet outside bottom margin of camera frame
                             is_truncated = bool(
                                 (by + bh) >= int(0.93 * h_orig)
                                 or shin_dy < 18.0
                                 or knee_y >= (0.94 * h_orig)
                             )
 
-                            # Seated classification robust to truncation
-                            aspect_ratio = float(bh) / max(1.0, float(bw))
-                            is_seated = bool(
-                                (thigh_dy / max(1.0, float(bh))) < 0.35
-                                or (is_truncated and aspect_ratio < 1.75)
+                            # Robust Posture Classification:
+                            # 1. STANDING: legs fully extended vertically (leg_dy/torso_dy > 1.25 and thigh_dy/torso_dy > 0.55)
+                            # 2. SEATED: thighs horizontal (thigh_dy/torso_dy < 0.40) or truncated squarish torso
+                            is_standing = bool(shin_dy > 25.0 and (leg_dy / torso_dy) > 1.25 and (thigh_dy / torso_dy) > 0.55)
+                            if not is_standing and is_truncated:
+                                # When lower legs cut off: check if visible thighs project straight down
+                                if (thigh_dy / torso_dy) > 0.60 and aspect_ratio > 1.40:
+                                    is_standing = True
+
+                            is_seated = not is_standing
+                            posture_str = "SEATED" if is_seated else ("STANDING (TRUNCATED)" if is_truncated else "STANDING")
+
+                            # 3D Human Heading Yaw Estimation from Shoulder & Face Vector:
+                            # COCO: 5=Left Shoulder, 6=Right Shoulder, 0=Nose
+                            # When facing camera: Left Shoulder is at viewer's right (x5 > x6)
+                            # When facing away: Right Shoulder is at viewer's right (x6 > x5)
+                            dx_sh = float(kpts_list[6][0] - kpts_list[5][0])  # right.x - left.x
+                            dx_nose = float(kpts_list[0][0] - sh_x)
+
+                            # In base_link: +X is forward (facing away from vehicle, yaw=0)
+                            # -X is backward (facing towards vehicle, yaw=pi)
+                            nz = 1.0 if dx_sh > 20.0 else (-1.0 if dx_sh < -20.0 else 0.0)
+                            ny = -dx_nose / max(15.0, torso_dy * 0.3)
+                            ny = max(-1.0, min(1.0, ny))
+
+                            yaw_base = math.atan2(ny, nz)
+                            cy = math.cos(yaw_base * 0.5)
+                            sy = math.sin(yaw_base * 0.5)
+                            det_obj.kinematics.pose_with_covariance.pose.orientation = Quaternion(
+                                x=0.0, y=0.0, z=sy, w=cy
                             )
-                            posture_str = "SEATED" if is_seated else "STANDING"
 
                             # Draw skeleton on debug frame
                             if annotated_bgr is not None:
@@ -852,6 +882,7 @@ class YoloPerceptionNode(LifecycleNode):
                             "x_base": round(x_base, 2),
                             "y_base": round(y_base, 2),
                             "z_base": round(z_base, 2),
+                            "yaw": round(yaw_base, 3),
                             "est_z": round(est_z, 2),
                             "posture": posture_str,
                             "is_seated": is_seated,

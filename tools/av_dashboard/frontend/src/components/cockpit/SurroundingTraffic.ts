@@ -463,7 +463,7 @@ export class SurroundingTraffic {
       smplMesh = SkeletonUtils.clone(this.smplTemplate);
       smplMesh.name = 'SMPL_Rigged_Mesh';
       smplMesh.scale.setScalar(0.0096);
-      smplMesh.rotation.y = 0;
+      smplMesh.rotation.y = Math.PI;
 
       const bones: Record<string, THREE.Bone> = {};
       smplMesh.traverse((child) => {
@@ -1135,6 +1135,9 @@ export class SurroundingTraffic {
           if (matchedPose) {
             actor.isSeated = Boolean(matchedPose.is_seated);
             actor.postureText = matchedPose.posture || (actor.isSeated ? 'SEATED' : 'STANDING');
+            if (typeof (matchedPose as any).yaw === 'number') {
+              actor.targetYaw = (matchedPose as any).yaw;
+            }
             const kpts = matchedPose.keypoints;
             if (kpts && kpts.left_shoulder && kpts.right_shoulder) {
               actor.hasLivePose = true;
