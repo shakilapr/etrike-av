@@ -74,6 +74,9 @@ interface Actor {
   skeletonGroup?: THREE.Group;
   skeletonJoints?: THREE.Mesh[];
   skeletonBones?: THREE.Mesh[];
+  smplMesh?: THREE.Object3D;
+  smplBones?: Record<string, THREE.Bone>;
+  proceduralMesh?: THREE.Object3D;
 }
 
 const CLASS_COLORS: Record<string, number> = {
@@ -165,13 +168,12 @@ export class SurroundingTraffic {
     this.group = new THREE.Group();
 
     // 1. Shared Materials (Automotive Digital Cockpit Palette)
-    // SMPL neutral slate-grey humanoid styling
+    // SMPL authentic anatomical grey humanoid styling
     this.pedMat = new THREE.MeshStandardMaterial({
-      color: 0x334155, // Slate-700 digital twin humanoid silhouette
-      roughness: 0.65,
-      metalness: 0.10,
-      transparent: true,
-      opacity: 0.82,
+      color: 0x94a3b8, // Classic SMPL matte silver-grey PBR
+      roughness: 0.50,
+      metalness: 0.15,
+      transparent: false,
     });
     this.pedAccentMat = new THREE.MeshStandardMaterial({
       color: 0x1e293b, // Slate-800 darker accent tone
@@ -334,12 +336,15 @@ export class SurroundingTraffic {
       actor.group.remove(oldPedMesh);
       this.disposeHierarchy(oldPedMesh);
     }
-    const { mesh: newMesh, limbs } = this.createPedestrianMesh();
+    const { mesh: newMesh, limbs, smplMesh, smplBones, proceduralMesh } = this.createPedestrianMesh();
     const { group: skelGroup, joints: skelJoints, bones: skelBones } = this.createRTMPoseSkeletonOverlay();
     newMesh.add(skelGroup);
 
     actor.meshes['PEDESTRIAN'] = newMesh;
     actor.limbs = limbs;
+    actor.smplMesh = smplMesh;
+    actor.smplBones = smplBones;
+    actor.proceduralMesh = proceduralMesh;
     actor.skeletonGroup = skelGroup;
     actor.skeletonJoints = skelJoints;
     actor.skeletonBones = skelBones;
@@ -437,7 +442,13 @@ export class SurroundingTraffic {
   /**
    * Builds an articulated SMPL humanoid model with athletic proportions and rigged pivots for RTMPose-s.
    */
-  private createPedestrianMesh(): { mesh: THREE.Group; limbs: ActorLimbs } {
+  private createPedestrianMesh(): {
+    mesh: THREE.Group;
+    limbs: ActorLimbs;
+    smplMesh?: THREE.Object3D;
+    smplBones?: Record<string, THREE.Bone>;
+    proceduralMesh?: THREE.Object3D;
+  } {
     const ped = new THREE.Group();
 
     // 1. Ground Contact Shadow
@@ -445,7 +456,32 @@ export class SurroundingTraffic {
     shadow.position.set(0, 0.02, 0);
     ped.add(shadow);
 
-    // 2. Anatomical Articulated SMPL Humanoid
+    // 2. Rigged Skinned SMPL Humanoid Mesh (25 Bones, Linear Blend Skinning)
+    let smplMesh: THREE.Object3D | undefined;
+    let smplBones: Record<string, THREE.Bone> | undefined;
+    if (this.smplTemplate) {
+      smplMesh = SkeletonUtils.clone(this.smplTemplate);
+      smplMesh.name = 'SMPL_Rigged_Mesh';
+      smplMesh.scale.setScalar(0.0096);
+      smplMesh.rotation.y = Math.PI;
+
+      const bones: Record<string, THREE.Bone> = {};
+      smplMesh.traverse((child) => {
+        if ((child as THREE.Bone).isBone) {
+          bones[child.name] = child as THREE.Bone;
+        }
+        if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+          const m = child as THREE.SkinnedMesh;
+          m.castShadow = true;
+          m.receiveShadow = true;
+          m.material = this.pedMat;
+        }
+      });
+      smplBones = bones;
+      ped.add(smplMesh);
+    }
+
+    // 3. Anatomical Articulated Limb Hierarchy (Procedural Kinematic Driver)
     const bodyRoot = new THREE.Group();
     bodyRoot.position.set(0, 0, 0);
     ped.add(bodyRoot);
@@ -584,6 +620,9 @@ export class SurroundingTraffic {
         legR,
         kneeR,
       },
+      smplMesh,
+      smplBones,
+      proceduralMesh: bodyRoot,
     };
   }
 
@@ -814,14 +853,14 @@ export class SurroundingTraffic {
    */
   private createDistanceBadge(): THREE.Sprite {
     const canvas = document.createElement('canvas');
-    canvas.width = 380;
-    canvas.height = 54;
+    canvas.width = 440;
+    canvas.height = 56;
     const ctx = canvas.getContext('2d');
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearFilter;
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(1.45, 0.21, 1);
+    sprite.scale.set(1.68, 0.21, 1);
     sprite.position.y = 2.1;
     sprite.userData = { canvas, ctx, texture, lastText: '', lastHazard: null };
     return sprite;
@@ -835,17 +874,17 @@ export class SurroundingTraffic {
     data.lastHazard = isHazard;
 
     const ctx = data.ctx as CanvasRenderingContext2D;
-    ctx.clearRect(0, 0, 380, 54);
+    ctx.clearRect(0, 0, 440, 56);
 
     ctx.fillStyle = isHazard ? 'rgba(239, 68, 68, 0.92)' : 'rgba(15, 23, 42, 0.88)';
     ctx.beginPath();
     const r = 20;
     ctx.moveTo(r, 4);
-    ctx.lineTo(380 - r, 4);
-    ctx.arcTo(380 - 4, 4, 380 - 4, 50, r);
-    ctx.arcTo(380 - 4, 50, 4, 50, r);
-    ctx.arcTo(4, 50, 4, 4, r);
-    ctx.arcTo(4, 4, 380 - r, 4, r);
+    ctx.lineTo(440 - r, 4);
+    ctx.arcTo(440 - 4, 4, 440 - 4, 52, r);
+    ctx.arcTo(440 - 4, 52, 4, 52, r);
+    ctx.arcTo(4, 52, 4, 4, r);
+    ctx.arcTo(4, 4, 440 - r, 4, r);
     ctx.closePath();
     ctx.fill();
 
@@ -854,10 +893,10 @@ export class SurroundingTraffic {
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 20px system-ui, -apple-system, sans-serif';
+    ctx.font = 'bold 19px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, 190, 27);
+    ctx.fillText(text, 220, 28);
 
     (data.texture as THREE.CanvasTexture).needsUpdate = true;
   }
@@ -866,7 +905,7 @@ export class SurroundingTraffic {
     const group = new THREE.Group();
 
     // Create pedestrian
-    const { mesh: pedMesh, limbs } = this.createPedestrianMesh();
+    const { mesh: pedMesh, limbs, smplMesh, smplBones, proceduralMesh } = this.createPedestrianMesh();
     const { group: skelGroup, joints: skelJoints, bones: skelBones } = this.createRTMPoseSkeletonOverlay();
     pedMesh.add(skelGroup);
 
@@ -908,6 +947,9 @@ export class SurroundingTraffic {
       skeletonGroup: skelGroup,
       skeletonJoints: skelJoints,
       skeletonBones: skelBones,
+      smplMesh,
+      smplBones,
+      proceduralMesh,
     };
   }
 
@@ -1219,65 +1261,125 @@ export class SurroundingTraffic {
         actor.poseCurrent.torsoRoll = THREE.MathUtils.lerp(actor.poseCurrent.torsoRoll, actor.poseTarget.torsoRoll, rotLerp);
         actor.poseCurrent.headYaw = THREE.MathUtils.lerp(actor.poseCurrent.headYaw, actor.poseTarget.headYaw, rotLerp);
 
-        // Seated vertical pelvis drop
-        actor.limbs.hips.position.y = 0.86 - 0.34 * sb;
+        // 1. Direct 25-Bone Articulation on Rigged SMPL Model (Linear Blend Skinning)
+        if (actor.smplBones) {
+          const b = actor.smplBones;
+          // Suppress procedural capsule primitives when authentic rigged SMPL model is loaded
+          if (actor.proceduralMesh) actor.proceduralMesh.visible = false;
+          if (actor.skeletonGroup) actor.skeletonGroup.visible = false;
 
-        // Ergonomic forward lean when seated
-        actor.limbs.hips.rotation.x = 0.08 * sb;
+          // Pelvis height (rest = 97.27 cm; drops down ~35 cm when seated)
+          if (b['m_avg_Pelvis']) {
+            b['m_avg_Pelvis'].position.y = 97.27 - 35 * sb;
+            b['m_avg_Pelvis'].rotation.x = 0.08 * sb;
+          }
 
-        // Kinematic joint angles
-        const seatedHip = 1.48 * sb;
-        const seatedKnee = -1.40 * sb;
-        const seatedArm = -0.55 * sb;
-        const seatedElbow = 0.75 * sb;
+          // Walk cycle dynamics
+          const walkWeight = Math.max(0, 1.0 - sb);
+          const walkFreq = 5.2;
+          const walkPhase = this.animTime * walkFreq + actor.animSeed;
+          const walkAngle = Math.sin(walkPhase) * 0.42 * walkWeight;
+          const armAngle = Math.sin(walkPhase) * 0.35 * walkWeight;
+          const kneeFlexL = Math.max(0, -walkAngle * 0.75) * walkWeight;
+          const kneeFlexR = Math.max(0, walkAngle * 0.75) * walkWeight;
 
-        // Torso / Head articulation
-        if (actor.limbs.spine) {
-          actor.limbs.spine.rotation.z = -actor.poseCurrent.torsoRoll;
-        }
-        if (actor.limbs.head) {
-          actor.limbs.head.rotation.y = actor.poseCurrent.headYaw;
-        }
+          // Hips & Legs articulation (thighs bend forward onto seat, shins bend down)
+          const seatedHip = -1.48 * sb;
+          const seatedKnee = 1.45 * sb;
+          if (b['m_avg_L_Hip']) b['m_avg_L_Hip'].rotation.x = seatedHip - walkAngle * 0.7;
+          if (b['m_avg_R_Hip']) b['m_avg_R_Hip'].rotation.x = seatedHip + walkAngle * 0.7;
+          if (b['m_avg_L_Knee']) b['m_avg_L_Knee'].rotation.x = seatedKnee + kneeFlexL;
+          if (b['m_avg_R_Knee']) b['m_avg_R_Knee'].rotation.x = seatedKnee + kneeFlexR;
 
-        // Walk cycle dynamics (weighted by standing ratio when no explicit keypoint leg constraint)
-        const walkWeight = Math.max(0, 1.0 - sb);
-        const walkFreq = 5.2;
-        const walkPhase = this.animTime * walkFreq + actor.animSeed;
-        const walkAngle = Math.sin(walkPhase) * 0.42 * walkWeight;
-        const armAngle = Math.sin(walkPhase) * 0.35 * walkWeight;
-        const kneeFlexL = Math.max(0, -walkAngle * 0.75) * walkWeight;
-        const kneeFlexR = Math.max(0, walkAngle * 0.75) * walkWeight;
+          // Shoulders & Arms: natural arms-down resting posture (z = -1.25 / +1.25)
+          // When seated: arms pitch forward onto lap with relaxed elbows
+          const seatedArmPitch = -0.35 * sb;
+          const seatedElbowFlex = 0.5 * sb;
 
-        // Leg articulation (hips & knees)
-        actor.limbs.legL.rotation.x = seatedHip + walkAngle;
-        actor.limbs.kneeL.rotation.x = seatedKnee - kneeFlexL;
-        actor.limbs.legR.rotation.x = seatedHip - walkAngle;
-        actor.limbs.kneeR.rotation.x = seatedKnee - kneeFlexR;
+          if (actor.hasLivePose) {
+            if (b['m_avg_L_Shoulder']) {
+              b['m_avg_L_Shoulder'].rotation.z = -1.25 + actor.poseCurrent.rollL;
+              b['m_avg_L_Shoulder'].rotation.x = seatedArmPitch;
+            }
+            if (b['m_avg_R_Shoulder']) {
+              b['m_avg_R_Shoulder'].rotation.z = 1.25 - actor.poseCurrent.rollR;
+              b['m_avg_R_Shoulder'].rotation.x = seatedArmPitch;
+            }
+            if (b['m_avg_L_Elbow']) {
+              b['m_avg_L_Elbow'].rotation.y = 0.25 + seatedElbowFlex + actor.poseCurrent.elbowL * 0.6;
+            }
+            if (b['m_avg_R_Elbow']) {
+              b['m_avg_R_Elbow'].rotation.y = -0.25 - seatedElbowFlex - actor.poseCurrent.elbowR * 0.6;
+            }
+          } else {
+            if (b['m_avg_L_Shoulder']) {
+              b['m_avg_L_Shoulder'].rotation.z = -1.25;
+              b['m_avg_L_Shoulder'].rotation.x = seatedArmPitch + armAngle * 0.5;
+            }
+            if (b['m_avg_R_Shoulder']) {
+              b['m_avg_R_Shoulder'].rotation.z = 1.25;
+              b['m_avg_R_Shoulder'].rotation.x = seatedArmPitch - armAngle * 0.5;
+            }
+            if (b['m_avg_L_Elbow']) {
+              b['m_avg_L_Elbow'].rotation.y = 0.25 + seatedElbowFlex;
+            }
+            if (b['m_avg_R_Elbow']) {
+              b['m_avg_R_Elbow'].rotation.y = -0.25 - seatedElbowFlex;
+            }
+          }
 
-        // Arm articulation: blend RTMPose observed keypoints with seated/walk kinematics
-        if (actor.hasLivePose) {
-          // Observed RTMPose-s motion
-          actor.limbs.armL.rotation.z = -actor.poseCurrent.rollL;
-          actor.limbs.armL.rotation.x = seatedArm;
-          actor.limbs.elbowL.rotation.x = Math.max(seatedElbow, actor.poseCurrent.elbowL);
-
-          actor.limbs.armR.rotation.z = actor.poseCurrent.rollR;
-          actor.limbs.armR.rotation.x = seatedArm;
-          actor.limbs.elbowR.rotation.x = Math.max(seatedElbow, actor.poseCurrent.elbowR);
+          // Head & Spine
+          if (b['m_avg_Head']) b['m_avg_Head'].rotation.y = actor.poseCurrent.headYaw;
+          if (b['m_avg_Spine3']) b['m_avg_Spine3'].rotation.z = -actor.poseCurrent.torsoRoll;
         } else {
-          // Fallback procedural gait
-          actor.limbs.armL.rotation.z = 0;
-          actor.limbs.armL.rotation.x = seatedArm - armAngle;
-          actor.limbs.elbowL.rotation.x = seatedElbow + (0.2 + Math.abs(armAngle) * 0.3) * walkWeight;
+          // Fallback procedural capsule articulation if GLB not yet loaded
+          if (actor.proceduralMesh) actor.proceduralMesh.visible = true;
+          actor.limbs.hips.position.y = 0.86 - 0.34 * sb;
+          actor.limbs.hips.rotation.x = 0.08 * sb;
 
-          actor.limbs.armR.rotation.z = 0;
-          actor.limbs.armR.rotation.x = seatedArm + armAngle;
-          actor.limbs.elbowR.rotation.x = seatedElbow + (0.2 + Math.abs(armAngle) * 0.3) * walkWeight;
+          const seatedHip = 1.48 * sb;
+          const seatedKnee = -1.40 * sb;
+          const seatedArm = -0.55 * sb;
+          const seatedElbow = 0.75 * sb;
+
+          if (actor.limbs.spine) actor.limbs.spine.rotation.z = -actor.poseCurrent.torsoRoll;
+          if (actor.limbs.head) actor.limbs.head.rotation.y = actor.poseCurrent.headYaw;
+
+          const walkWeight = Math.max(0, 1.0 - sb);
+          const walkFreq = 5.2;
+          const walkPhase = this.animTime * walkFreq + actor.animSeed;
+          const walkAngle = Math.sin(walkPhase) * 0.42 * walkWeight;
+          const armAngle = Math.sin(walkPhase) * 0.35 * walkWeight;
+          const kneeFlexL = Math.max(0, -walkAngle * 0.75) * walkWeight;
+          const kneeFlexR = Math.max(0, walkAngle * 0.75) * walkWeight;
+
+          actor.limbs.legL.rotation.x = seatedHip + walkAngle;
+          actor.limbs.kneeL.rotation.x = seatedKnee - kneeFlexL;
+          actor.limbs.legR.rotation.x = seatedHip - walkAngle;
+          actor.limbs.kneeR.rotation.x = seatedKnee - kneeFlexR;
+
+          if (actor.hasLivePose) {
+            actor.limbs.armL.rotation.z = -actor.poseCurrent.rollL;
+            actor.limbs.armL.rotation.x = seatedArm;
+            actor.limbs.elbowL.rotation.x = Math.max(seatedElbow, actor.poseCurrent.elbowL);
+
+            actor.limbs.armR.rotation.z = actor.poseCurrent.rollR;
+            actor.limbs.armR.rotation.x = seatedArm;
+            actor.limbs.elbowR.rotation.x = Math.max(seatedElbow, actor.poseCurrent.elbowR);
+          } else {
+            actor.limbs.armL.rotation.z = 0;
+            actor.limbs.armL.rotation.x = seatedArm - armAngle;
+            actor.limbs.elbowL.rotation.x = seatedElbow + (0.2 + Math.abs(armAngle) * 0.3) * walkWeight;
+
+            actor.limbs.armR.rotation.z = 0;
+            actor.limbs.armR.rotation.x = seatedArm + armAngle;
+            actor.limbs.elbowR.rotation.x = seatedElbow + (0.2 + Math.abs(armAngle) * 0.3) * walkWeight;
+          }
         }
 
         // Live RTMPose-s 17-Keypoint Skeletal Rig Dynamic Alignment
         if (actor.skeletonJoints && actor.skeletonBones && actor.skeletonGroup && actor.limbs) {
-          actor.skeletonGroup.visible = true;
+          actor.skeletonGroup.visible = !actor.smplBones;
           const positions: THREE.Vector3[] = [];
           const headObj = actor.limbs.head || actor.limbs.hips;
 
