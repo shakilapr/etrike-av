@@ -187,10 +187,10 @@ start_universe() {
 
   # Pre-Flight Sanitization: Terminate lingering Autoware/ROS nodes inside container to avoid duplicates
   docker exec -u root "$CONTAINER" bash -c "
-    pkill -9 -f 'ros2 launch' 2>/dev/null || true
-    pkill -9 -f 'rviz2' 2>/dev/null || true
-    pkill -9 -f 'planning_simulator' 2>/dev/null || true
-    pkill -9 -f 'robot_state_publisher' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'ros2 launch' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'rviz2' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'planning_simulator' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'robot_state_publisher' 2>/dev/null || true
   " 2>/dev/null || true
   sleep 1
 
@@ -234,10 +234,10 @@ start_live_autoware() {
 
   # Pre-Flight Sanitization: Terminate lingering Autoware/ROS nodes inside container to avoid duplicates
   docker exec -u root "$CONTAINER" bash -c "
-    pkill -9 -f 'ros2 launch' 2>/dev/null || true
-    pkill -9 -f 'rviz2' 2>/dev/null || true
-    pkill -9 -f 'planning_simulator' 2>/dev/null || true
-    pkill -9 -f 'robot_state_publisher' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'ros2 launch' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'rviz2' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'planning_simulator' 2>/dev/null || true
+    pkill --signal SIGKILL -f 'robot_state_publisher' 2>/dev/null || true
   " 2>/dev/null || true
   sleep 1
 
@@ -367,19 +367,19 @@ stop_all() {
   detect_can
   say "Stopping all Autoware, Bridge, Dashboard, and CAN services"
   if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    docker exec "$CONTAINER" bash -c "
-      pkill -9 -f 'ros2' 2>/dev/null || true
-      pkill -9 -f 'rviz2' 2>/dev/null || true
-      pkill -9 -f 'component_container' 2>/dev/null || true
-      pkill -9 -f 'vehicle_bridge' 2>/dev/null || true
-      pkill -9 -f 'kinect2_node' 2>/dev/null || true
-      pkill -9 -f 'bench_perception_node' 2>/dev/null || true
-      pkill -9 -f 'hesai_ros_wrapper_node' 2>/dev/null || true
-      pkill -9 -f 'hybrid_bench_sensing' 2>/dev/null || true
-      pkill -9 -f 'single_kinect' 2>/dev/null || true
-      pkill -9 -f 'topic_tools' 2>/dev/null || true
-      pkill -9 -f 'tools.av_dashboard.backend.server' 2>/dev/null || true
-      pkill -9 -f 'tools.can_watcher.backend.server' 2>/dev/null || true
+    docker exec -u root "$CONTAINER" bash -c "
+      pkill --signal SIGKILL -f 'ros2' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'rviz2' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'component_container' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'vehicle_bridge' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'kinect2_node' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'bench_perception_node' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'hesai_ros_wrapper_node' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'hybrid_bench_sensing' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'single_kinect' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'topic_tools' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'tools.av_dashboard.backend.server' 2>/dev/null || true
+      pkill --signal SIGKILL -f 'tools.can_watcher.backend.server' 2>/dev/null || true
     " >/dev/null 2>&1 || true
     docker restart "$CONTAINER" >/dev/null 2>&1 || true
   fi
