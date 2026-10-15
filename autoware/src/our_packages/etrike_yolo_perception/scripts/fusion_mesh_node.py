@@ -76,7 +76,7 @@ class FusionMeshNode(LifecycleNode):
         self.declare_parameter("camera_poses_topic", "/bench_perception/human_poses")
         self.declare_parameter("lidar_clusters_topic", "/bench_perception/clusters")
         self.declare_parameter("mesh_resource_uri", "package://etrike_yolo_perception/models/human_model.obj")
-        self.declare_parameter("fusion_dist_threshold_m", 1.2)
+        self.declare_parameter("fusion_dist_threshold_m", 2.2)
 
         # Extrinsics: Kinect optical frame relative to base_link
         # Optical +Z = fwd (base_link +X), Optical +X = right (base_link -Y), Optical +Y = down (base_link -Z)
@@ -358,18 +358,43 @@ class FusionMeshNode(LifecycleNode):
                 "yaw": math.atan2(-cl_pos[1], -cl_pos[0]),
             })
 
-        # Add Camera-only pedestrian detections
+        # Add Camera-only pedestrian detections (suppress if already spatially covered by a fused/lidar track)
         for c_idx, co in enumerate(cam_objs):
             if c_idx not in matched_cam_indices and "person" in str(co["label"]).lower():
                 co_pos = co["pos"]
-                fused_tracks.append({
-                    "type": "CAMERA_ONLY",
-                    "pos": co_pos,
-                    "dims": co["dims"],
-                    "confidence": float(co["confidence"]),
-                    "label": "Person (Camera)",
-                    "yaw": math.atan2(-co_pos[1], -co_pos[0]),
-                })
+                # Skip camera detection if any track is already present within dist_thresh
+                already_covered = any(
+                    float(np.linalg.norm(co_pos[:2] - trk["pos"][:2])) < dist_thresh
+                    for trk in fused_tracks
+                )
+                if not already_covered:
+                    fused_tracks.append({
+                        "type": "CAMERA_ONLY",
+                        "pos": co_pos,
+                        "dims": co["dims"],
+                        "confidence": float(co["confidence"]),
+                        "label": "Person (Camera)",
+                        "yaw": math.atan2(-co_pos[1], -co_pos[0]),
+                    })
+
+        # 2b. Spatial NMS: Guarantee exactly 1 track per physical person (suppress duplicates within 1.8m)
+        clean_tracks: List[Dict[str, Any]] = []
+        # Sort priority: FUSED > CAMERA_ONLY > LIDAR_ONLY, then higher confidence
+        type_priority = {"FUSED": 3, "CAMERA_ONLY": 2, "LIDAR_ONLY": 1}
+        sorted_tracks = sorted(
+            fused_tracks,
+            key=lambda t: (type_priority.get(t["type"], 0), float(t.get("confidence", 0.0))),
+            reverse=True,
+        )
+        for candidate in sorted_tracks:
+            c_pos = candidate["pos"]
+            overlap = any(
+                float(np.linalg.norm(c_pos[:2] - accepted["pos"][:2])) < 1.8
+                for accepted in clean_tracks
+            )
+            if not overlap:
+                clean_tracks.append(candidate)
+        fused_tracks = clean_tracks
 
         # 3. Build & Publish 3D Mesh and Box MarkerArrays
         self._publish_visualizations(fused_tracks)
