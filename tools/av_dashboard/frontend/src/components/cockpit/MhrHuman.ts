@@ -119,6 +119,21 @@ export class MhrHuman {
     return seen;
   }
 
+  public getActorPosition(id: string): THREE.Vector3 | null {
+    const entry = this.actorMeshes.get(id);
+    return entry && entry.group.visible ? entry.group.position : null;
+  }
+
+  public getActivePositions(): THREE.Vector3[] {
+    const list: THREE.Vector3[] = [];
+    for (const entry of this.actorMeshes.values()) {
+      if (entry.group.visible) {
+        list.push(entry.group.position);
+      }
+    }
+    return list;
+  }
+
   private hideAll(): void {
     for (const entry of this.actorMeshes.values()) {
       entry.group.visible = false;

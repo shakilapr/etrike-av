@@ -1024,8 +1024,18 @@ class Ros2Bridge:
                     tx, ty, tz, rel_yaw = self._relative_transform(float(pos.x), float(pos.y), float(pos.z), yaw)
                     dist = round(math.hypot(float(pos.x), float(pos.y)), 1)
 
+                    # Correlate track with camera pose ID (det_N) if within 2.5m so MHR & actors use identical keys
+                    track_id = f"fuse_{m.id}"
+                    if self._human_poses and isinstance(self._human_poses, dict):
+                        for p in self._human_poses.get("poses", []):
+                            p_x = float(p.get("y_base", 0.0))
+                            p_z = round(BASE_LINK_TO_SCENE_Z_OFFSET - float(p.get("x_base", 0.0)), 2)
+                            if math.hypot(tx - p_x, tz - p_z) < 2.5:
+                                track_id = str(p.get("id")) or track_id
+                                break
+
                     tracks.append({
-                        "id": f"fuse_{m.id}",
+                        "id": track_id,
                         "label": "PEDESTRIAN",
                         "x": tx,
                         "y": ty,
@@ -1337,9 +1347,9 @@ class Ros2Bridge:
                             continue
                         cx = float(c_obj.get("x", 0.0))
                         cz = float(c_obj.get("z", 0.0))
-                        # Check 1.5 m overlap against any existing fusion track
+                        # Check 2.5 m overlap against any existing fusion track
                         already_covered = any(
-                            math.hypot(cx - float(f.get("x", 0.0)), cz - float(f.get("z", 0.0))) < 1.5
+                            math.hypot(cx - float(f.get("x", 0.0)), cz - float(f.get("z", 0.0))) < 2.5
                             for f in self._fusion_tracks
                         )
                         if not already_covered:
@@ -1357,7 +1367,7 @@ class Ros2Bridge:
                     cx = c_obj.get("x", 0.0)
                     cz = c_obj.get("z", 0.0)
                     best_l_idx = None
-                    best_dist = 1.5
+                    best_dist = 2.2
                     for l_idx, l_obj in enumerate(lidar_objs):
                         if l_idx in matched_lidar_indices:
                             continue
@@ -1387,13 +1397,20 @@ class Ros2Bridge:
                         c_copy["fused"] = False
                         fused_objects.append(c_copy)
 
-                # Append non-overlapping LiDAR clusters (360° coverage, obstacles, rear targets)
+                # Append non-overlapping LiDAR clusters (skip if close to any camera pedestrian)
                 for l_idx, l_obj in enumerate(lidar_objs):
                     if l_idx not in matched_lidar_indices:
-                        l_copy = dict(l_obj)
-                        l_copy["sensor"] = "lidar"
-                        l_copy["fused"] = False
-                        fused_objects.append(l_copy)
+                        lx = float(l_obj.get("x", 0.0))
+                        lz = float(l_obj.get("z", 0.0))
+                        is_near_cam = any(
+                            math.hypot(lx - float(c.get("x", 0.0)), lz - float(c.get("z", 0.0))) < 2.2
+                            for c in cam_objs if c.get("label") == "PEDESTRIAN"
+                        )
+                        if not is_near_cam:
+                            l_copy = dict(l_obj)
+                            l_copy["sensor"] = "lidar"
+                            l_copy["fused"] = False
+                            fused_objects.append(l_copy)
 
                 objects = fused_objects
                 source = "bench_fused"
@@ -1430,6 +1447,35 @@ class Ros2Bridge:
                     source = fresh_sources[0] if fresh_sources else "offline"
                     pose_ok = ego_fresh
                     frame_id = "base_link"
+
+            # Final Pedestrian Deduplication: Guarantee exactly 1 representation per physical person
+            dedup_objects: List[Dict[str, Any]] = []
+            ped_priority = {"fused": 3, "camera": 2, "lidar": 1}
+            for obj in objects:
+                if obj.get("label") != "PEDESTRIAN":
+                    dedup_objects.append(obj)
+                    continue
+                ox = float(obj.get("x", 0.0))
+                oz = float(obj.get("z", 0.0))
+                matching_idx = None
+                for idx, acc in enumerate(dedup_objects):
+                    if acc.get("label") == "PEDESTRIAN":
+                        if math.hypot(ox - float(acc.get("x", 0.0)), oz - float(acc.get("z", 0.0))) < 2.0:
+                            matching_idx = idx
+                            break
+                if matching_idx is not None:
+                    existing = dedup_objects[matching_idx]
+                    ex_prio = ped_priority.get(str(existing.get("sensor")).lower(), 0)
+                    cur_prio = ped_priority.get(str(obj.get("sensor")).lower(), 0)
+                    if cur_prio > ex_prio:
+                        if str(existing.get("id", "")).startswith("det_") and not str(obj.get("id", "")).startswith("det_"):
+                            obj["id"] = existing["id"]
+                        dedup_objects[matching_idx] = obj
+                    elif str(obj.get("id", "")).startswith("det_") and not str(existing.get("id", "")).startswith("det_"):
+                        existing["id"] = obj["id"]
+                else:
+                    dedup_objects.append(obj)
+            objects = dedup_objects
 
             hz = float(len(self._perception_timestamps)) if (fresh_sources or cam_online or lidar_online) else 0.0
             if hz == 0.0:

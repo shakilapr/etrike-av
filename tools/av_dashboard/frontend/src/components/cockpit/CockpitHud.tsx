@@ -26,7 +26,6 @@ import {
   HighBeamTelltale,
   HazardTelltale,
 } from './AutomotiveTelltales';
-import { SensorTriadIndicator } from './SensorTriadIndicator';
 
 export const CockpitHud: React.FC = () => {
   const {
@@ -222,9 +221,6 @@ export const CockpitHud: React.FC = () => {
               <HoldTelltale active={isHold} />
               <ReadyTelltale active={isReady} />
             </div>
-
-            {/* Sensor Status Triad (Camera, LiDAR, Mode) - Minimal side-docked */}
-            <SensorTriadIndicator className="ml-1" />
           </div>
 
           {/* Top-Center Primary Horizon: PRND Transmission & Speedometer */}
@@ -510,22 +506,6 @@ export const CockpitHud: React.FC = () => {
                 {mode === 'orbit' ? '360°' : mode}
               </button>
             ))}
-
-            <div className="w-[1px] h-6 bg-neutral-800 my-auto" />
-
-            {/* SMPL + RTMPose Demonstration Toggle */}
-            <button
-              onClick={toggleDemoPedestrian}
-              className={`h-10 px-3 rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5 ${
-                demoPedestrian
-                  ? 'bg-cyan-500 text-black shadow-[0_0_14px_rgba(6,182,212,0.85)] border border-cyan-300'
-                  : 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-700/80'
-              }`}
-              title="Toggle interactive 3D Pedestrian Avatar & RTMPose-s 17-keypoint skeletal rig model"
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>{demoPedestrian ? 'PED RIG: ON' : 'PED RIG'}</span>
-            </button>
           </div>
 
           {/* Bottom-Center: Autoware Perception Radar, Drive Mode & Link Status */}

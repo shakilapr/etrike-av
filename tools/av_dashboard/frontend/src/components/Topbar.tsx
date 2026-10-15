@@ -152,10 +152,10 @@ export const Topbar: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950/40 px-3 py-1 rounded-full border border-cyan-800/40 font-bold uppercase tracking-wider flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-            AUTOWARE 3D DIGITAL TWIN
+        <div className="hidden xl:flex items-center gap-2 shrink-0">
+          <span className="text-[11px] font-mono text-neutral-300 bg-neutral-900/80 px-2.5 py-1 rounded border border-neutral-800 font-semibold uppercase tracking-wider flex items-center gap-2 whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+            AUTOWARE TWIN
           </span>
         </div>
       )}

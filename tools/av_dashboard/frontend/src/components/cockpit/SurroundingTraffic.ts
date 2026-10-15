@@ -1374,22 +1374,69 @@ export class SurroundingTraffic {
     this.animTime += step;
 
     const rawPoses = humanPoses?.poses;
-    const effectiveList: PerceptionObject[] = [...(perceptionList || [])];
+
+    // 1. Spatial NMS on incoming perceptionList: suppress duplicate pedestrian detections within 2.2m
+    const rawList: PerceptionObject[] = [...(perceptionList || [])];
+    const dedupList: PerceptionObject[] = [];
+    const pedProvPriority = (p?: string) => {
+      const s = (p || '').toLowerCase();
+      return s === 'fused' ? 3 : s === 'camera' ? 2 : 1;
+    };
+    for (const obj of rawList) {
+      if (obj.label !== 'PEDESTRIAN') {
+        dedupList.push(obj);
+        continue;
+      }
+      let matchIdx = -1;
+      for (let i = 0; i < dedupList.length; i++) {
+        const acc = dedupList[i];
+        if (acc.label === 'PEDESTRIAN' && Math.hypot(obj.x - acc.x, obj.z - acc.z) < 2.2) {
+          matchIdx = i;
+          break;
+        }
+      }
+      if (matchIdx >= 0) {
+        const existing = dedupList[matchIdx];
+        if (pedProvPriority(obj.sensor) > pedProvPriority(existing.sensor)) {
+          if (String(existing.id).startsWith('det_') && !String(obj.id).startsWith('det_')) {
+            obj.id = existing.id;
+          }
+          dedupList[matchIdx] = obj;
+        } else if (String(obj.id).startsWith('det_') && !String(existing.id).startsWith('det_')) {
+          existing.id = obj.id;
+        }
+      } else {
+        dedupList.push(obj);
+      }
+    }
+    const effectiveList = dedupList;
     const rawPosesCount = rawPoses ? rawPoses.length : 0;
     const hasRealPed = effectiveList.some((o) => o.label === 'PEDESTRIAN') || rawPosesCount > 0;
 
-    // Ensure every detected human pose from YOLO26x-Pose / RTMPose has a corresponding PEDESTRIAN actor in effectiveList
+    // 2. Correlate every detected human pose with an actor, unifying IDs to det_N
     if (rawPoses && rawPoses.length > 0) {
       rawPoses.forEach((pose, pIdx) => {
         const targetX = pose.y_base;
         const targetZ = 1.0 - pose.x_base;
-        const alreadyInList = effectiveList.some((obj) => {
-          if (obj.label !== 'PEDESTRIAN') return false;
-          if (obj.id && pose.id && String(obj.id) === String(pose.id)) return true;
-          return Math.hypot(obj.x - targetX, obj.z - targetZ) < 2.0;
-        });
+        let matchedObj: PerceptionObject | undefined = undefined;
+        for (const obj of effectiveList) {
+          if (obj.label !== 'PEDESTRIAN') continue;
+          if (obj.id && pose.id && String(obj.id) === String(pose.id)) {
+            matchedObj = obj;
+            break;
+          }
+          if (Math.hypot(obj.x - targetX, obj.z - targetZ) < 2.5) {
+            matchedObj = obj;
+            break;
+          }
+        }
 
-        if (!alreadyInList) {
+        if (matchedObj) {
+          // Unify actor ID with pose ID (det_N) so MHR and actor map match 1-to-1
+          if (pose.id && !String(matchedObj.id).startsWith('det_')) {
+            matchedObj.id = pose.id;
+          }
+        } else {
           effectiveList.push({
             id: pose.id || `yolo-ped-${pIdx}`,
             label: 'PEDESTRIAN',
@@ -1742,11 +1789,28 @@ export class SurroundingTraffic {
     const posLerp = 1 - Math.exp(-step * 12);
     const yawLerp = 1 - Math.exp(-step * 10);
 
+    // Track placed HUD badge positions to guarantee at most 1 floating badge per person
+    const activeBadgePositions: THREE.Vector3[] = [];
+
     for (const [key, actor] of this.actors) {
       const isVisible = seen.has(key);
-      if (!isVisible && now - actor.lastSeen > 0.5) {
-        actor.group.visible = false;
-        continue;
+      if (!isVisible) {
+        // Immediate suppression if another visible actor is within 2.0m (prevents dual avatar ghosting)
+        let closeToOtherVisible = false;
+        for (const [otherKey, otherActor] of this.actors) {
+          if (otherKey !== key && seen.has(otherKey) && otherActor.group.visible) {
+            if (actor.group.position.distanceTo(otherActor.group.position) < 2.0) {
+              closeToOtherVisible = true;
+              break;
+            }
+          }
+        }
+        if (closeToOtherVisible || now - actor.lastSeen > 0.15) {
+          actor.group.visible = false;
+          const distBadge = actor.meshes['__dist'] as THREE.Sprite | undefined;
+          if (distBadge) distBadge.visible = false;
+          continue;
+        }
       }
 
       // Smooth position & rotation (canonical circular shortest-delta interpolation)
@@ -1755,33 +1819,10 @@ export class SurroundingTraffic {
       const delta = Math.atan2(Math.sin(diff), Math.cos(diff));
       actor.group.rotation.y += delta * yawLerp;
 
-      // Update floating HUD distance and provenance telemetry badges
+      // Floating annotations disabled per design request (clean automotive 3D twin, no floating text capsules)
       const distBadge = actor.meshes['__dist'] as THREE.Sprite | undefined;
-      const isPedestrian = actor.currentLabel === 'PEDESTRIAN' || Boolean(actor.meshes['PEDESTRIAN']?.visible) || Boolean(actor.skeletonGroup?.visible);
-      const isLead = key === leadKey && closestDist < 12.0;
-
-      // Planar horizontal distance from ego origin
-      const dHorizontal = Math.sqrt(actor.group.position.x * actor.group.position.x + actor.group.position.z * actor.group.position.z);
-
       if (distBadge) {
-        if (isPedestrian && dHorizontal < 25.0) {
-          distBadge.visible = true;
-          distBadge.position.y = 1.90; // Floating right above head at 1.90m
-          const isHazard = dHorizontal < 3.5 && Math.abs(actor.group.position.x) < 1.6 && actor.group.position.z < -0.3;
-          const prov = (actor.sensorProvenance || 'fused').toLowerCase();
-          const tag = prov === 'fused' ? 'FUSED' : prov === 'lidar' ? 'LIDAR' : prov === 'camera' ? 'CAM' : 'HUMAN';
-          const postStr = actor.postureText && actor.postureText !== 'UNKNOWN' ? ` · ${actor.postureText}` : '';
-          const dStr = `[${tag}] ${dHorizontal.toFixed(1)} m${postStr}`;
-          this.updateDistanceBadge(distBadge, dStr, isHazard, prov);
-        } else if (isLead && !isPedestrian) {
-          distBadge.visible = true;
-          distBadge.position.y = 1.35;
-          const isCritical = closestDist < 3.5;
-          const dStr = `[LEAD] ${closestDist.toFixed(1)} m`;
-          this.updateDistanceBadge(distBadge, dStr, isCritical, 'hazard');
-        } else {
-          distBadge.visible = false;
-        }
+        distBadge.visible = false;
       }
 
       // Dynamic humanoid walking & RTMPose-s observed kinematics (SMPL rigged skeleton)
@@ -2097,10 +2138,14 @@ export class SurroundingTraffic {
       return null;
     });
     if (mhrActive.size > 0) {
+      const mhrPositions = this.mhr.getActivePositions();
       for (const [key, actor] of this.actors) {
         const pedMesh = actor.meshes['PEDESTRIAN'];
         if (!pedMesh) continue;
-        if (mhrActive.has(String(key)) || mhrActive.size > 0) {
+        const isCoveredByMhr =
+          mhrActive.has(String(key)) ||
+          mhrPositions.some((mp) => mp.distanceTo(actor.group.position) < 2.0);
+        if (isCoveredByMhr) {
           pedMesh.visible = false;
           if (actor.skeletonGroup) actor.skeletonGroup.visible = false;
         }

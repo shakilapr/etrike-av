@@ -1,6 +1,5 @@
 import React from 'react';
 import { useCanStore } from '../../store/canStore';
-import { Camera, Radio, Layers } from 'lucide-react';
 
 interface SensorTriadIndicatorProps {
   size?: string;
@@ -31,56 +30,76 @@ export const SensorTriadIndicator: React.FC<SensorTriadIndicatorProps> = ({
     : 'OFFLINE';
 
   return (
-    <div className={`flex items-center gap-1.5 font-mono select-none ${className}`}>
+    <div
+      className={`flex items-center gap-2.5 px-3 py-1 bg-[#0a0a0a] border border-neutral-800 rounded font-mono text-[11px] select-none ${className}`}
+    >
       {/* 1. Camera Status */}
       <div
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors ${
-          camOnline
-            ? 'bg-neutral-900/90 text-cyan-400 border-cyan-800/80'
-            : 'bg-neutral-950/80 text-neutral-600 border-neutral-800'
-        }`}
-        title={camOnline ? `Camera Active: ${camHz.toFixed(1)} FPS` : 'Camera Disconnected'}
+        className="flex items-center gap-1.5"
+        title={camOnline ? `Kinect v2 Color: ${camHz.toFixed(1)} Hz` : 'Camera Disconnected'}
       >
-        <Camera className="w-3.5 h-3.5 shrink-0" />
-        <span>CAM</span>
-        {camOnline && <span className="text-[9px] text-cyan-300 font-normal">{camHz.toFixed(0)}fps</span>}
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            camOnline ? 'bg-cyan-400 shadow-[0_0_6px_rgba(6,182,212,0.8)]' : 'bg-neutral-600'
+          }`}
+        />
+        <span className={camOnline ? 'text-neutral-200 font-semibold' : 'text-neutral-500'}>
+          CAM
+        </span>
+        {camOnline && (
+          <span className="text-neutral-400 text-[10px] tabular-nums font-normal">
+            {camHz.toFixed(0)}Hz
+          </span>
+        )}
       </div>
+
+      <span className="text-neutral-700">|</span>
 
       {/* 2. LiDAR Status */}
       <div
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors ${
-          lidarOnline
-            ? 'bg-neutral-900/90 text-emerald-400 border-emerald-800/80'
-            : 'bg-neutral-950/80 text-neutral-600 border-neutral-800'
-        }`}
-        title={lidarOnline ? `LiDAR Active: ${lidarHz.toFixed(1)} Hz` : 'LiDAR Disconnected / Link Down (eno1)'}
+        className="flex items-center gap-1.5"
+        title={lidarOnline ? `Hesai XT32: ${lidarHz.toFixed(1)} Hz` : 'LiDAR Disconnected / Link Down (eno1)'}
       >
-        <Radio className="w-3.5 h-3.5 shrink-0" />
-        <span>LIDAR</span>
-        {lidarOnline && <span className="text-[9px] text-emerald-300 font-normal">{lidarHz.toFixed(0)}Hz</span>}
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${
+            lidarOnline ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-neutral-600'
+          }`}
+        />
+        <span className={lidarOnline ? 'text-neutral-200 font-semibold' : 'text-neutral-500'}>
+          LIDAR
+        </span>
+        {lidarOnline && (
+          <span className="text-neutral-400 text-[10px] tabular-nums font-normal">
+            {lidarHz.toFixed(0)}Hz
+          </span>
+        )}
       </div>
 
-      {/* 3. Fusion Mode */}
+      <span className="text-neutral-700">|</span>
+
+      {/* 3. Operational Mode */}
       <div
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold transition-colors ${
-          activeMode === 'COMBINED'
-            ? 'bg-neutral-900/90 text-purple-300 border-purple-800/80'
-            : activeMode === 'CAMERA_ONLY'
-            ? 'bg-neutral-900/90 text-cyan-400 border-neutral-800'
-            : activeMode === 'LIDAR_ONLY'
-            ? 'bg-neutral-900/90 text-emerald-400 border-neutral-800'
-            : 'bg-neutral-950/80 text-neutral-600 border-neutral-800'
-        }`}
-        title={`Active Perception Mode: ${activeMode}`}
+        className="flex items-center gap-1.5"
+        title={`Perception Operating Mode: ${activeMode}`}
       >
-        <Layers className="w-3.5 h-3.5 shrink-0" />
-        <span>
+        <span className="text-neutral-500 text-[10px] font-normal uppercase">MODE:</span>
+        <span
+          className={`font-bold ${
+            activeMode === 'COMBINED'
+              ? 'text-cyan-400'
+              : activeMode === 'CAMERA_ONLY'
+              ? 'text-sky-300'
+              : activeMode === 'LIDAR_ONLY'
+              ? 'text-emerald-400'
+              : 'text-neutral-600'
+          }`}
+        >
           {activeMode === 'COMBINED'
-            ? 'FUSED'
+            ? 'FUSION'
             : activeMode === 'CAMERA_ONLY'
-            ? 'CAM ONLY'
+            ? 'CAM'
             : activeMode === 'LIDAR_ONLY'
-            ? 'LIDAR ONLY'
+            ? 'LIDAR'
             : 'OFFLINE'}
         </span>
       </div>
