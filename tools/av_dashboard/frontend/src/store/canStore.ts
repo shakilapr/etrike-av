@@ -30,8 +30,16 @@ interface CanState {
   cameraMode: 'chase' | 'cabin' | 'orbit';
   speedUnit: 'km/h' | 'mph';
   demoPedestrian: boolean;
+  showTukTuk: boolean;
+  showSpeed: boolean;
+  showSkeletons: boolean;
+  showPointCloud: boolean;
 
   // Actions
+  toggleShowTukTuk: () => void;
+  toggleShowSpeed: () => void;
+  toggleShowSkeletons: () => void;
+  toggleShowPointCloud: () => void;
   setActiveView: (view: 'monitor' | 'cockpit' | 'radar') => void;
   toggleActiveView: () => void;
   setCameraMode: (mode: 'chase' | 'cabin' | 'orbit') => void;
@@ -115,7 +123,71 @@ export const useCanStore = create<CanState>((set, get) => ({
   })(),
   speedUnit: 'km/h',
   demoPedestrian: true,
+  showTukTuk: (() => {
+    try {
+      const v = localStorage.getItem('av_dashboard_show_tuktuk');
+      return v !== null ? v === 'true' : true;
+    } catch {
+      return true;
+    }
+  })(),
+  showSpeed: (() => {
+    try {
+      const v = localStorage.getItem('av_dashboard_show_speed');
+      return v !== null ? v === 'true' : true;
+    } catch {
+      return true;
+    }
+  })(),
+  showSkeletons: (() => {
+    try {
+      const v = localStorage.getItem('av_dashboard_show_skeletons');
+      return v !== null ? v === 'true' : true;
+    } catch {
+      return true;
+    }
+  })(),
+  showPointCloud: (() => {
+    try {
+      const v = localStorage.getItem('av_dashboard_show_pointcloud');
+      return v !== null ? v === 'true' : true;
+    } catch {
+      return true;
+    }
+  })(),
 
+  toggleShowTukTuk: () =>
+    set((s) => {
+      const next = !s.showTukTuk;
+      try {
+        localStorage.setItem('av_dashboard_show_tuktuk', String(next));
+      } catch {}
+      return { showTukTuk: next };
+    }),
+  toggleShowSpeed: () =>
+    set((s) => {
+      const next = !s.showSpeed;
+      try {
+        localStorage.setItem('av_dashboard_show_speed', String(next));
+      } catch {}
+      return { showSpeed: next };
+    }),
+  toggleShowSkeletons: () =>
+    set((s) => {
+      const next = !s.showSkeletons;
+      try {
+        localStorage.setItem('av_dashboard_show_skeletons', String(next));
+      } catch {}
+      return { showSkeletons: next };
+    }),
+  toggleShowPointCloud: () =>
+    set((s) => {
+      const next = !s.showPointCloud;
+      try {
+        localStorage.setItem('av_dashboard_show_pointcloud', String(next));
+      } catch {}
+      return { showPointCloud: next };
+    }),
   toggleDemoPedestrian: () => set((s) => ({ demoPedestrian: !s.demoPedestrian })),
   setActiveView: (activeView) => {
     try {

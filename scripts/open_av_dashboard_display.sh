@@ -61,7 +61,7 @@ if curl -s "http://127.0.0.1:${PORT}/api/v1/ros" >/dev/null 2>&1; then
     else
         echo "  [INFO] Restarting existing AV Dashboard server to enable ROS 2 container bridge..."
         pkill -9 -f "tools.av_dashboard.backend.server" 2>/dev/null || true
-        docker exec "$CONTAINER" pkill -9 -f "tools.av_dashboard.backend.server" 2>/dev/null || true
+        docker exec -u root "$CONTAINER" pkill --signal SIGKILL -f "tools.av_dashboard.backend.server" 2>/dev/null || true
         sleep 0.5
     fi
 fi

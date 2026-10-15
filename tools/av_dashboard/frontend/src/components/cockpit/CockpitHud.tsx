@@ -9,6 +9,10 @@ import {
   ChevronLeft,
   ChevronRight,
   TriangleAlert,
+  Car,
+  Gauge,
+  Bone,
+  Cloud,
 } from 'lucide-react';
 import {
   ParkTelltale,
@@ -39,6 +43,14 @@ export const CockpitHud: React.FC = () => {
     perceptionObjects,
     demoPedestrian,
     toggleDemoPedestrian,
+    showTukTuk,
+    showSpeed,
+    showSkeletons,
+    showPointCloud,
+    toggleShowTukTuk,
+    toggleShowSpeed,
+    toggleShowSkeletons,
+    toggleShowPointCloud,
   } = useCanStore();
 
   // Speed calculation
@@ -237,23 +249,25 @@ export const CockpitHud: React.FC = () => {
             </div>
 
             {/* Primary Speedometer Digits (Automotive Glance Sizing: 80-96px) */}
-            <div className="flex flex-col items-center drop-shadow-[0_6px_20px_rgba(0,0,0,0.95)]">
-              <div className="flex items-baseline gap-2">
-                <span className={`text-7xl lg:text-8xl font-black tracking-tight tabular-nums font-mono leading-none ${
-                  (telemetry.bus_rate_hz ?? 0) > 0 ? 'text-white' : 'text-neutral-500'
-                }`}>
-                  {(telemetry.bus_rate_hz ?? 0) > 0 ? speedVal.toFixed(0) : '--'}
-                </span>
-                <span className="text-base lg:text-lg font-black text-neutral-400 uppercase tracking-widest">
-                  {speedUnit}
-                </span>
+            {showSpeed && (
+              <div className="flex flex-col items-center drop-shadow-[0_6px_20px_rgba(0,0,0,0.95)]">
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-7xl lg:text-8xl font-black tracking-tight tabular-nums font-mono leading-none ${
+                    (telemetry.bus_rate_hz ?? 0) > 0 ? 'text-white' : 'text-neutral-500'
+                  }`}>
+                    {(telemetry.bus_rate_hz ?? 0) > 0 ? speedVal.toFixed(0) : '--'}
+                  </span>
+                  <span className="text-base lg:text-lg font-black text-neutral-400 uppercase tracking-widest">
+                    {speedUnit}
+                  </span>
+                </div>
+                {(telemetry.bus_rate_hz ?? 0) === 0 && (
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/90 bg-amber-950/40 border border-amber-800/50 px-2 py-0.5 rounded mt-1">
+                    CAN TELEMETRY OFFLINE
+                  </span>
+                )}
               </div>
-              {(telemetry.bus_rate_hz ?? 0) === 0 && (
-                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/90 bg-amber-950/40 border border-amber-800/50 px-2 py-0.5 rounded mt-1">
-                  CAN TELEMETRY OFFLINE
-                </span>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Top-Right: ISO Telltales Cluster & Peripheral Right Turn (56px) */}
@@ -604,6 +618,65 @@ export const CockpitHud: React.FC = () => {
               </span>
             </button>
           </div>
+        </div>
+
+        {/* ================= RIGHT-SIDE VISIBILITY TOGGLES (QUICK ICON BUTTONS) ================= */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2.5 bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 p-2 rounded-2xl pointer-events-auto shadow-2xl z-40">
+          {/* TukTuk Ego Vehicle Toggle */}
+          <button
+            onClick={toggleShowTukTuk}
+            title={showTukTuk ? "Hide E-Trike Model (TukTuk)" : "Show E-Trike Model (TukTuk)"}
+            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
+              showTukTuk
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 shadow-[0_0_12px_rgba(6,182,212,0.35)]'
+                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
+            }`}
+          >
+            <Car className="w-4 h-4" />
+            <span className="text-[9px] font-black tracking-tighter mt-0.5">TUK</span>
+          </button>
+
+          {/* Speed Display Toggle */}
+          <button
+            onClick={toggleShowSpeed}
+            title={showSpeed ? "Hide Speedometer Display" : "Show Speedometer Display"}
+            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
+              showSpeed
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
+            }`}
+          >
+            <Gauge className="w-4 h-4" />
+            <span className="text-[9px] font-black tracking-tighter mt-0.5">SPD</span>
+          </button>
+
+          {/* Skeletons Toggle */}
+          <button
+            onClick={toggleShowSkeletons}
+            title={showSkeletons ? "Hide RTMPose Keypoint Skeletons" : "Show RTMPose Keypoint Skeletons"}
+            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
+              showSkeletons
+                ? 'bg-amber-500/20 text-amber-300 border-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
+            }`}
+          >
+            <Bone className="w-4 h-4" />
+            <span className="text-[9px] font-black tracking-tighter mt-0.5">SKEL</span>
+          </button>
+
+          {/* Point Cloud Toggle */}
+          <button
+            onClick={toggleShowPointCloud}
+            title={showPointCloud ? "Hide LiDAR Point Cloud" : "Show LiDAR Point Cloud"}
+            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
+              showPointCloud
+                ? 'bg-violet-500/20 text-violet-300 border-violet-400/60 shadow-[0_0_12px_rgba(167,139,250,0.35)]'
+                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
+            }`}
+          >
+            <Cloud className="w-4 h-4" />
+            <span className="text-[9px] font-black tracking-tighter mt-0.5">PTS</span>
+          </button>
         </div>
       </div>
     </>

@@ -32,8 +32,8 @@ if [ ! -d "$WORKSPACE_ROOT/scripts" ] && [ -d "$HOME/av_project/scripts" ]; then
 fi
 
 CONTAINER="autoware_test"
-CONTAINER_ACTION="keep" # default: keep container ready & idle for fast, reliable mode switching
-RESET_CAN=false         # default: keep CAN link healthy across mode switches unless --reset-can is passed
+CONTAINER_ACTION="restart" # default: restart container clean and idle to reclaim all GPU/CUDA memory & kill lingering nodes
+RESET_CAN=true             # default: cleanly bring down CAN link and daemons for full close
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do
@@ -58,15 +58,21 @@ while [[ $# -gt 0 ]]; do
             RESET_CAN=true
             shift
             ;;
+        --keep-can)
+            RESET_CAN=false
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [--keep-container | --restart-container | --stop-container | --rm-container] [--reset-can]"
+            echo "Usage: $0 [--restart-container | --keep-container | --stop-container | --rm-container] [--reset-can | --keep-can]"
             echo ""
             echo "Options:"
-            echo "  (default)            Gracefully stop all nodes, free ports, clean DDS shm, keep container & CAN ready"
-            echo "  --restart-container  Force full Docker container restart (reclaims CUDA/GPU RAM)"
+            echo "  (default)            Gracefully stop all nodes, free ports, restart container clean, close CAN"
+            echo "  --keep-container     Stop in-container nodes without restarting the Docker container"
+            echo "  --keep-can           Leave CAN interfaces and daemon running for rapid stack switching"
+            echo "  --restart-container  Force Docker container restart (reclaims CUDA/GPU RAM)"
             echo "  --stop-container     Stop all services and stop the docker container ($CONTAINER)"
             echo "  --rm-container       Stop all services and forcefully remove the docker container"
-            echo "  --reset-can          Tear down SocketCAN interfaces (can2, canable0) and bridge daemons"
+            echo "  --reset-can          Tear down SocketCAN interfaces (can2, canable0) and bridge daemons (default)"
             echo "  --help, -h           Display this help message"
             exit 0
             ;;
@@ -114,25 +120,25 @@ echo "--> 2. Stopping all processes inside Docker container ($CONTAINER)..."
 if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     docker exec -u root "$CONTAINER" bash -c '
         # Autoware & ROS 2 Core (Universe, Planning, Control, Sim)
-        pkill -9 -f "ros2" 2>/dev/null || true
-        pkill -9 -f "rviz" 2>/dev/null || true
-        pkill -9 -f "component_container" 2>/dev/null || true
-        pkill -9 -f "planning" 2>/dev/null || true
-        pkill -9 -f "control" 2>/dev/null || true
-        pkill -9 -f "autoware" 2>/dev/null || true
-        pkill -9 -f "vehicle_bridge" 2>/dev/null || true
-        pkill -9 -f "remote_control" 2>/dev/null || true
-        pkill -9 -f "kinect" 2>/dev/null || true
-        pkill -9 -f "hesai" 2>/dev/null || true
-        pkill -9 -f "perception" 2>/dev/null || true
-        pkill -9 -f "robot_state_publisher" 2>/dev/null || true
-        pkill -9 -f "tools.av_dashboard" 2>/dev/null || true
-        pkill -9 -f "tools.can_watcher" 2>/dev/null || true
+        pkill --signal SIGKILL -f "ros2" 2>/dev/null || true
+        pkill --signal SIGKILL -f "rviz" 2>/dev/null || true
+        pkill --signal SIGKILL -f "component_container" 2>/dev/null || true
+        pkill --signal SIGKILL -f "planning" 2>/dev/null || true
+        pkill --signal SIGKILL -f "control" 2>/dev/null || true
+        pkill --signal SIGKILL -f "autoware" 2>/dev/null || true
+        pkill --signal SIGKILL -f "vehicle_bridge" 2>/dev/null || true
+        pkill --signal SIGKILL -f "remote_control" 2>/dev/null || true
+        pkill --signal SIGKILL -f "kinect" 2>/dev/null || true
+        pkill --signal SIGKILL -f "hesai" 2>/dev/null || true
+        pkill --signal SIGKILL -f "perception" 2>/dev/null || true
+        pkill --signal SIGKILL -f "robot_state_publisher" 2>/dev/null || true
+        pkill --signal SIGKILL -f "tools.av_dashboard" 2>/dev/null || true
+        pkill --signal SIGKILL -f "tools.can_watcher" 2>/dev/null || true
 
         # Clean all remaining processes inside container except PID 1 and current shell
-        for p in $(ps -eo pid=); do
+        for p in $(ps -eo pid= 2>/dev/null); do
             p_trimmed=$(echo "$p" | tr -d " ")
-            if [ "$p_trimmed" -gt 1 ] && [ "$p_trimmed" -ne $$ ]; then
+            if [ -n "$p_trimmed" ] && [ "$p_trimmed" -gt 1 ] 2>/dev/null && [ "$p_trimmed" -ne $$ ] 2>/dev/null; then
                 kill -9 "$p_trimmed" 2>/dev/null || true
             fi
         done
@@ -190,10 +196,11 @@ rm -rf /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* /dev/shm/cyclonedds_* 2>/dev/
 # STEP 4: CAN Adapter Lifecycle Handling
 # ------------------------------------------------------------------------------
 if [ "$RESET_CAN" = "true" ]; then
-    echo "--> 4. Bringing down CAN interfaces and bridge daemons (--reset-can requested)..."
+    echo "--> 4. Bringing down CAN interfaces and bridge daemons..."
 
     # CANalyst-II bridge daemon teardown
     pkill -9 -f "canalyst_socketcan_daemon.py" 2>/dev/null || true
+    sudo pkill -9 -f "canalyst_socketcan_daemon.py" 2>/dev/null || true
     if [ -f "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" ]; then
         bash "$WORKSPACE_ROOT/scripts/setup_canalyst.sh" down "can2" >/dev/null 2>&1 || true
     fi
@@ -274,7 +281,8 @@ else
 fi
 
 # ROS 2 process count
-ROS_COUNT=$(pgrep -cf ros2 2>/dev/null || echo "0")
+ROS_COUNT=$(pgrep -f "ros2" 2>/dev/null | wc -l || echo "0")
+ROS_COUNT=$(echo "$ROS_COUNT" | tr -d ' ')
 echo "  Remaining ROS processes: $ROS_COUNT"
 
 # Port checks

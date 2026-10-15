@@ -1366,7 +1366,8 @@ export class SurroundingTraffic {
     dt: number,
     humanPoses?: HumanPosesPayload | null,
     demoPedestrian: boolean = false,
-    mhrHuman?: MhrHumanPayload | null
+    mhrHuman?: MhrHumanPayload | null,
+    showSkeletons: boolean = true
   ) {
     const now = performance.now() / 1000;
     const step = Math.min(dt > 0 ? dt : 0.016, 0.1);
@@ -1926,7 +1927,7 @@ export class SurroundingTraffic {
 
         // Live YOLO26x-Pose / RTMPose 17-Keypoint Skeletal Rig Dynamic Alignment
         if (actor.skeletonJoints && actor.skeletonBones && actor.skeletonGroup) {
-          actor.skeletonGroup.visible = true;
+          actor.skeletonGroup.visible = showSkeletons;
 
           // 17 Kinematic Joint Points in Local Pedestrian Frame:
           // In the pedestrian avatar:

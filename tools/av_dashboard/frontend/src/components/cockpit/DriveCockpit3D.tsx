@@ -148,13 +148,19 @@ export const DriveCockpit3D: React.FC = () => {
         dt,
         state.humanPoses || state.rosStatus.human_poses,
         state.demoPedestrian,
-        state.mhrHuman
+        state.mhrHuman,
+        state.showSkeletons
       );
+
+      // Point cloud visibility toggle
+      lidarCloud.group.visible = state.showPointCloud;
 
       // Camera Management based on cameraMode
       const activeCameraMode = state.cameraMode;
+      const allowTukTuk = state.showTukTuk;
+
       if (activeCameraMode === 'orbit') {
-        tuktuk.group.visible = true;
+        tuktuk.group.visible = allowTukTuk;
         orbitControls.enabled = true;
         orbitControls.target.set(0, 0.75, 0.2);
         orbitControls.update();
@@ -167,13 +173,13 @@ export const DriveCockpit3D: React.FC = () => {
           camera.position.set(0, 1.30, -0.40);
           camera.lookAt(0, 1.05, -25);
         } else {
-          tuktuk.group.visible = true;
+          tuktuk.group.visible = allowTukTuk;
           // Chase Cam: smoothly follow behind vehicle with stable framing
           const targetCamX = 0;
-          const targetCamY = 2.5;
-          const targetCamZ = 5.2;
-          const targetLookY = 0.75;
-          const targetLookZ = -8.0;
+          const targetCamY = 3.2;
+          const targetCamZ = 5.8;
+          const targetLookY = 0.85;
+          const targetLookZ = -5.0;
 
           if (isNaN(camera.position.x)) camera.position.x = 0;
           if (isNaN(camera.position.y)) camera.position.y = targetCamY;
