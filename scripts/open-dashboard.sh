@@ -163,6 +163,20 @@ docker exec "$CONTAINER" bash -c "
     ros2 run tf2_ros static_transform_publisher --x 0.963 --y 0.0 --z 1.58 --yaw 0.0 --pitch 0.0 --roll 0.0 --frame-id base_link --child-frame-id lidar_link &
 " >/dev/null 2>&1 || true
 
+# 6b. Ensure Camera Driver is Running if Camera is Connected
+if [ "$CAM_CONNECTED" -eq 1 ] && [ "$FINAL_MODE" != "lidar" ] && [ "$FINAL_MODE" != "standby" ]; then
+    echo "Ensuring Kinect Front Camera driver is running..."
+    docker exec -d "$CONTAINER" bash -c "
+        source /opt/ros/humble/setup.bash
+        source /workspace/autoware/install/setup.bash 2>/dev/null || true
+        export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+        export LIBFREENECT2_LOGGER_LEVEL=warning
+        if ! ros2 node list 2>/dev/null | grep -q '/kinect_front'; then
+            ros2 launch etrike_kinect2 single_kinect.launch.py camera:=front > /tmp/kinect_front.log 2>&1
+        fi
+    "
+fi
+
 # 7. Launch Appropriate Perception Pipelines
 case "$FINAL_MODE" in
     fusion)
@@ -181,6 +195,13 @@ case "$FINAL_MODE" in
             pkill -f 'hesai_ros_wrapper_node' || true
             pkill -f 'hesai_synthetic_publisher' || true
             ros2 launch etrike_common_launch hesai_bench.launch.py > /tmp/hesai_bench.log 2>&1
+        "
+        echo "Launching Multi-Modal 3D Fusion Node (fusion_mesh_node)..."
+        docker exec -d "$CONTAINER" bash -c "
+            source /opt/ros/humble/setup.bash
+            source /workspace/autoware/install/setup.bash 2>/dev/null || true
+            pkill -f 'fusion_mesh_node' || true
+            ros2 launch etrike_yolo_perception fusion_perception.launch.py use_rviz:=false > /tmp/fusion_perception.log 2>&1
         "
         if [ "$LIDAR_CONNECTED" -eq 0 ]; then
             if [ "$ALLOW_SIM" -eq 1 ]; then
@@ -206,6 +227,13 @@ case "$FINAL_MODE" in
             pkill -f 'autoware_bevfusion' || true
             pkill -f 'hesai_pointxyzirc_adapter' || true
             ros2 launch etrike_common_launch etrike_bevfusion.launch.xml > /tmp/etrike_bevfusion.log 2>&1
+        "
+        echo "Launching Hesai PointXYZIRC Adapter for BEVFusion..."
+        docker exec -d "$CONTAINER" bash -c "
+            source /opt/ros/humble/setup.bash
+            source /workspace/autoware/install/setup.bash 2>/dev/null || true
+            pkill -f 'hesai_pointxyzirc_adapter' || true
+            ros2 run etrike_common_launch hesai_pointxyzirc_adapter.py > /tmp/hesai_adapter.log 2>&1 &
         "
         if [ "$LIDAR_CONNECTED" -eq 0 ]; then
             if [ "$ALLOW_SIM" -eq 1 ]; then
@@ -272,6 +300,7 @@ if ! curl -s "http://127.0.0.1:${PORT}/api/v1/status" >/dev/null 2>&1; then
         source /workspace/autoware/install/setup.bash 2>/dev/null || true
         export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
         export PYTHONPATH=/workspace/av_project:/host_local/lib/python3.10/site-packages:/host_dist_packages:\$PYTHONPATH
+        export MHR_MODEL_PATH=/workspace/av_project/tools/av_dashboard/data/mhr_assets/mhr_model.pt
         python3 -m tools.av_dashboard.backend.server --interface '$INTERFACE' --host 0.0.0.0 --port '$PORT' > /tmp/av_dashboard.log 2>&1
     "
     for i in {1..20}; do
@@ -307,15 +336,16 @@ COMMON_FLAGS=(
     "--no-default-browser-check"
     "--ignore-gpu-blocklist"
     "--enable-gpu-rasterization"
-    "--enable-zero-copy"
     "--enable-webgl"
     "--enable-unsafe-swiftshader"
     "--disable-gpu-sandbox"
     "--test-type"
 )
 
-# Close existing browser windows cleanly
-pkill -f "chromium.*${PORT}" 2>/dev/null || true
+# Close existing dashboard browser windows cleanly
+pkill -f "(chromium|chrome).*(cockpit|camera|${PORT})" 2>/dev/null || true
+pkill -f "(chromium|chrome).*app=http" 2>/dev/null || true
+rm -rf /tmp/chromium_cockpit/Singleton* /tmp/chromium_camera/Singleton* 2>/dev/null || true
 sleep 0.5
 
 echo "Launching 3D Cockpit Window on $DISPLAY..."
