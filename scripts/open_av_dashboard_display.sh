@@ -191,12 +191,6 @@ else
         --start-maximized \
         --no-first-run \
         --no-default-browser-check \
-        --ignore-gpu-blocklist \
-        --enable-gpu-rasterization \
-        --enable-zero-copy \
-        --enable-webgl \
-        --enable-unsafe-swiftshader \
-        --disable-gpu-sandbox \
         --test-type \
         < /dev/null > "/tmp/av_dashboard_browser.log" 2>&1 &
 fi

@@ -817,7 +817,7 @@ export class SurroundingTraffic {
     legR.add(kneeR);
     hips.add(legR);
 
-    return {
+    const result = {
       mesh: ped,
       limbs: {
         bodyRoot,
@@ -843,6 +843,13 @@ export class SurroundingTraffic {
       pedEdges,
       pedRing,
     };
+
+    if (humanObjMesh) {
+      if (smplMesh) smplMesh.visible = false;
+      bodyRoot.visible = false;
+    }
+
+    return result;
   }
 
   /**
@@ -1068,19 +1075,19 @@ export class SurroundingTraffic {
   }
 
   /**
-   * Minimalist automotive HUD distance pill (e.g. "2.8 m").
+   * Minimalist automotive HUD distance pill (e.g. "[CAM] 2.8 m · STANDING").
    */
   private createDistanceBadge(): THREE.Sprite {
     const canvas = document.createElement('canvas');
-    canvas.width = 440;
-    canvas.height = 56;
+    canvas.width = 320;
+    canvas.height = 48;
     const ctx = canvas.getContext('2d');
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearFilter;
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(1.68, 0.21, 1);
-    sprite.position.y = 2.1;
+    sprite.scale.set(1.30, 0.195, 1);
+    sprite.position.y = 1.90;
     sprite.userData = { canvas, ctx, texture, lastText: '', lastHazard: null };
     return sprite;
   }
@@ -1093,7 +1100,7 @@ export class SurroundingTraffic {
     data.lastCacheKey = cacheKey;
 
     const ctx = data.ctx as CanvasRenderingContext2D;
-    ctx.clearRect(0, 0, 440, 56);
+    ctx.clearRect(0, 0, 320, 48);
 
     let borderColor = '#38bdf8';
     let tagBgColor = '#0284c7';
@@ -1113,18 +1120,18 @@ export class SurroundingTraffic {
 
     ctx.fillStyle = isHazard ? 'rgba(220, 38, 38, 0.94)' : 'rgba(10, 18, 30, 0.90)';
     ctx.beginPath();
-    const r = 20;
+    const r = 16;
     ctx.moveTo(r, 4);
-    ctx.lineTo(440 - r, 4);
-    ctx.arcTo(440 - 4, 4, 440 - 4, 52, r);
-    ctx.arcTo(440 - 4, 52, 4, 52, r);
-    ctx.arcTo(4, 52, 4, 4, r);
-    ctx.arcTo(4, 4, 440 - r, 4, r);
+    ctx.lineTo(320 - r, 4);
+    ctx.arcTo(320 - 4, 4, 320 - 4, 44, r);
+    ctx.arcTo(320 - 4, 44, 4, 44, r);
+    ctx.arcTo(4, 44, 4, 4, r);
+    ctx.arcTo(4, 4, 320 - r, 4, r);
     ctx.closePath();
     ctx.fill();
 
     ctx.strokeStyle = borderColor;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.0;
     ctx.stroke();
 
     const match = text.match(/^\[(.*?)\]\s*(.*)$/);
@@ -1132,36 +1139,36 @@ export class SurroundingTraffic {
       const tag = match[1];
       const remainder = match[2];
 
-      const tagWidth = tag.length * 11 + 18;
+      const tagWidth = tag.length * 10 + 16;
       ctx.fillStyle = tagBgColor;
       ctx.beginPath();
-      const tr = 10;
-      ctx.moveTo(14 + tr, 10);
-      ctx.lineTo(14 + tagWidth - tr, 10);
-      ctx.arcTo(14 + tagWidth, 10, 14 + tagWidth, 46, tr);
-      ctx.arcTo(14 + tagWidth, 46, 14, 46, tr);
-      ctx.arcTo(14, 46, 14, 10, tr);
-      ctx.arcTo(14, 10, 14 + tagWidth, 10, tr);
+      const tr = 8;
+      ctx.moveTo(10 + tr, 8);
+      ctx.lineTo(10 + tagWidth - tr, 8);
+      ctx.arcTo(10 + tagWidth, 8, 10 + tagWidth, 40, tr);
+      ctx.arcTo(10 + tagWidth, 40, 10, 40, tr);
+      ctx.arcTo(10, 40, 10, 8, tr);
+      ctx.arcTo(10, 8, 10 + tagWidth, 8, tr);
       ctx.closePath();
       ctx.fill();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
+      ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(tag, 14 + tagWidth / 2, 28);
+      ctx.fillText(tag, 10 + tagWidth / 2, 24);
 
       ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+      ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(remainder, 14 + tagWidth + 14, 28);
+      ctx.fillText(remainder, 10 + tagWidth + 10, 24);
     } else {
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 19px system-ui, -apple-system, sans-serif';
+      ctx.font = 'bold 16px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, 220, 28);
+      ctx.fillText(text, 160, 24);
     }
 
     (data.texture as THREE.CanvasTexture).needsUpdate = true;
@@ -1758,7 +1765,7 @@ export class SurroundingTraffic {
       if (distBadge) {
         if (isPedestrian && dHorizontal < 25.0) {
           distBadge.visible = true;
-          distBadge.position.y = 2.08; // Floating right above head at 2.08m
+          distBadge.position.y = 1.90; // Floating right above head at 1.90m
           const isHazard = dHorizontal < 3.5 && Math.abs(actor.group.position.x) < 1.6 && actor.group.position.z < -0.3;
           const prov = (actor.sensorProvenance || 'fused').toLowerCase();
           const tag = prov === 'fused' ? 'FUSED' : prov === 'lidar' ? 'LIDAR' : prov === 'camera' ? 'CAM' : 'HUMAN';
@@ -1798,6 +1805,10 @@ export class SurroundingTraffic {
           const b = actor.smplBones;
           // Suppress procedural capsule primitives when authentic rigged SMPL model is loaded
           if (actor.proceduralMesh) actor.proceduralMesh.visible = false;
+          if (actor.humanObjMesh) {
+            if (actor.smplMesh) actor.smplMesh.visible = false;
+            actor.humanObjMesh.visible = true;
+          }
 
           // Pelvis height (rest = 97.27 cm; drops down ~36 cm when seated)
           if (b['m_avg_Pelvis']) {
@@ -1868,7 +1879,8 @@ export class SurroundingTraffic {
           if (b['m_avg_Spine3']) b['m_avg_Spine3'].rotation.z = -actor.poseCurrent.torsoRoll;
         } else {
           // Fallback procedural capsule articulation if GLB not yet loaded
-          if (actor.proceduralMesh) actor.proceduralMesh.visible = true;
+          if (actor.proceduralMesh) actor.proceduralMesh.visible = !actor.humanObjMesh;
+          if (actor.humanObjMesh) actor.humanObjMesh.visible = true;
           actor.limbs.hips.position.y = 0.86 - 0.34 * sb;
           actor.limbs.hips.rotation.x = 0.08 * sb;
 
@@ -2037,19 +2049,51 @@ export class SurroundingTraffic {
 
     // MHR overlay: when the backend streams posed MHR meshes, render them and
     // suppress the procedural pedestrian mesh for the same actor ids.
+    //
+    // MULTI-PEDESTRIAN FIX: Each MHR actor id (det_0, det_1, ...) must be placed
+    // at its own detected position — NOT all stacked on the first pedestrian.
+    // Resolution order:
+    //   1. Exact match by ID in this.actors map (ideal: YOLO obj IDs == MHR IDs)
+    //   2. Match by pose coordinates from rawPoses (x_base/y_base → Three.js space)
+    //   3. Index-based match: det_N → Nth PEDESTRIAN actor in the actors map
     const mhrActive = this.mhr.update(mhrHuman, (id) => {
-      let actor = this.actors.get(id);
-      if (!actor) {
-        // Fallback: bind to any visible pedestrian actor if IDs differ (e.g. det_0 vs demo-smpl-pedestrian)
+      // 1. Exact actor map match
+      const actor = this.actors.get(id);
+      if (actor && actor.group.visible) {
+        return { position: actor.group.position, yaw: actor.group.rotation.y, visible: true };
+      }
+
+      // 2. Use pose spatial coordinates directly from rawPoses.
+      // Transforms: base_link (x=forward, y=left) → Three.js (x=right, z=1-forward).
+      // Works regardless of whether a matching ROS perception object exists.
+      if (rawPoses) {
+        const pose = rawPoses.find((p) => p.id === id);
+        if (pose) {
+          const threeX = (pose as any).y_base != null ? Number((pose as any).y_base) : 0;
+          const threeZ = (pose as any).x_base != null ? 1.0 - Number((pose as any).x_base) : 1.0;
+          const pos = new THREE.Vector3(threeX, 0, threeZ);
+          const yaw = typeof (pose as any).yaw === 'number' ? -Number((pose as any).yaw) : 0;
+          return { position: pos, yaw, visible: true };
+        }
+      }
+
+      // 3. Index-based fallback: det_N → Nth visible PEDESTRIAN actor.
+      // Handles ID mismatch when fusion track IDs (fuse_N) don't match MHR pose IDs (det_N).
+      const detMatch = id.match(/^det_(\d+)$/);
+      if (detMatch) {
+        const targetIdx = parseInt(detMatch[1], 10);
+        let pedCount = 0;
         for (const act of this.actors.values()) {
-          if (act.meshes['PEDESTRIAN'] && act.group.visible) {
-            actor = act;
-            break;
+          if (act.group.visible && (act.meshes['PEDESTRIAN'] || act.currentLabel === 'PEDESTRIAN')) {
+            if (pedCount === targetIdx) {
+              return { position: act.group.position, yaw: act.group.rotation.y, visible: true };
+            }
+            pedCount++;
           }
         }
       }
-      if (!actor || !actor.group.visible) return null;
-      return { position: actor.group.position, yaw: actor.group.rotation.y, visible: true };
+
+      return null;
     });
     if (mhrActive.size > 0) {
       for (const [key, actor] of this.actors) {
