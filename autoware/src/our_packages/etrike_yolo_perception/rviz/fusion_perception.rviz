@@ -11,7 +11,7 @@ Panels:
         - /3D BBoxes and Labels1
         - /Camera Fusion HUD1
       Splitter Ratio: 0.5
-    Tree Height: 549
+    Tree Height: 667
 Visualization Manager:
   Class: ""
   Displays:
@@ -21,7 +21,7 @@ Visualization Manager:
       Color: 160; 160; 164
       Enabled: true
       Line Style:
-        Line Width: 0.03
+        Line Width: 0.029999999329447746
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -33,12 +33,11 @@ Visualization Manager:
       Plane Cell Count: 30
       Reference Frame: base_link
       Value: true
-
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 3
-        Min Value: -0.5
+        Max Value: 4.859723091125488
+        Min Value: 0.6419952511787415
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -56,18 +55,18 @@ Visualization Manager:
       Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 2
-      Size (m): 0.035
+      Size (m): 0.03500000014901161
       Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
+        Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /sensing/lidar/top/pointcloud_raw_ex
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: 3D Human Meshes
@@ -80,7 +79,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /perception/fusion/human_mesh_markers
       Value: true
-
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: 3D BBoxes and Labels
@@ -94,7 +92,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /perception/fusion/lidar_boxes_3d
       Value: true
-
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -109,7 +106,6 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /perception/fusion/annotated_camera
       Value: true
-
   Enabled: true
   Global Options:
     Background Color: 24; 25; 28
@@ -124,36 +120,42 @@ Visualization Manager:
     - Class: rviz_default_plugins/FocusCamera
     - Class: rviz_default_plugins/Measure
       Line color: 128; 128; 0
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
   Value: true
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
       Distance: 14.5
       Enable Stereo Rendering:
-        Stereo Eye Separation: 0.06
+        Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
         X: 4.5
         Y: 0
-        Z: 0.8
+        Z: 0.800000011920929
       Focal Shape Fixed Size: true
-      Focal Shape Size: 0.05
+      Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.01
-      Pitch: 0.38
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.7799999713897705
       Target Frame: base_link
       Value: Orbit (rviz)
-      Yaw: 2.85
+      Yaw: 3.410001039505005
     Saved: ~
 Window Geometry:
+  Camera Fusion HUD:
+    collapsed: false
   Displays:
     collapsed: false
-  Height: 900
+  Height: 1376
   Hide Left Dock: false
   Hide Right Dock: false
-  Width: 1600
-  X: 40
-  Y: 40
+  QMainWindow State: 000000ff00000000fd0000000100000000000001560000050afc0200000002fb0000002200430061006d00650072006100200046007500730069006f006e0020004800550044010000003b000001e00000002800fffffffb000000100044006900730070006c006100790073010000022100000324000000c700ffffff00000bce0000050a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Width: 3370
+  X: 70
+  Y: 27
