@@ -24,6 +24,7 @@ This directory contains utility scripts for workspace management, testing, diagn
    - [close_everything.ps1](file:///E:/work/av_project/scripts/close_everything.ps1)
    - [close-etrike.sh](file:///E:/work/av_project/scripts/close-etrike.sh)
    - [close_remote_control.sh](file:///E:/work/av_project/scripts/close_remote_control.sh)
+   - [close_camera.sh](file:///E:/work/av_project/scripts/close_camera.sh)
    - [kill_all.sh](file:///E:/work/av_project/scripts/kill_all.sh)
    - [kill_container.sh](file:///E:/work/av_project/scripts/kill_container.sh)
 5. [SSH Remote Commands](#5-ssh-remote-commands)
@@ -385,6 +386,9 @@ This directory contains utility scripts for workspace management, testing, diagn
 
 ### [close_remote_control.sh](file:///E:/work/av_project/scripts/close_remote_control.sh)
 * **Description**: Focused shutdown script targeting the remote cockpit GUI, teleop web server, and vehicle bridge while leaving simulator components untouched.
+
+### [close_camera.sh](file:///E:/work/av_project/scripts/close_camera.sh)
+* **Description**: Dedicated camera and perception shutdown script. Terminates native YOLO26x OpenCV camera viewer windows (`yolo_cam_viewer`), Kinect v2 camera driver (`kinect2_node_exec`, `single_kinect`), YOLO26x & RTMPose-s perception nodes (`yolo_perception_node.py`), and Kinect static transform publishers.
 
 ### [kill_all.sh](file:///E:/work/av_project/scripts/kill_all.sh)
 * **Description**: Cleanly removes the test container and forcefully terminates leftover ROS2/RViz processes on the host.

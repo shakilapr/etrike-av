@@ -247,23 +247,20 @@ bash scripts/open_cockpit_and_camera_monitor.sh 8080
   * **Window 1**: Full 3D Cockpit & Radar HUD (`http://localhost:8080`)
   * **Window 2**: Dedicated Full-Window Camera Stream with real-time annotations (`http://localhost:8080/camera`)
 
-### Camera Health Diagnostics & Instant Recovery
+### Open Standalone YOLO26x Native Camera Window
 ```bash
-bash scripts/check_camera_health.sh
+bash /av_project/scripts/yolo-camera.sh
 ```
-* **Checks**:
-  * USB 3.0 bus connection (`045e:02c4` Microsoft Corp. Xbox NUI Sensor).
-  * Video topic rate (`/kinect_front/rgb/image_raw` and `/bench_perception/camera/debug_image`).
-  * Process status of `kinect2_node_exec` and `yolo_perception_node.py`.
-* **Instant Recovery (if Kinect USB drops/stalls)**:
-  ```bash
-  docker exec autoware_test pkill -9 -f kinect2_node_exec
-  docker exec -d autoware_test bash -c "
-      source /opt/ros/humble/setup.bash
-      source /workspace/autoware/install/setup.bash
-      export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-      ros2 launch etrike_kinect2 single_kinect.launch.py camera:=front > /tmp/kinect_front.log 2>&1
-  "
-  ```
+*Windows:* `ssh med1@172.16.25.67 "bash ~/av_project/scripts/yolo-camera.sh"`
+* **Opens**: Direct hardware-accelerated X11 window on Jetson monitor (`DISPLAY=:1`) rendering Kinect v2 video with YOLO26x bounding boxes and RTMPose-s skeletons.
+* **Exit**: Press `Q`, `ESC`, or click the window `[X]` button, or close terminal.
+
+### Close Camera & Perception Only
+```bash
+bash /av_project/scripts/close_camera.sh
+```
+*Windows:* `ssh med1@172.16.25.67 "bash ~/av_project/scripts/close_camera.sh"`
+* **Closes**: Instantly terminates camera viewer window (`yolo_cam_viewer`), Kinect v2 driver (`kinect2_node_exec`), YOLO perception nodes (`yolo_perception_node`), and releases the USB camera sensor.
+
 
 

@@ -117,21 +117,21 @@ fi
 # 5. Clean up trap for viewer exit
 cleanup() {
     echo ""
-    echo "--> Closing YOLO26x Camera Viewer..."
-    docker exec "$CONTAINER" pkill -f "yolo_cam_viewer" 2>/dev/null || true
+    echo "--> Stopping YOLO26x Camera Viewer and Pipeline..."
+    docker exec "$CONTAINER" pkill -9 -f "yolo_cam_viewer" 2>/dev/null || true
+    docker exec "$CONTAINER" pkill -9 -f "kinect2_node_exec" 2>/dev/null || true
+    docker exec "$CONTAINER" pkill -9 -f "single_kinect" 2>/dev/null || true
+    docker exec "$CONTAINER" pkill -9 -f "yolo_perception_node" 2>/dev/null || true
+    docker exec "$CONTAINER" pkill -9 -f "fusion_mesh_node" 2>/dev/null || true
+    docker exec "$CONTAINER" pkill -9 -f "static_transform_publisher.*kinect" 2>/dev/null || true
+    pkill -9 -f "yolo_cam_viewer" 2>/dev/null || true
+    echo "--> [OK] Camera and perception nodes closed."
     exit 0
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP
 
-# 6. Launch Native Hardware-Accelerated Video Viewer Window on Jetson Display
-echo "--> Opening Live Annotated Camera Window on $DISPLAY..."
-echo "    [Press 'Q' or 'ESC' in the window or Ctrl+C in terminal to close]"
-
-docker exec -e DISPLAY="$DISPLAY" -e XAUTHORITY="$XAUTHORITY" -e NO_AT_BRIDGE=1 "$CONTAINER" bash -c '
-source /opt/ros/humble/setup.bash
-source /workspace/autoware/install/setup.bash 2>/dev/null || true
-
-python3 -u - << "EOF"
+# 6. Deploy Viewer Script inside Container with identifiable process name
+docker exec "$CONTAINER" bash -c 'cat << "EOF" > /tmp/yolo_cam_viewer.py
 import sys
 import numpy as np
 import cv2
@@ -178,6 +178,16 @@ class YoloCameraViewer(Node):
             self.get_logger().warn(f"Image decode error: {e}")
 
     def render_tick(self):
+        # 1. Detect if user closed window with the [X] button
+        try:
+            if cv2.getWindowProperty(self.window_title, cv2.WND_PROP_VISIBLE) < 1:
+                self.get_logger().info("Window close button [X] clicked.")
+                rclpy.shutdown()
+                return
+        except Exception:
+            pass
+
+        # 2. Render frame or waiting splash
         if self.last_img is not None:
             cv2.imshow(self.window_title, self.last_img)
         else:
@@ -186,6 +196,7 @@ class YoloCameraViewer(Node):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 230, 255), 2)
             cv2.imshow(self.window_title, splash)
 
+        # 3. Detect keyboard exit ('q', 'Q', ESC)
         key = cv2.waitKey(1) & 0xFF
         if key in (ord("q"), ord("Q"), 27):
             self.get_logger().info("Exit key pressed.")
@@ -199,7 +210,10 @@ def main():
     except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
         pass
     finally:
-        cv2.destroyAllWindows()
+        try:
+            cv2.destroyAllWindows()
+        except Exception:
+            pass
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
@@ -207,4 +221,16 @@ def main():
 if __name__ == "__main__":
     main()
 EOF
+chmod +x /tmp/yolo_cam_viewer.py
 '
+
+# 7. Launch Native Hardware-Accelerated Video Viewer Window on Jetson Display
+echo "--> Opening Live Annotated Camera Window on $DISPLAY..."
+echo "    [Press 'Q' or 'ESC' or click [X] on window, or Ctrl+C in terminal to close]"
+
+docker exec -e DISPLAY="$DISPLAY" -e XAUTHORITY="$XAUTHORITY" -e NO_AT_BRIDGE=1 "$CONTAINER" bash -c '
+source /opt/ros/humble/setup.bash
+source /workspace/autoware/install/setup.bash 2>/dev/null || true
+python3 -u /tmp/yolo_cam_viewer.py
+'
+

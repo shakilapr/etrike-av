@@ -27,3 +27,9 @@ Open YOLO 26x Camera
 ```bash
 bash ~/av_project/scripts/yolo-camera.sh
 ```
+
+Close YOLO 26x Camera
+```bash
+bash ~/av_project/scripts/close_camera.sh
+```
+

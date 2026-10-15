@@ -100,15 +100,27 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         pkill -INT -f 'etrike_remote_control' 2>/dev/null || true
         pkill -INT -f 'remote_control_node' 2>/dev/null || true
         pkill -INT -f 'remote_control_gui' 2>/dev/null || true
+        pkill -INT -f 'yolo_cam_viewer' 2>/dev/null || true
+        pkill -INT -f 'yolo-camera' 2>/dev/null || true
         pkill -INT -f 'yolo_perception_node' 2>/dev/null || true
+        pkill -INT -f 'fusion_mesh_node' 2>/dev/null || true
         pkill -INT -f 'bench_perception_node' 2>/dev/null || true
+        pkill -INT -f 'kinect2_node_exec' 2>/dev/null || true
+        pkill -INT -f 'single_kinect' 2>/dev/null || true
+        pkill -INT -f 'kinect' 2>/dev/null || true
         pkill -INT -f 'rosbag2' 2>/dev/null || true
     " 2>/dev/null || true
 fi
 pkill -INT -f "etrike_remote_control" 2>/dev/null || true
 pkill -INT -f "vehicle_bridge" 2>/dev/null || true
+pkill -INT -f "yolo_cam_viewer" 2>/dev/null || true
+pkill -INT -f "yolo-camera" 2>/dev/null || true
 pkill -INT -f "yolo_perception_node" 2>/dev/null || true
 pkill -INT -f "bench_perception_node" 2>/dev/null || true
+pkill -INT -f "kinect2_node_exec" 2>/dev/null || true
+pkill -INT -f "single_kinect" 2>/dev/null || true
+pkill -INT -f "kinect" 2>/dev/null || true
+pkill -INT -f "open_cockpit_and_camera_monitor" 2>/dev/null || true
 
 sleep 0.8
 
@@ -128,9 +140,16 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         pkill --signal SIGKILL -f "autoware" 2>/dev/null || true
         pkill --signal SIGKILL -f "vehicle_bridge" 2>/dev/null || true
         pkill --signal SIGKILL -f "remote_control" 2>/dev/null || true
+        pkill --signal SIGKILL -f "kinect2_node_exec" 2>/dev/null || true
+        pkill --signal SIGKILL -f "single_kinect" 2>/dev/null || true
         pkill --signal SIGKILL -f "kinect" 2>/dev/null || true
         pkill --signal SIGKILL -f "hesai" 2>/dev/null || true
+        pkill --signal SIGKILL -f "yolo_cam_viewer" 2>/dev/null || true
+        pkill --signal SIGKILL -f "yolo-camera" 2>/dev/null || true
+        pkill --signal SIGKILL -f "yolo_perception_node" 2>/dev/null || true
+        pkill --signal SIGKILL -f "fusion_mesh_node" 2>/dev/null || true
         pkill --signal SIGKILL -f "perception" 2>/dev/null || true
+        pkill --signal SIGKILL -f "static_transform_publisher.*kinect" 2>/dev/null || true
         pkill --signal SIGKILL -f "robot_state_publisher" 2>/dev/null || true
         pkill --signal SIGKILL -f "tools.av_dashboard" 2>/dev/null || true
         pkill --signal SIGKILL -f "tools.can_watcher" 2>/dev/null || true
@@ -162,8 +181,12 @@ pkill -9 -f "autoware_teleop" 2>/dev/null || true
 pkill -9 -f "vite" 2>/dev/null || true
 
 # Host GUI / Display windows (matches snap, deb, and native chrome/chromium/epiphany)
+pkill -9 -f "chromium_camera" 2>/dev/null || true
+pkill -9 -f "chromium_cockpit" 2>/dev/null || true
+pkill -9 -f "user-data-dir=/tmp/chromium" 2>/dev/null || true
 pkill -9 -f "chromium" 2>/dev/null || true
 pkill -9 -f "chrome" 2>/dev/null || true
+killall -9 chrome chromium chromium-browser 2>/dev/null || true
 pkill -9 -f "epiphany" 2>/dev/null || true
 pkill -9 -f "electron" 2>/dev/null || true
 pkill -9 -f "rviz2" 2>/dev/null || true
@@ -171,6 +194,15 @@ pkill -9 -f "remote_control_gui" 2>/dev/null || true
 pkill -9 -f "remote_control_node" 2>/dev/null || true
 pkill -9 -f "loop_mapping" 2>/dev/null || true
 pkill -9 -f "record_slam" 2>/dev/null || true
+
+# Camera & Perception GUI windows and scripts (host & X11)
+pkill -9 -f "yolo-camera" 2>/dev/null || true
+pkill -9 -f "yolo_cam_viewer" 2>/dev/null || true
+pkill -9 -f "open_cockpit_and_camera_monitor" 2>/dev/null || true
+pkill -9 -f "rqt_image_view" 2>/dev/null || true
+pkill -9 -f "kinect2_node_exec" 2>/dev/null || true
+pkill -9 -f "single_kinect" 2>/dev/null || true
+pkill -9 -f "kinect" 2>/dev/null || true
 
 # Host ROS2/bridge/perception leftovers
 pkill -9 -f "ros2" 2>/dev/null || true
