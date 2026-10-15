@@ -47,17 +47,43 @@ if [ -d /workspace/av_project ] && ! command -v docker &>/dev/null; then
 fi
 
 echo "── Sensor reachability ──"
-if ping -c 2 -W 2 "$SENSOR_IP" &>/dev/null; then
+MAX_WAIT_SEC=15
+REACHABLE=false
+
+printf "  Checking sensor at %s " "$SENSOR_IP"
+for ((i=1; i<=MAX_WAIT_SEC; i++)); do
+    if ping -c 1 -W 1 "$SENSOR_IP" &>/dev/null; then
+        REACHABLE=true
+        break
+    fi
+    printf "."
+    sleep 1
+done
+echo ""
+
+if [ "$REACHABLE" = true ]; then
     echo "  ✅ $SENSOR_IP reachable"
 else
-    echo "  ❌ Sensor not reachable — configure the network first:"
-    echo "     sudo $SCRIPT_DIR/setup_lidar_network.sh eno1 192.168.1.10 $SENSOR_IP"
+    echo "  ❌ Sensor not reachable after ${MAX_WAIT_SEC}s."
+
+    IFACE="eno1"
+    CARRIER=$(cat "/sys/class/net/$IFACE/carrier" 2>/dev/null || echo 0)
+    if [ "$CARRIER" -eq 0 ]; then
+        echo "  ⚠️ Interface $IFACE has NO CARRIER (link down)."
+        echo "     Check LiDAR power and Ethernet cable connection."
+    elif ! ip -4 addr show "$IFACE" 2>/dev/null | grep -q "192.168.1."; then
+        echo "  ⚠️ Interface $IFACE is up but missing IP on 192.168.1.0/24 subnet."
+        echo "     Run: sudo $SCRIPT_DIR/setup_lidar_network.sh $IFACE 192.168.1.10 $SENSOR_IP"
+    else
+        echo "  ⚠️ Interface $IFACE has link and IP, but sensor $SENSOR_IP is not responding to ping."
+        echo "     Check LiDAR power cycle status or if sensor IP is configured differently."
+    fi
     exit 1
 fi
 
 echo "── Starting viewer container ──"
 docker rm -f "$CONTAINER" 2>/dev/null || true
-xhost +local:docker >/dev/null 2>&1 || true
+DISPLAY="$DISPLAY_TARGET" xhost +local:docker >/dev/null 2>&1 || true
 
 docker run -d --name "$CONTAINER" --rm \
   --privileged --runtime=nvidia --gpus all --net=host --ipc=host \

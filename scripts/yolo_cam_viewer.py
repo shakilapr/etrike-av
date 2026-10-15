@@ -49,16 +49,6 @@ class YoloCameraViewer(Node):
             self.get_logger().warn(f"Image decode error: {e}")
 
     def render_tick(self):
-        # 1. Detect if user closed window with the [X] button
-        try:
-            if cv2.getWindowProperty(self.window_title, cv2.WND_PROP_VISIBLE) < 1:
-                self.get_logger().info("Window close button [X] clicked.")
-                rclpy.shutdown()
-                return
-        except Exception:
-            pass
-
-        # 2. Render frame or waiting splash
         if self.last_img is not None:
             cv2.imshow(self.window_title, self.last_img)
         else:
@@ -67,7 +57,6 @@ class YoloCameraViewer(Node):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 230, 255), 2)
             cv2.imshow(self.window_title, splash)
 
-        # 3. Detect keyboard exit ('q', 'Q', ESC)
         key = cv2.waitKey(1) & 0xFF
         if key in (ord("q"), ord("Q"), 27):
             self.get_logger().info("Exit key pressed.")

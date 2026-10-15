@@ -8,6 +8,22 @@ process topology, data models, the exact coordinate/temporal math it applies,
 the 3D assets and rigs it renders, and the protocols it speaks. Every claim is
 grounded in a source file with a `path:line` reference.
 
+> **⚠️ This codebase contains known internal contradictions.** Section 15
+> documents 20 confirmed conflicts (wrong dev port, mismatched gauge scales,
+> dead rig code, a default-on synthetic pedestrian, a 696 MB committed asset,
+> etc.) with the authoritative side called out for each. Read it before
+> trusting any single value.
+
+**Conflict quick index:** C1 dev API port `8000` vs `8080` · C2 speed gauge
+0–15 vs 0–50 · C3 brake scale 1500/5000/20000 · C4 throttle derivation · C5
+`AUTONOMOUS`/`EMERGENCY` never emitted · C6 gear `P` unrepresentable on CAN · C7
+`m_avg_*` SMPL rig is dead code · C8 dual `_sources["detection"]` writers · C9
+unused `detection` priority · C10 triple pedestrian NMS · C11 demo pedestrian
+on by default · C12 write-only `active_view` · C13 696 MB MHR blob · C14 git
+contract list incomplete · C15 camera freshness windows · C16 simulator not
+contract-exact · C17 partial WS set locking · C18 MHR path ambiguity · C19
+overloaded "MHR" name · C20 deprecated `on_event`.
+
 ---
 
 ## 1. Purpose & Scope
@@ -887,7 +903,237 @@ tools/av_dashboard/
 
 ---
 
-## 15. Key Invariants (do not break)
+## 15. Known Contradictions, Conflicts & Dead Code
+
+These are real inconsistencies confirmed in the source. They are documented
+rather than silently "fixed" because several are load-bearing quirks. Severity
+is my assessment; **"authoritative"** names the side that should win until
+someone decides otherwise.
+
+### C1 — Dev API base is the wrong port (HIGH, functional bug)
+
+- `App.tsx:18` fetches the catalog from `http://127.0.0.1:8000` in dev.
+- Every other dev consumer uses **8080**: `canStore.ts:250` (WS),
+  `MhrHuman.ts:18` (topology), `vite.config.ts:9,11` (proxy), and the backend
+  itself defaults to `8080` (`server.py:893`).
+- Nothing listens on 8000, so in `pnpm dev` the CAN catalog fetch fails
+  (`App.tsx:30` logs "Failed to fetch CAN catalog") and the monitor views render
+  empty while the 3D cockpit still works.
+- **Authoritative:** `8080`. `App.tsx:18` is stale.
+
+### C2 — Speedometer has two different full-scale values on one dial (HIGH)
+
+- `TelemetrySidebar.tsx:9` `maxSpeed = 15` drives the needle angle
+  (`:13–14`), but the same gauge is labelled **"0 - 50 km/h"** (`:187`) and its
+  ticks are drawn 0…50 (`:201`).
+- At 15 km/h the needle is at full scale while the label reads ~30 %.
+- **Authoritative:** the label/ticks (0–50) or the needle (0–15) — pick one; the
+  E-Trike's real top speed (≈15–18 km/h) suggests the needle is right and the
+  label is wrong.
+
+### C3 — Brake pressure has three different full scales (MEDIUM)
+
+- `TelemetrySidebar.tsx:25` `maxBrake = 5000` for the bar fill, but the gauge is
+  labelled **"0 - 1500 kPa"** (`:322`).
+- `CockpitHud.tsx:77` uses **5000** for the HUD bar.
+- The contract allows **0…20000 kPa** (`contracts/host.yaml`,
+  `brake_pressure_kpa max: 20000`; `rt.yaml` `max: 20000`).
+- Three mutually inconsistent ranges for the same quantity.
+- **Authoritative:** the contract (20000 kPa) for saturation; labels should match.
+
+### C4 — Two different throttle-percent derivations (MEDIUM)
+
+- Backend: `throttle_pct = min(100, abs(mmps)/3000 * 100)` (`server.py:381`).
+- Frontend fallback when `throttle_pct` is absent:
+  `min(round(abs(speed_cmd_kmh)/10.8*100), 100)` (`CockpitHud.tsx:143`).
+- `3000 mm/s = 10.8 km/h`, so these *attempt* to agree, but they are computed
+  from different fields (`speed_mmps` vs `speed_cmd_kmh`) and the fallback can
+  disagree with the backend whenever command ≠ actual speed.
+- **Authoritative:** backend `throttle_pct`; the frontend fallback is a guess.
+
+### C5 — Ground-truth vehicle `mode` enum mismatch (LOW, dead branches)
+
+- Backend only ever emits `MANUAL` / `AUTO` / `ESTOP` (`server.py:357`,
+  `:203`, `:205`, `:236`).
+- Frontend tests for `AUTONOMOUS` (`CockpitHud.tsx:63`,
+  `DriveCockpit3D.tsx:111`, `TelemetrySidebar.tsx:57`), which is **never
+  emitted**, and for `EMERGENCY` (`TelemetrySidebar.tsx:59`), also never emitted.
+- The `|| 'AUTONOMOUS'` / `|| 'EMERGENCY'` halves are dead.
+- **Authoritative:** `AUTO` / `ESTOP`.
+
+### C6 — Gear vocabulary conflict: `P` is unrepresentable over CAN (MEDIUM)
+
+- Both HUDs render the selector `['P','R','N','D','S']`
+  (`CockpitHud.tsx:230`, `TelemetrySidebar.tsx:29`).
+- The CAN contract gear enum is only `{0:N, 1:D, 2:S, 3:R}` — **no P**
+  (`contracts/host.yaml`, `contracts/rt.yaml`).
+- `P` can only light via the ROS path, which maps `22 → "P"` and `20 → "R"`
+  (`ros2_bridge.py:1211`) — a different enum from CAN's `{0..3}`.
+- Two incompatible gear encodings (`P` present in ROS, absent in CAN).
+- **Authoritative:** the CAN contract; `P` is a ROS-only state.
+
+### C7 — SMPL bone-name mismatch makes the 25-bone rig dead code (HIGH)
+
+- `SurroundingTraffic.ts:1846–1921` articulates bones named
+  **`m_avg_Pelvis`, `m_avg_L_Hip`, `m_avg_R_Knee`, `m_avg_L_Shoulder`, …**
+- `generate_smpl_model.js` — the script that produces
+  `public/models/pedestrian_smpl.glb` — names objects **`Hips`, `LeftUpLeg`,
+  `LeftLeg`, `Pelvis_Mesh`, …** and creates **no `THREE.Bone`, no
+  `SkinnedMesh`, no `Skeleton`** (verified: no `isBone`/`SkinnedMesh` in the
+  generator).
+- `smplBones` is populated by traversing for `isBone`
+  (`SurroundingTraffic.ts:684`), so it is **always empty** with the shipped GLB.
+  The entire `if (actor.smplBones) { … }` branch is unreachable, and pedestrians
+  always take the `human_model.obj` / procedural path.
+- The `m_avg_*` names imply the code was written against the **real MHR/SMPL
+  asset** (which does use `m_avg_*` bones), not the generated GLB.
+- **Authoritative:** the `m_avg_*` path is the intended design; the shipped
+  `pedestrian_smpl.glb` does not satisfy it. Either regenerate the GLB with
+  `m_avg_*`-named `Bone`s, or delete the dead branch.
+
+### C8 — `_sources["detection"]` has two writers, breaking the stated guard (MEDIUM)
+
+- `ros2_bridge.py:782` explicitly states `_camera_objects` must only be set by
+  `_process_camera_objects_batch` so the generic detector cannot clobber it
+  (to protect MHR's `det_N` actor IDs).
+- But `_process_camera_objects_batch` sets `_sources["detection"]`
+  (`ros2_bridge.py:936`) **and** `_process_objects_batch` also sets
+  `_sources["detection"]` when called from `_on_detected_objects`
+  (`ros2_bridge.py:951`, `:781`). The guard protects `_camera_objects` only; the
+  shared `_sources["detection"]` slot is still a race between the two paths.
+- **Authoritative:** camera path for `det_N`; the generic detector should use a
+  distinct source key.
+
+### C9 — `SOURCE_PRIORITY` includes `detection` that the selector never uses (LOW)
+
+- `SOURCE_PRIORITY = ("tracking", "prediction", "detection")`
+  (`ros2_bridge.py:48`).
+- The primary-source fallback loop only iterates `("tracking", "prediction")`
+  (`ros2_bridge.py:1435`). `detection` is therefore **never** selected as a
+  primary upstream source, despite being declared in the priority tuple.
+- **Authoritative:** the loop; the tuple is misleading.
+
+### C10 — Duplicated pedestrian NMS with different thresholds (MEDIUM)
+
+Pedestrian de-duplication is implemented **twice**, with different constants:
+
+| Layer | Merge radius | Priority map |
+|-------|-------------|--------------|
+| Backend (`ros2_bridge.py:1451`) | **2.0 m** | fused 3, camera 2, lidar 1 |
+| Frontend (`SurroundingTraffic.ts:1378`) | **2.2 m** | fused 3, camera 2, else 1 |
+
+The frontend also correlates `human_poses` again (`:1417`), and the MHR
+placement does a third proximity check (`:2147`, 2.0 m). Three proximity gates.
+- **Authoritative:** backend, to keep one source of truth; the frontend passes
+  are defensive and can re-introduce IDs the backend already collapsed.
+
+### C11 — `demoPedestrian` defaults to `true` in production (MEDIUM, product)
+
+- `canStore.ts:125` `demoPedestrian: true` (not persisted, not gated by `--sim`).
+- Whenever no real pedestrian exists, `SurroundingTraffic.ts:1459` injects a
+  **synthetic** pedestrian at `z = -2.8 m` with animated keypoints and a seated
+  cycle.
+- This contradicts the design's "honest HUD" stance (e.g. `ros2_bridge.py:699`
+  refuses to draw ghosts without localization). A production cockpit shows a
+  fake actor by default.
+- **Authoritative:** `false` for production; `true` only as an explicit demo.
+
+### C12 — `active_view` persistence is write-only (LOW, functional bug)
+
+- `setActiveView` / `toggleActiveView` write `av_dashboard_active_view` to
+  `localStorage` (`canStore.ts:194`, `:202`).
+- The store initializer hardcodes `activeView: 'cockpit'` (`canStore.ts:114`)
+  and **never reads the key back** — unlike `zoomLevel`, `cameraMode`,
+  `showTukTuk`, etc., which all read their keys.
+- The saved view is silently discarded on reload.
+
+### C13 — "Optional, download it" MHR asset vs. 696 MB committed blob (MEDIUM, repo hygiene)
+
+- `requirements-mhr.txt` frames MHR as optional and instructs
+  `mhr-download-assets` to fetch `mhr_model.pt`.
+- The repository ships `data/mhr_assets/mhr_model.pt` at **696,110,248 bytes**
+  (~696 MB) — in direct tension with the "fetch it, it's optional" contract.
+- **Authoritative:** the download workflow; the committed blob should be removed
+  and gitignored (mirrors the project rule against large in-repo artifacts).
+
+### C14 — Git-fallback contract set is incomplete (LOW)
+
+- `_load_from_git` uses `["network","host","rt","sys","hmi","mtr","pwt"]`
+  (`contracts.py:117`) — **7** files.
+- The local `contracts/` directory holds **9**: the above plus `seb.yaml` and
+  `ses.yaml`.
+- When the local directory is missing, the dashboard silently decodes fewer
+  messages than the local path, so `0x7B9/0x721/0x169/0x201` etc. become
+  unmapped.
+- **Authoritative:** the 9-file local directory; the git list is stale.
+
+### C15 — Camera freshness windows disagree (LOW)
+
+- `_on_camera_raw_image` suppresses the raw frame only while annotated debug
+  frames are younger than **1.0 s** (`ros2_bridge.py:1142`).
+- `get_latest_jpeg` serves any frame younger than **2.0 s**
+  (`ros2_bridge.py:1162`).
+- In the 1.0–2.0 s gap a raw frame can overwrite an annotated one even though
+  the design intends annotated to win.
+- **Authoritative:** the annotated-priority intent; align the two windows.
+
+### C16 — `SimulatedCanTransport` emits IDs/bytes that do not all match the contracts (MEDIUM)
+
+- The simulator (`transport.py:159`) hand-packs frames, e.g. `0x300` with a
+  32-bit **big-endian** speed at bytes 0–3 **and** a 24-bit yaw at bytes 4–6
+  (`transport.py:200–213`), while `contracts`/`host.yaml` defines `0x300` as
+  bytes 0–3 speed + bytes 4–6 yaw + byte 7 gear with `byte_order: big` — this
+  one *does* line up.
+- But the simulator also emits `0x501` with `d501[0]=3` and `d501[2]=0x10`
+  (`transport.py:278–281`), which maps onto the `rt_node_status` layout
+  (`node_state=3` but `block_mask` bytes 1–2 are only half-written), i.e. a
+  partially-populated `rt_node_status`.
+- Several simulator frames are demo-shaped rather than contract-exact, so
+  `--sim` output and real bus output are not bit-identical for every ID.
+- **Authoritative:** the YAML contracts; treat the simulator as indicative.
+
+### C17 — WebSocket set locking is partial (LOW, concurrency)
+
+- A hardware `threading.Lock` (`ros2_bridge.py:76`) guards all bridge writers, so
+  snapshots are best-effort consistent. However
+  `websocket_endpoint` adds/removes sockets from `active_websockets` outside
+  `_send_lock` (`server.py:55`, `:778`, `:794`) while `_send_all` iterates and
+  prunes them under the lock (`server.py:93–101`).
+- A socket can be pruned-after-close or double-pruned; the code tolerates it via
+  `discard`, but the set is not uniformly locked.
+- **Authoritative:** correctness relies on `discard` idempotency, not the lock.
+
+### C18 — Config sources disagree about the MHR default path (LOW)
+
+- `mhr_engine._default_model_path()` (`mhr_engine.py:233`) checks
+  `backend/data/mhr_assets/mhr_model.pt` then `tools/av_dashboard/data/mhr_assets/mhr_model.pt`.
+- The only shipped asset lives at `tools/av_dashboard/data/mhr_assets/mhr_model.pt`
+  (`here.parents[2]`), which **is** the second candidate — so it resolves, but
+  the first candidate (`backend/data/...`) never exists.
+- `requirements-mhr.txt` instead tells the user to set `MHR_MODEL_PATH` to a
+  downloaded copy. Three mental models for one asset location.
+
+### C19 — "MHR" name is overloaded for two different rigs (LOW, terminology)
+
+- Backend `mhr_engine`/`mhr_service` = **Meta Momentum Human Rig** (real
+  TorchScript model).
+- Frontend `MhrHuman.ts` renders that streamed mesh (correct).
+- But `SurroundingTraffic.ts:347` comments call the **generated GLB**
+  "SMPL/MHR pedestrian mesh", and the `m_avg_*` bone names (C7) also belong to
+  MHR/SMPL proper. The generated asset is neither SMPL nor MHR — it is a
+  hand-built capsule avatar.
+- **Authoritative:** reserve "MHR" for the backend TorchScript rig; call the GLB
+  the "procedural/SMPL-styled avatar".
+
+### C20 — `@app.on_event("startup")` is deprecated FastAPI usage (INFO)
+
+- `server.py:496` uses the legacy `on_event` hook rather than the lifespan
+  context manager. Functional today, deprecated in current FastAPI. Not a
+  conflict between components, but a maintenance divergence.
+
+---
+
+## 16. Key Invariants (do not break)
 
 1. **One Three.js frame for all producers.** `three_z = 1.0 − base_x` must hold
    in `ros2_bridge`, `lidar_streamer`, and the rendered vehicle/algorithms, or
