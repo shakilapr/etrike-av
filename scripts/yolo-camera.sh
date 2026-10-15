@@ -54,6 +54,25 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     fi
 fi
 
+# 2b. Ensure execute permissions on perception scripts
+docker exec "$CONTAINER" chmod +x \
+    /workspace/autoware/src/our_packages/etrike_yolo_perception/scripts/yolo_perception_node.py \
+    /workspace/autoware/src/our_packages/etrike_yolo_perception/scripts/fusion_mesh_node.py \
+    /workspace/av_project/autoware/src/our_packages/etrike_yolo_perception/scripts/yolo_perception_node.py \
+    /workspace/av_project/autoware/src/our_packages/etrike_yolo_perception/scripts/fusion_mesh_node.py 2>/dev/null || true
+
+# 2c. Ensure Static Transforms for Kinect optical frame
+if ! docker exec "$CONTAINER" pgrep -f "static_transform_publisher.*kinect_front" >/dev/null 2>&1; then
+    docker exec -d "$CONTAINER" bash -c "
+        source /opt/ros/humble/setup.bash
+        ros2 run tf2_ros static_transform_publisher --x 1.2 --y 0.0 --z 1.0 --yaw 0.0 --pitch 0.0 --roll 0.0 --frame-id base_link --child-frame-id kinect_front_link
+    "
+    docker exec -d "$CONTAINER" bash -c "
+        source /opt/ros/humble/setup.bash
+        ros2 run tf2_ros static_transform_publisher --x 0.0 --y 0.0 --z 0.0 --yaw -1.5707963 --pitch 0.0 --roll -1.5707963 --frame-id kinect_front_link --child-frame-id kinect_front_optical_link
+    "
+fi
+
 # 3. Start Kinect v2 Front Driver if not already running
 if ! docker exec "$CONTAINER" pgrep -f "kinect2_node_exec" >/dev/null 2>&1; then
     echo "--> Starting Kinect v2 Front Camera Driver..."
@@ -78,8 +97,19 @@ if ! docker exec "$CONTAINER" pgrep -f "yolo_perception_node.py" >/dev/null 2>&1
         export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
         ros2 launch etrike_yolo_perception yolo_perception.launch.py publish_mode:=bench auto_start:=true > /tmp/yolo_perception.log 2>&1
     "
-    echo "--> Waiting for TensorRT 10.3 engines to deserialize (~4s)..."
-    sleep 4
+    echo "--> Waiting for TensorRT engines to load..."
+    for i in {1..12}; do
+        if docker exec "$CONTAINER" pgrep -f "yolo_perception_node.py" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+
+    if ! docker exec "$CONTAINER" pgrep -f "yolo_perception_node.py" >/dev/null 2>&1; then
+        echo "[ERROR] YOLO26x Perception Node failed to start. Last log lines:"
+        docker exec "$CONTAINER" tail -n 15 /tmp/yolo_perception.log 2>/dev/null || true
+        exit 1
+    fi
 else
     echo "--> YOLO26x Perception Node already running."
 fi
@@ -88,7 +118,7 @@ fi
 cleanup() {
     echo ""
     echo "--> Closing YOLO26x Camera Viewer..."
-    docker exec "$CONTAINER" pkill -f "yolo_cam_viewer.py" 2>/dev/null || true
+    docker exec "$CONTAINER" pkill -f "yolo_cam_viewer" 2>/dev/null || true
     exit 0
 }
 trap cleanup EXIT INT TERM
@@ -97,7 +127,7 @@ trap cleanup EXIT INT TERM
 echo "--> Opening Live Annotated Camera Window on $DISPLAY..."
 echo "    [Press 'Q' or 'ESC' in the window or Ctrl+C in terminal to close]"
 
-docker exec -e DISPLAY="$DISPLAY" -e XAUTHORITY="$XAUTHORITY" "$CONTAINER" bash -c '
+docker exec -e DISPLAY="$DISPLAY" -e XAUTHORITY="$XAUTHORITY" -e NO_AT_BRIDGE=1 "$CONTAINER" bash -c '
 source /opt/ros/humble/setup.bash
 source /workspace/autoware/install/setup.bash 2>/dev/null || true
 
@@ -120,15 +150,17 @@ class YoloCameraViewer(Node):
     def __init__(self):
         super().__init__("yolo_cam_viewer")
         self.bridge = CvBridge() if has_bridge else None
+        self.last_img = None
+        self.window_title = "YOLO26x Live Camera Annotations"
+        cv2.namedWindow(self.window_title, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(self.window_title, 1280, 720)
         self.sub = self.create_subscription(
             Image,
             "/bench_perception/camera/debug_image",
             self.image_cb,
             qos_profile_sensor_data
         )
-        self.window_title = "YOLO26x Live Camera Annotations"
-        cv2.namedWindow(self.window_title, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(self.window_title, 1280, 720)
+        self.timer = self.create_timer(0.033, self.render_tick)
         self.get_logger().info("Viewer window ready. Streaming from /bench_perception/camera/debug_image")
 
     def image_cb(self, msg):
@@ -141,14 +173,23 @@ class YoloCameraViewer(Node):
                     cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGRA2BGR)
                 elif msg.encoding == "rgb8":
                     cv_img = cv2.cvtColor(cv_img, cv2.COLOR_RGB2BGR)
-
-            cv2.imshow(self.window_title, cv_img)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q") or key == ord("Q") or key == 27:
-                self.get_logger().info("Exit key pressed.")
-                rclpy.shutdown()
+            self.last_img = cv_img
         except Exception as e:
             self.get_logger().warn(f"Image decode error: {e}")
+
+    def render_tick(self):
+        if self.last_img is not None:
+            cv2.imshow(self.window_title, self.last_img)
+        else:
+            splash = np.zeros((720, 1280, 3), dtype=np.uint8)
+            cv2.putText(splash, "Connecting to YOLO26x + RTMPose-s stream...", (360, 360),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 230, 255), 2)
+            cv2.imshow(self.window_title, splash)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key in (ord("q"), ord("Q"), 27):
+            self.get_logger().info("Exit key pressed.")
+            rclpy.shutdown()
 
 def main():
     rclpy.init()
