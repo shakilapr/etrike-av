@@ -1111,13 +1111,43 @@ class YoloPerceptionNode(LifecycleNode):
 
                     # Annotate debug visualization
                     if annotated_bgr is not None:
-                        color = (0, 255, 0) if is_ped else (255, 165, 0)
+                        color = (0, 255, 0) if is_ped else (0, 165, 255)
                         cv2.rectangle(annotated_bgr, (bx, by), (bx + bw, by + bh), color, 2)
-                        if not is_ped:
-                            caption = f"{coco_label.upper()} {conf*100:.0f}% ({est_z:.2f}m, y={y_base:+.2f}m)"
-                            cv2.putText(annotated_bgr, caption, (bx, max(22, by - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+                        if is_ped:
+                            yaw_deg = math.degrees(yaw_base)
+                            cap_lines = [
+                                f"PERSON {conf*100:.0f}% | {posture_str}",
+                                f"D:{est_z:.2f}m [X:{x_base:+.2f} Y:{y_base:+.2f} Z:{z_base:+.2f}] {yaw_deg:+.0f}\u00b0",
+                            ]
+                        else:
+                            cap_lines = [
+                                f"{coco_label.upper()} {conf*100:.0f}%",
+                                f"D:{est_z:.2f}m [Y:{y_base:+.2f}m]",
+                            ]
+
+                        # Render multi-line badges with dark background for high contrast
+                        curr_y = max(38, by - 8)
+                        for line_idx, line_txt in enumerate(reversed(cap_lines)):
+                            (tw, th), _ = cv2.getTextSize(line_txt, cv2.FONT_HERSHEY_SIMPLEX, 0.52, 2)
+                            ty = curr_y - (line_idx * (th + 6))
+                            cv2.rectangle(annotated_bgr, (bx, ty - th - 3), (bx + tw + 6, ty + 3), (20, 20, 20), -1)
+                            cv2.putText(annotated_bgr, line_txt, (bx + 3, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.52, color, 2)
 
             self._pub_objects.publish(out_msg)
+
+            # Top HUD banner overlay
+            if annotated_bgr is not None:
+                img_w = annotated_bgr.shape[1]
+                cv2.rectangle(annotated_bgr, (0, 0), (img_w, 42), (20, 22, 26), -1)
+                cv2.line(annotated_bgr, (0, 42), (img_w, 42), (0, 200, 255), 1)
+                hud_fps = round(1000.0 / max(1.0, self._last_infer_ms), 1)
+                hud_txt = (
+                    f"YOLO26x TRT FP16 + RTMPose-s | FPS: {hud_fps} | Latency: {self._last_infer_ms:.1f}ms | "
+                    f"Objects: {len(out_msg.objects)} | Sensor: Kinect v2 | Frame: base_link"
+                )
+                cv2.putText(annotated_bgr, hud_txt, (14, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 230, 255), 2)
+
 
             # Publish human skeletal poses every frame (including an empty payload).
             # Publishing the empty case clears stale poses in the dashboard, preventing
