@@ -11,6 +11,8 @@ bash ~/av_project/scripts/close_remote_control.sh
 Open Autoware Universe
 ```bash
 bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --universe
+
+bash ~/av_project/autoware/scripts/loading/load_pipeline.sh --bench
 ```
 
 Open Point Cloud
