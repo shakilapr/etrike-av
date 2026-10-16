@@ -281,6 +281,27 @@ bash scripts/check_camera_health.sh
   "
   ```
 
+---
+
+## 8. On-Demand Raw Sensor Capture (LiDAR + Camera Dataset)
+
+### Record 30s Raw Sensors & Download to Windows (One Command)
+```powershell
+pwsh scripts/record_and_fetch_sensors.ps1
+```
+* **What it does**: Connects to `med1`, records 30 seconds of raw Hesai XT32M2X point clouds (`/sensing/lidar/top/pointcloud_raw_ex`), Kinect v2 1080p RGB (`/kinect_front/color/image_raw`), depth (`/kinect_front/depth/image_raw`), camera intrinsics, and TF frames into a compressed MCAP file, then automatically transfers the completed file to `data/recordings/` on Windows.
+* **Custom Duration**: `pwsh scripts/record_and_fetch_sensors.ps1 -Duration 60`
+* **Include Perception**: `pwsh scripts/record_and_fetch_sensors.ps1 -WithPerception`
+
+### Record 30s Raw Sensors Locally on Jetson
+```bash
+bash ~/av_project/scripts/record_raw_sensors.sh
+```
+* *SSH:* `ssh med1@172.16.25.67 "bash ~/av_project/scripts/record_raw_sensors.sh"`
+* **Saves to**: `/workspace/data/recordings/raw_sensors_<TIMESTAMP>/`
+* **Custom Duration**: `bash ~/av_project/scripts/record_raw_sensors.sh -d 15`
+
+
 
 
 

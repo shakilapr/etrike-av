@@ -352,12 +352,6 @@ void Kinect2Node::capture_loop()
         device_ok_ = true;
         auto stamp = this->now();
         publish_frame(frames, stamp);
-        {
-          std::lock_guard<std::mutex> lock(device_mutex_);
-          if (device_) {
-            device_->release_frames(frames);
-          }
-        }
       }
 
       // While streaming, only check diagnostics periodically; do NOT sleep a
@@ -387,44 +381,67 @@ void Kinect2Node::capture_loop()
 
 void Kinect2Node::publish_frame(FrameSet & frames, const rclcpp::Time & stamp)
 {
+  sensor_msgs::msg::Image::SharedPtr color_msg;
+  sensor_msgs::msg::CameraInfo color_ci;
+  sensor_msgs::msg::Image::SharedPtr depth_msg;
+  sensor_msgs::msg::CameraInfo depth_ci;
+  sensor_msgs::msg::Image::SharedPtr depth_reg_msg;
+  sensor_msgs::msg::Image::SharedPtr ir_msg;
+
   if (color_enabled_ && frames.color) {
-    auto msg = FrameConverter::to_color_image(*frames.color, frame_id_color_, stamp);
-    color_pub_->publish(*msg);
+    color_msg = FrameConverter::to_color_image(*frames.color, frame_id_color_, stamp);
+    color_ci = color_info_;
+    color_ci.header.stamp = stamp;
+    color_ci.header.frame_id = frame_id_color_;
+  }
 
-    auto ci = color_info_;
-    ci.header.stamp = stamp;
-    ci.header.frame_id = frame_id_color_;
-    color_info_pub_->publish(ci);
+  if (depth_enabled_ && frames.depth) {
+    depth_msg = FrameConverter::to_depth_image(*frames.depth, frame_id_depth_, stamp);
+    depth_ci = depth_info_;
+    depth_ci.header.stamp = stamp;
+    depth_ci.header.frame_id = frame_id_depth_;
+  }
 
+  if (registration_enabled_ && frames.depth && frames.color && depth_registered_pub_) {
+    depth_reg_msg = FrameConverter::to_registered_depth_image(
+      *frames.depth, *frames.color, *device_->registration(),
+      frame_id_depth_, stamp);
+  }
+
+  if (ir_enabled_ && frames.ir) {
+    ir_msg = FrameConverter::to_ir_image(*frames.ir, frame_id_ir_, stamp);
+  }
+
+  // Release hardware frames IMMEDIATELY before DDS publication.
+  // This unblocks the libfreenect2 USB transfer ring buffer in < 0.2 ms
+  // so the hardware never drops the next incoming USB frame.
+  {
+    std::lock_guard<std::mutex> lock(device_mutex_);
+    if (device_) {
+      device_->release_frames(frames);
+    }
+  }
+
+  if (color_msg) {
+    color_pub_->publish(*color_msg);
+    color_info_pub_->publish(color_ci);
     color_frames_delivered_++;
     color_frames_in_window_++;
   }
 
-  if (depth_enabled_ && frames.depth) {
-    auto msg = FrameConverter::to_depth_image(*frames.depth, frame_id_depth_, stamp);
-    depth_pub_->publish(*msg);
-
-    auto ci = depth_info_;
-    ci.header.stamp = stamp;
-    ci.header.frame_id = frame_id_depth_;
-    depth_info_pub_->publish(ci);
-
+  if (depth_msg) {
+    depth_pub_->publish(*depth_msg);
+    depth_info_pub_->publish(depth_ci);
     depth_frames_delivered_++;
     depth_frames_in_window_++;
   }
 
-  if (registration_enabled_ && frames.depth && frames.color && depth_registered_pub_) {
-    // Color-aligned depth using libfreenect2's factory-calibrated
-    // registration (see frame_converter for the algorithm).
-    auto msg = FrameConverter::to_registered_depth_image(
-      *frames.depth, *frames.color, *device_->registration(),
-      frame_id_depth_, stamp);
-    depth_registered_pub_->publish(*msg);
+  if (depth_reg_msg) {
+    depth_registered_pub_->publish(*depth_reg_msg);
   }
 
-  if (ir_enabled_ && frames.ir) {
-    auto msg = FrameConverter::to_ir_image(*frames.ir, frame_id_ir_, stamp);
-    ir_pub_->publish(*msg);
+  if (ir_msg) {
+    ir_pub_->publish(*ir_msg);
     ir_frames_delivered_++;
     ir_frames_in_window_++;
   }

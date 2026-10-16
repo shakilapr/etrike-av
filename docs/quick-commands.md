@@ -35,3 +35,14 @@ Close YOLO 26x Camera
 bash ~/av_project/scripts/close_camera.sh
 ```
 
+Record 30s Raw Sensors (LiDAR + Camera) & Auto-Sync to Windows
+```powershell
+pwsh scripts/record_and_fetch_sensors.ps1
+```
+
+Record 30s Raw Sensors (Jetson Local Only)
+```bash
+bash ~/av_project/scripts/record_raw_sensors.sh
+```
+
+

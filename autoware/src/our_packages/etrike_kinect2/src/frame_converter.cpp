@@ -25,11 +25,11 @@ sensor_msgs::msg::Image::SharedPtr FrameConverter::to_color_image(
   const std::string & frame_id,
   const rclcpp::Time & stamp)
 {
+  // libfreenect2 outputs BGRX (4-channel uint8). Wrapping directly as bgra8
+  // avoids 15-20 ms of synchronous CPU cv::cvtColor per frame.
   cv::Mat bgra(frame.height, frame.width, CV_8UC4, frame.data);
-  cv::Mat bgr;
-  cv::cvtColor(bgra, bgr, cv::COLOR_BGRA2BGR);
 
-  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", bgr).toImageMsg();
+  auto msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgra8", bgra).toImageMsg();
   msg->header.frame_id = frame_id;
   msg->header.stamp = stamp;
   return msg;

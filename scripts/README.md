@@ -14,6 +14,8 @@ This directory contains utility scripts for workspace management, testing, diagn
    - [setup_ptp.sh](file:///E:/work/av_project/scripts/setup_ptp.sh)
    - [lidar_bringup.sh](file:///E:/work/av_project/scripts/lidar_bringup.sh)
    - [lidar_standalone.sh](file:///E:/work/av_project/scripts/lidar_standalone.sh)
+   - [record_raw_sensors.sh](file:///E:/work/av_project/scripts/record_raw_sensors.sh)
+   - [record_and_fetch_sensors.ps1](file:///E:/work/av_project/scripts/record_and_fetch_sensors.ps1)
 3. [DDS & ROS2 Diagnostics](#3-dds--ros2-diagnostics)
    - [dds_diag.sh](file:///E:/work/av_project/scripts/dds_diag.sh)
    - [check_dds_diag.sh](file:///E:/work/av_project/scripts/check_dds_diag.sh)
@@ -272,6 +274,25 @@ This directory contains utility scripts for workspace management, testing, diagn
       - DISPLAY, XDG_RUNTIME_DIR, and X11-unix volume mount for graphical forwarding
       - Workspace directories mounted
       - COMMAND: Source environments and launch "ros2 launch etrike_lidar_viewer lidar_view.launch.py"
+  ```
+
+### [record_raw_sensors.sh](file:///E:/work/av_project/scripts/record_raw_sensors.sh)
+* **Description**: On-demand raw 3D LiDAR (Hesai XT32M2X) and Camera (Kinect v2 RGB-D) 30s capture script on the Jetson. Records raw point clouds, 1080p RGB, depth, camera calibration infos, and TF transforms into a compressed MCAP bag (`data/recordings/`) with zero background overhead.
+* **Usage**:
+  ```bash
+  bash scripts/record_raw_sensors.sh               # 30s capture (default)
+  bash scripts/record_raw_sensors.sh -d 15        # 15s capture
+  bash scripts/record_raw_sensors.sh --with-perception # include 3D perception objects
+  ```
+
+### [record_and_fetch_sensors.ps1](file:///E:/work/av_project/scripts/record_and_fetch_sensors.ps1)
+* **Description**: PowerShell wrapper that triggers 30s raw sensor recording on `med1` over SSH, waits for capture completion, and automatically transfers the compressed MCAP bag file directly to your local Windows `data/recordings/` folder via SCP.
+* **Usage**:
+  ```powershell
+  pwsh scripts/record_and_fetch_sensors.ps1                   # Record 30s and download
+  pwsh scripts/record_and_fetch_sensors.ps1 -Duration 15     # 15s recording
+  pwsh scripts/record_and_fetch_sensors.ps1 -WithPerception  # Include perception debug topics
+  pwsh scripts/record_and_fetch_sensors.ps1 -NoFetch         # Record on Jetson only, skip transfer
   ```
 
 ---

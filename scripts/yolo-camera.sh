@@ -73,6 +73,19 @@ if ! docker exec "$CONTAINER" pgrep -f "static_transform_publisher.*kinect_front
     "
 fi
 
+# 2d. Ensure TensorRT Python and CUDA runtime libraries are available
+if ! docker exec "$CONTAINER" python3 -c "import tensorrt" >/dev/null 2>&1; then
+    echo "--> Provisioning TensorRT Python runtime inside container..."
+    if [ -d "$HOME/packages" ]; then
+        docker cp "$HOME/packages/." "$CONTAINER":/tmp/packages/ 2>/dev/null || true
+        docker exec "$CONTAINER" bash -c "dpkg -i /tmp/packages/*.deb >/dev/null 2>&1 && ldconfig" || true
+    fi
+    if [ -f /usr/local/cuda-12.6/targets/aarch64-linux/lib/libcudla.so.1 ]; then
+        docker cp -L /usr/local/cuda-12.6/targets/aarch64-linux/lib/libcudla.so.1 "$CONTAINER":/usr/lib/aarch64-linux-gnu/ 2>/dev/null || true
+        docker exec "$CONTAINER" ldconfig >/dev/null 2>&1 || true
+    fi
+fi
+
 # 3. Start Kinect v2 Front Driver if not already running
 if ! docker exec "$CONTAINER" pgrep -f "kinect2_node_exec" >/dev/null 2>&1; then
     echo "--> Starting Kinect v2 Front Camera Driver..."
@@ -104,6 +117,7 @@ if ! docker exec "$CONTAINER" pgrep -f "yolo_perception_node.py" >/dev/null 2>&1
         fi
         sleep 1
     done
+    sleep 2
 
     if ! docker exec "$CONTAINER" pgrep -f "yolo_perception_node.py" >/dev/null 2>&1; then
         echo "[ERROR] YOLO26x Perception Node failed to start. Last log lines:"
@@ -137,7 +151,7 @@ import numpy as np
 import cv2
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy, QoSHistoryPolicy
 from sensor_msgs.msg import Image
 
 try:
@@ -154,14 +168,30 @@ class YoloCameraViewer(Node):
         self.window_title = "YOLO26x Live Camera Annotations"
         cv2.namedWindow(self.window_title, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(self.window_title, 1280, 720)
+
+        qos_realtime = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+
         self.sub = self.create_subscription(
             Image,
             "/bench_perception/camera/debug_image",
             self.image_cb,
-            qos_profile_sensor_data
+            qos_realtime
         )
-        self.timer = self.create_timer(0.033, self.render_tick)
-        self.get_logger().info("Viewer window ready. Streaming from /bench_perception/camera/debug_image")
+        self.splash_timer = self.create_timer(0.5, self.show_splash)
+        self.get_logger().info("Viewer window ready. Streaming from /bench_perception/camera/debug_image (zero-lag)")
+
+    def show_splash(self):
+        if self.last_img is None:
+            splash = np.zeros((720, 1280, 3), dtype=np.uint8)
+            cv2.putText(splash, "Connecting to YOLO26x + RTMPose-s stream...", (360, 360),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 230, 255), 2)
+            cv2.imshow(self.window_title, splash)
+            cv2.waitKey(1)
 
     def image_cb(self, msg):
         try:
@@ -174,22 +204,13 @@ class YoloCameraViewer(Node):
                 elif msg.encoding == "rgb8":
                     cv_img = cv2.cvtColor(cv_img, cv2.COLOR_RGB2BGR)
             self.last_img = cv_img
+            cv2.imshow(self.window_title, cv_img)
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), ord("Q"), 27):
+                self.get_logger().info("Exit key pressed.")
+                rclpy.shutdown()
         except Exception as e:
             self.get_logger().warn(f"Image decode error: {e}")
-
-    def render_tick(self):
-        if self.last_img is not None:
-            cv2.imshow(self.window_title, self.last_img)
-        else:
-            splash = np.zeros((720, 1280, 3), dtype=np.uint8)
-            cv2.putText(splash, "Connecting to YOLO26x + RTMPose-s stream...", (360, 360),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 230, 255), 2)
-            cv2.imshow(self.window_title, splash)
-
-        key = cv2.waitKey(1) & 0xFF
-        if key in (ord("q"), ord("Q"), 27):
-            self.get_logger().info("Exit key pressed.")
-            rclpy.shutdown()
 
 def main():
     rclpy.init()

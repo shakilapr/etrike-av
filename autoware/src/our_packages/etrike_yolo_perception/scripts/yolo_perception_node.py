@@ -1160,9 +1160,14 @@ class YoloPerceptionNode(LifecycleNode):
                 }
                 self._pub_human_poses.publish(String(data=json.dumps(poses_payload)))
 
-            # Publish debug image
+            # Publish debug image (downscaled to 960x540 for responsive real-time DDS streaming)
             if annotated_bgr is not None and self._pub_debug_img and self._pub_debug_img.is_activated:
-                debug_msg = self._bridge.cv2_to_imgmsg(annotated_bgr, encoding="bgr8")
+                h_dbg, w_dbg = annotated_bgr.shape[:2]
+                if w_dbg > 960:
+                    debug_out = cv2.resize(annotated_bgr, (960, int(h_dbg * 960 / w_dbg)), interpolation=cv2.INTER_LINEAR)
+                else:
+                    debug_out = annotated_bgr
+                debug_msg = self._bridge.cv2_to_imgmsg(debug_out, encoding="bgr8")
                 debug_msg.header = out_msg.header
                 self._pub_debug_img.publish(debug_msg)
 
