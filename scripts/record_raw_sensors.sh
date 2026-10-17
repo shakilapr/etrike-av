@@ -128,13 +128,11 @@ if [ "$IN_CONTAINER" = "true" ]; then
     echo "--> Starting ros2 bag recording for ${DURATION}s..."
     mkdir -p "/workspace/data/recordings"
     
-    # Run ros2 bag record with timeout fallback to ensure clean SIGINT exit
-    TIMEOUT_SEC=$((DURATION + 3))
-    timeout --signal=SIGINT "${TIMEOUT_SEC}" ros2 bag record \
+    # Run ros2 bag record with timeout --signal=SIGINT for clean bag finalization
+    timeout --signal=SIGINT "${DURATION}" ros2 bag record \
         --storage mcap \
         --compression-mode file \
         --compression-format zstd \
-        --max-duration "${DURATION}" \
         --output "${CONTAINER_BAG_PATH}" \
         "${TOPICS[@]}" || true
 
@@ -176,7 +174,6 @@ else
     fi
 
     echo "--> Initiating recording inside container ($DURATION seconds)..."
-    TIMEOUT_SEC=$((DURATION + 3))
     TOPIC_STR="${TOPICS[*]}"
 
     docker exec "$CONTAINER" bash -c "
@@ -186,11 +183,10 @@ else
         export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
         mkdir -p /workspace/data/recordings
 
-        timeout --signal=SIGINT ${TIMEOUT_SEC} ros2 bag record \
+        timeout --signal=SIGINT ${DURATION} ros2 bag record \
             --storage mcap \
             --compression-mode file \
             --compression-format zstd \
-            --max-duration ${DURATION} \
             --output '${CONTAINER_BAG_PATH}' \
             ${TOPIC_STR} || true
     "

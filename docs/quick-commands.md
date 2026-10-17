@@ -25,7 +25,12 @@ Close All
 bash ~/av_project/scripts/close_everything.sh
 ```
 
-Open YOLO 26x Camera
+Open YOLO 26x Camera (GPU Accelerated - 25+ FPS)
+```bash
+bash ~/av_project/scripts/yolo-camera-gpu.sh
+```
+
+Open YOLO 26x Camera (Standard)
 ```bash
 bash ~/av_project/scripts/yolo-camera.sh
 ```

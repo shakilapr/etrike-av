@@ -14,13 +14,28 @@
 
 param (
     [int]$Duration = 30,
-    [string]$TargetHost = "med1@172.16.25.67",
+    [string]$TargetHost = "",
     [string]$DestinationDir = "e:\work\av_project\data\recordings",
     [switch]$WithPerception,
     [switch]$NoFetch
 )
 
 $ErrorActionPreference = "Stop"
+
+# Auto-detect target host if not explicitly specified
+if (-not $TargetHost) {
+    $candidateHosts = @("med1@10.226.206.145", "med1@172.16.25.67")
+    foreach ($cand in $candidateHosts) {
+        $testSsh = ssh -o ConnectTimeout=2 -o BatchMode=yes $cand "echo OK" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $TargetHost = $cand
+            break
+        }
+    }
+    if (-not $TargetHost) {
+        $TargetHost = "med1@10.226.206.145" # fallback
+    }
+}
 
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host " On-Demand Raw Sensor Capture & Sync (${Duration}s)" -ForegroundColor Cyan
