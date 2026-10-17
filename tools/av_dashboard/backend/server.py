@@ -1,20 +1,10 @@
-"""FastAPI server and WebSocket broadcaster for CAN Watcher.
-
-Conforms to canonical architecture:
-- REST /api/v1
-- WebSocket /ws/v1/stream
-- Static React / Vite production bundle mount
-"""
+"""FastAPI server and WebSocket broadcaster for CAN Watcher."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
 import json
-import math
-import os
-import struct
-import sys
 import threading
 import time
 from pathlib import Path
@@ -23,23 +13,33 @@ from typing import Any, Dict, List, Optional, Set
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from tools.av_dashboard.backend.contracts import ContractRegistry
 from tools.av_dashboard.backend.mhr_service import MhrService
 from tools.av_dashboard.backend.ros2_bridge import Ros2Bridge
+from tools.av_dashboard.backend.server_routes import create_api_router
+from tools.av_dashboard.backend.server_state import (
+    decay_stale_frame_rates,
+    frame_counts,
+    frame_rates,
+    frame_timestamps,
+    latest_frames,
+    recent_timestamps,
+    refresh_telemetry_summary,
+    start_time,
+    telemetry_summary,
+    total_frames,
+    update_telemetry_summary,
+)
 from tools.av_dashboard.backend.transport import BaseCanTransport, CanFrame, create_transport
+from tools.av_dashboard.backend import server_state
 
 app = FastAPI(title="AV Dashboard API", version="2.0.0")
-
 ros_bridge = Ros2Bridge()
-
-# Optional Meta Momentum Human Rig (MHR) sidecar. Fail-closed: if the TorchScript
-# model or PyTorch is missing, the cockpit falls back to its procedural mesh.
 mhr_service = MhrService()
 
-# Enable CORS for Vite dev server during development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -49,17 +49,13 @@ app.add_middleware(
 )
 
 FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
-
 registry: ContractRegistry = ContractRegistry()
 transport: Optional[BaseCanTransport] = None
 active_websockets: Set[WebSocket] = set()
-
-# Serializes concurrent sends (CAN batch loop + independent ROS loop) on the same sockets.
 _send_lock = asyncio.Lock()
 
 
 def _ros_snapshot() -> Dict[str, Any]:
-    """Build the ROS 2 perception/planning payload plus its diagnostic status."""
     ros_data = ros_bridge.get_latest_data()
     return {
         "ros_status": {
@@ -86,7 +82,6 @@ def _ros_snapshot() -> Dict[str, Any]:
 
 
 async def _send_all(payload: Dict[str, Any]) -> None:
-    """Broadcast a JSON payload to all live websockets, pruning stale ones."""
     if not active_websockets:
         return
     msg_text = json.dumps(payload)
@@ -100,295 +95,9 @@ async def _send_all(payload: Dict[str, Any]) -> None:
         for ws in stale_sockets:
             active_websockets.discard(ws)
 
-# Live tracking state
-total_frames: int = 0
-start_time: float = time.time()
-latest_frames: Dict[int, Dict[str, Any]] = {}
-frame_counts: Dict[int, int] = {}
-frame_timestamps: Dict[int, float] = {}
-frame_rates: Dict[int, float] = {}
-recent_timestamps: Dict[int, List[float]] = {}
-bus_frame_timestamps: List[float] = []
-last_hw_rx_time: Dict[int, float] = {}
-last_host_tx_time: Dict[int, float] = {}
-
-HW_FEEDBACK_IDS = (0x121, 0x210, 0x310, 0x311, 0x011, 0x206, 0x120)
-HOST_CMD_IDS = (0x300, 0x301, 0x302, 0x303, 0x7FC)
-FEEDBACK_FRESH_SEC = 1.5
-
-
-def _decay_stale_frame_rates() -> List[Dict[str, Any]]:
-    """Prune >1.0s timestamps per CAN ID and return any frame entries whose rate_hz decayed."""
-    now = time.time()
-    decayed: List[Dict[str, Any]] = []
-    for can_id, entry in list(latest_frames.items()):
-        q = recent_timestamps.get(can_id)
-        if q is not None:
-            while q and (now - q[0]) > 1.0:
-                q.pop(0)
-            new_rate = round(float(len(q)), 1) if q else 0.0
-        else:
-            new_rate = 0.0
-        if entry.get("rate_hz") != new_rate:
-            entry["rate_hz"] = new_rate
-            frame_rates[can_id] = new_rate
-            decayed.append(entry)
-    return decayed
-
-# Telemetry summary for glanceable dashboard
-telemetry_summary: Dict[str, Any] = {
-    "mode": "MANUAL",
-    "estop": False,
-    "estop_reason": 0,
-    "gear": "N",
-    "gear_cmd": "N",
-    "gear_act": "N",
-    "speed_cmd_kmh": 0.0,
-    "speed_act_kmh": 0.0,
-    "steer_cmd_deg": 0.0,
-    "steer_act_deg": 0.0,
-    "brake_cmd_kpa": 0.0,
-    "brake_act_kpa": 0.0,
-    "lights_cmd": {"left": False, "right": False, "hazard": False, "headlight": False, "brake": False},
-    "lights_act": {"left": False, "right": False, "hazard": False, "headlight": False, "brake": False},
-    "motor_rpm": None,
-    "throttle_pct": None,
-    "bus_rate_hz": 0.0,
-    "can_connected": False,
-    "is_simulated": False,
-    "can_interface": "can2",
-    "telemetry_source": "OFFLINE",
-}
-
-
-def _refresh_telemetry_summary() -> Dict[str, Any]:
-    """Recompute time-windowed bus rate, link status, and bench/ROS fallback telemetry."""
-    now = time.time()
-    while bus_frame_timestamps and (now - bus_frame_timestamps[0]) > 1.0:
-        bus_frame_timestamps.pop(0)
-
-    telemetry_summary["bus_rate_hz"] = round(float(len(bus_frame_timestamps)), 1)
-    telemetry_summary["can_connected"] = bool(transport.is_connected) if transport else False
-    telemetry_summary["is_simulated"] = bool(transport.is_simulated) if transport else False
-    telemetry_summary["can_interface"] = transport.interface if transport else "can2"
-
-    has_hw_feedback = any(
-        (now - last_hw_rx_time.get(cid, 0.0)) < FEEDBACK_FRESH_SEC
-        for cid in (0x121, 0x210, 0x310, 0x311, 0x011)
-    )
-    has_host_cmd = any(
-        (now - last_host_tx_time.get(cid, 0.0)) < FEEDBACK_FRESH_SEC
-        for cid in (0x300, 0x301, 0x302, 0x303)
-    )
-
-    if transport and transport.is_simulated:
-        telemetry_summary["telemetry_source"] = "SIMULATED"
-    elif has_hw_feedback:
-        telemetry_summary["telemetry_source"] = "ECU_FEEDBACK"
-    elif has_host_cmd:
-        # Bench mode (autoware_vehicle_bridge sim_mode:=true on can2 without physical STM32/ESP32 ECUs):
-        # mirror commanded states into _act so the 3D cockpit & gauges reflect live bench CAN output.
-        telemetry_summary["telemetry_source"] = "BENCH_CMD"
-        telemetry_summary["speed_act_kmh"] = telemetry_summary["speed_cmd_kmh"]
-        telemetry_summary["steer_act_deg"] = telemetry_summary["steer_cmd_deg"]
-        telemetry_summary["brake_act_kpa"] = telemetry_summary["brake_cmd_kpa"]
-        telemetry_summary["lights_act"] = dict(telemetry_summary["lights_cmd"])
-        telemetry_summary["gear_act"] = telemetry_summary["gear_cmd"]
-        telemetry_summary["gear"] = telemetry_summary["gear_cmd"]
-        if (now - last_host_tx_time.get(0x300, 0.0)) < FEEDBACK_FRESH_SEC and (
-            telemetry_summary["gear_cmd"] != "N"
-            or abs(float(telemetry_summary["speed_cmd_kmh"])) > 0.05
-            or abs(float(telemetry_summary["steer_cmd_deg"])) > 0.1
-        ):
-            telemetry_summary["mode"] = "AUTO"
-        else:
-            telemetry_summary["mode"] = "MANUAL"
-    else:
-        ros_data = ros_bridge.get_latest_data()
-        veh_ros = ros_data.get("vehicle_status") or {}
-        if ros_data.get("has_ego_pose") or veh_ros.get("fresh"):
-            telemetry_summary["telemetry_source"] = "ROS_SIM"
-            ego_spd = float(
-                veh_ros.get("speed_act_kmh")
-                if veh_ros.get("speed_act_kmh") is not None
-                else ros_data.get("ego_speed_kmh", 0.0)
-            )
-            cmd_spd = float(
-                veh_ros.get("speed_cmd_kmh")
-                if veh_ros.get("speed_cmd_kmh") is not None
-                else ego_spd
-            )
-            telemetry_summary["speed_act_kmh"] = round(ego_spd, 1)
-            telemetry_summary["speed_cmd_kmh"] = round(cmd_spd, 1)
-            if veh_ros.get("steer_act_deg") is not None:
-                telemetry_summary["steer_act_deg"] = round(float(veh_ros["steer_act_deg"]), 1)
-            elif veh_ros.get("steer_cmd_deg") is not None:
-                telemetry_summary["steer_act_deg"] = round(float(veh_ros["steer_cmd_deg"]), 1)
-            if veh_ros.get("steer_cmd_deg") is not None:
-                telemetry_summary["steer_cmd_deg"] = round(float(veh_ros["steer_cmd_deg"]), 1)
-            telemetry_summary["gear"] = (
-                veh_ros.get("gear")
-                or ("D" if abs(ego_spd) > 0.05 else "N")
-            )
-            telemetry_summary["gear_act"] = telemetry_summary["gear"]
-            telemetry_summary["mode"] = (
-                veh_ros.get("mode")
-                or ("AUTO" if ros_data.get("trajectory") else "MANUAL")
-            )
-            if veh_ros.get("lights"):
-                telemetry_summary["lights_act"] = dict(veh_ros["lights"])
-        else:
-            telemetry_summary["telemetry_source"] = "OFFLINE"
-
-    if (now - last_hw_rx_time.get(0x206, 0.0)) >= FEEDBACK_FRESH_SEC:
-        telemetry_summary["motor_rpm"] = None
-    if (now - last_hw_rx_time.get(0x120, 0.0)) >= FEEDBACK_FRESH_SEC:
-        telemetry_summary["throttle_pct"] = None
-
-    return telemetry_summary
-
-
-def update_telemetry_summary(can_id: int, decoded: Dict[str, Any], raw_data: bytes) -> None:
-    """Update high-level vehicle telemetry from parsed signals."""
-    global telemetry_summary
-    now = time.time()
-
-    if can_id in HW_FEEDBACK_IDS:
-        last_hw_rx_time[can_id] = now
-    if can_id in HOST_CMD_IDS:
-        last_host_tx_time[can_id] = now
-
-    # 1. Host Drive Cmd (0x300) - Commanded speed and gear
-    if can_id == 0x300:
-        if "speed_mmps" in decoded:
-            telemetry_summary["speed_cmd_kmh"] = round(decoded["speed_mmps"]["value"] * 0.0036, 1)
-        elif len(raw_data) >= 4:
-            s_raw = struct.unpack(">i", raw_data[:4])[0]
-            telemetry_summary["speed_cmd_kmh"] = round(s_raw * 0.0036, 1)
-        if len(raw_data) >= 8:
-            gear_raw = raw_data[7]
-            g_cmd = {0: "N", 1: "D", 2: "S", 3: "R"}.get(gear_raw, "N")
-            telemetry_summary["gear_cmd"] = g_cmd
-            if telemetry_summary.get("mode") == "AUTO" or telemetry_summary.get("gear_act") == "N":
-                telemetry_summary["gear"] = g_cmd
-
-    # 2. RT Motion Report (0x121) - Feedback speed and yaw
-    elif can_id == 0x121:
-        if "speed_mmps" in decoded:
-            telemetry_summary["speed_act_kmh"] = round(decoded["speed_mmps"]["value"] * 0.0036, 1)
-        elif len(raw_data) >= 2:
-            s_raw = struct.unpack(">h", raw_data[:2])[0]
-            telemetry_summary["speed_act_kmh"] = round(s_raw * 0.0036, 1)
-        if "gear" in decoded:
-            g_val = int(decoded["gear"]["raw"])
-            g_act = {0: "N", 1: "D", 2: "S", 3: "R"}.get(g_val, "N")
-            telemetry_summary["gear_act"] = g_act
-            if telemetry_summary.get("mode") != "AUTO":
-                telemetry_summary["gear"] = g_act
-        elif len(raw_data) >= 6:
-            g_act = {0: "N", 1: "D", 2: "S", 3: "R"}.get(raw_data[5], "N")
-            telemetry_summary["gear_act"] = g_act
-            if telemetry_summary.get("mode") != "AUTO":
-                telemetry_summary["gear"] = g_act
-
-    # 3. Host Steer Cmd (0x303) - Commanded steering
-    elif can_id == 0x303:
-        if "steer_angle_0_1deg" in decoded and isinstance(decoded["steer_angle_0_1deg"].get("raw"), (int, float)):
-            telemetry_summary["steer_cmd_deg"] = round(float(decoded["steer_angle_0_1deg"]["raw"]) * 0.1, 1)
-        elif len(raw_data) >= 2:
-            st_raw = struct.unpack(">h", raw_data[:2])[0]
-            telemetry_summary["steer_cmd_deg"] = round(st_raw * 0.1, 1)
-
-    # 4. Steer Diag (0x310) - Feedback steering
-    elif can_id == 0x310:
-        if "angle_0_1deg" in decoded and isinstance(decoded["angle_0_1deg"].get("value"), (int, float)):
-            telemetry_summary["steer_act_deg"] = round(float(decoded["angle_0_1deg"]["value"]), 1)
-        elif len(raw_data) >= 2:
-            ang_raw = (raw_data[0] << 8) | raw_data[1]
-            deg = (ang_raw - 30000) * 0.1
-            telemetry_summary["steer_act_deg"] = round(deg, 1)
-
-    # 5. Host Brake Req (0x301) - Commanded brake (signed 32-bit in host.yaml)
-    elif can_id == 0x301:
-        if "brake_pressure_kpa" in decoded and isinstance(decoded["brake_pressure_kpa"].get("value"), (int, float)):
-            telemetry_summary["brake_cmd_kpa"] = round(float(decoded["brake_pressure_kpa"]["value"]), 1)
-        elif len(raw_data) >= 4:
-            p_kpa = struct.unpack(">i", raw_data[:4])[0]
-            telemetry_summary["brake_cmd_kpa"] = round(float(p_kpa), 1)
-
-    # 6. Brake Diag (0x311) - Feedback brake (factor 0.05 in rt.yaml)
-    elif can_id == 0x311:
-        if "pressure_raw" in decoded and isinstance(decoded["pressure_raw"].get("value"), (int, float)):
-            telemetry_summary["brake_act_kpa"] = round(float(decoded["pressure_raw"]["value"]), 1)
-        elif len(raw_data) >= 2:
-            p_raw = (raw_data[0] << 8) | raw_data[1]
-            telemetry_summary["brake_act_kpa"] = round(p_raw * 0.05, 1)
-
-    # 7. Host Light Cmd (0x302) - Commanded lights
-    elif can_id == 0x302:
-        if len(raw_data) >= 1:
-            b = raw_data[0]
-            telemetry_summary["lights_cmd"] = {
-                "left": bool(b & 0x01),
-                "right": bool(b & 0x02),
-                "hazard": bool((b & 0x03) == 0x03),
-                "brake": bool(b & 0x04),
-                "headlight": bool(b & 0x08),
-            }
-
-    # 8. Sys Safety Sts (0x011) - Feedback lights and ESTOP
-    elif can_id == 0x011:
-        if len(raw_data) >= 1:
-            telemetry_summary["estop"] = bool(raw_data[0])
-        if len(raw_data) >= 3:
-            b = raw_data[2]
-            telemetry_summary["lights_act"] = {
-                "left": bool(b & 0x01),
-                "right": bool(b & 0x02),
-                "hazard": bool((b & 0x03) == 0x03),
-                "brake": bool(b & 0x04),
-                "headlight": bool(b & 0x08),
-            }
-
-    # 9. RT State Report (0x210) - Mode & Safety state
-    elif can_id == 0x210:
-        if len(raw_data) >= 1:
-            m_code = raw_data[0]
-            telemetry_summary["mode"] = {0: "MANUAL", 1: "AUTO", 2: "ESTOP"}.get(m_code, "MANUAL")
-        if len(raw_data) >= 2:
-            telemetry_summary["estop_reason"] = (raw_data[1] >> 4) & 0x0F
-
-    # 10. Motor Feedback (0x206) - Motor RPM derived from signed motor_command_speed_mmps
-    elif can_id == 0x206:
-        if "motor_rpm" in decoded and isinstance(decoded["motor_rpm"].get("value"), (int, float)):
-            telemetry_summary["motor_rpm"] = int(decoded["motor_rpm"]["value"])
-        elif (
-            "motor_command_speed_mmps" in decoded
-            and isinstance(decoded["motor_command_speed_mmps"].get("value"), (int, float))
-        ):
-            mmps = float(decoded["motor_command_speed_mmps"]["value"])
-            telemetry_summary["motor_rpm"] = int(round((abs(mmps) / 1000.0) / (2.0 * math.pi * 0.254) * 60.0))
-        elif len(raw_data) >= 2:
-            mmps = float(struct.unpack(">h", raw_data[:2])[0])
-            telemetry_summary["motor_rpm"] = int(round((abs(mmps) / 1000.0) / (2.0 * math.pi * 0.254) * 60.0))
-
-    # 11. Sys Throttle Sts (0x120) - Throttle demand % derived from signed speed_mmps
-    elif can_id == 0x120:
-        if "throttle_pct" in decoded and isinstance(decoded["throttle_pct"].get("value"), (int, float)):
-            telemetry_summary["throttle_pct"] = round(float(decoded["throttle_pct"]["value"]), 1)
-        elif "speed_mmps" in decoded and isinstance(decoded["speed_mmps"].get("value"), (int, float)):
-            mmps = float(decoded["speed_mmps"]["value"])
-            telemetry_summary["throttle_pct"] = min(100.0, round(abs(mmps) / 3000.0 * 100.0, 1))
-        elif len(raw_data) >= 2:
-            mmps = float(struct.unpack(">h", raw_data[:2])[0])
-            telemetry_summary["throttle_pct"] = min(100.0, round(abs(mmps) / 3000.0 * 100.0, 1))
-
-    _refresh_telemetry_summary()
-
 
 async def ingest_can_loop() -> None:
-    """Continuously ingest CAN frames, update state, and broadcast to WebSocket clients."""
-    global total_frames, transport, registry
+    global transport, registry
     if transport is not None:
         await transport.start()
 
@@ -402,13 +111,13 @@ async def ingest_can_loop() -> None:
                 continue
             async for frame in transport.frames():
                 now = time.time()
-                total_frames += 1
+                server_state.total_frames += 1
                 can_id = frame.can_id
                 frame_counts[can_id] = frame_counts.get(can_id, 0) + 1
 
-                bus_frame_timestamps.append(now)
-                while bus_frame_timestamps and (now - bus_frame_timestamps[0]) > 1.0:
-                    bus_frame_timestamps.pop(0)
+                server_state.bus_frame_timestamps.append(now)
+                while server_state.bus_frame_timestamps and (now - server_state.bus_frame_timestamps[0]) > 1.0:
+                    server_state.bus_frame_timestamps.pop(0)
 
                 if can_id not in recent_timestamps:
                     recent_timestamps[can_id] = []
@@ -421,7 +130,7 @@ async def ingest_can_loop() -> None:
                 frame_timestamps[can_id] = now
 
                 decoded_signals, bit_cells = registry.decode_frame(can_id, frame.data)
-                update_telemetry_summary(can_id, decoded_signals, frame.data)
+                update_telemetry_summary(can_id, decoded_signals, frame.data, transport, ros_bridge)
 
                 frame_entry = {
                     "id": can_id,
@@ -439,21 +148,19 @@ async def ingest_can_loop() -> None:
                 latest_frames[can_id] = frame_entry
                 pending_updates[can_id] = frame_entry
 
-                # Throttle broadcast to ~25 Hz (every 40ms)
                 if (now - last_broadcast) >= 0.040:
                     last_broadcast = now
                     if pending_updates:
                         payload = {
                             "type": "batch",
-                            "total_frames": total_frames,
+                            "total_frames": server_state.total_frames,
                             "uptime_sec": round(now - start_time, 1),
                             "frames": list(pending_updates.values()),
-                            "telemetry": _refresh_telemetry_summary(),
+                            "telemetry": refresh_telemetry_summary(transport, ros_bridge),
                             **_ros_snapshot(),
                         }
                         pending_updates.clear()
                         await _send_all(payload)
-
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -465,22 +172,17 @@ async def ingest_can_loop() -> None:
 
 
 async def broadcast_ros_loop() -> None:
-    """Stream ROS 2 perception/planning and telemetry heartbeat independently of CAN traffic (~10 Hz).
-
-    This guarantees live cockpit objects appear even when no CAN frames are flowing
-    and ensures bus_rate_hz / per-ID rate_hz / can_connected decay cleanly when CAN stops.
-    """
     while True:
         try:
             await asyncio.sleep(0.1)
-            decayed_frames = _decay_stale_frame_rates()
+            decayed_frames = decay_stale_frame_rates()
             if not active_websockets:
                 continue
             payload: Dict[str, Any] = {
                 "type": "ros",
-                "total_frames": total_frames,
+                "total_frames": server_state.total_frames,
                 "uptime_sec": round(time.time() - start_time, 1),
-                "telemetry": _refresh_telemetry_summary(),
+                "telemetry": refresh_telemetry_summary(transport, ros_bridge),
                 **_ros_snapshot(),
             }
             if decayed_frames:
@@ -493,6 +195,18 @@ async def broadcast_ros_loop() -> None:
             await asyncio.sleep(0.1)
 
 
+def mhr_worker_loop() -> None:
+    while True:
+        try:
+            data = ros_bridge.get_latest_data()
+            human_poses = data.get("human_poses") or {}
+            poses = human_poses.get("poses", []) if isinstance(human_poses, dict) else []
+            mhr_service.update(poses)
+        except Exception as exc:
+            print(f"[MHR] worker recovering: {exc}")
+        time.sleep(0.08)
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
     ros_bridge.start()
@@ -500,279 +214,13 @@ async def startup_event() -> None:
     asyncio.create_task(broadcast_ros_loop())
     if mhr_service.available:
         threading.Thread(target=mhr_worker_loop, name="mhr-worker", daemon=True).start()
-        print(f"[MHR] Sidecar active ({mhr_service.describe().get('num_joints')} joints, "
-              f"{mhr_service.describe().get('num_faces')} faces)")
-    else:
-        print(f"[MHR] Disabled: {mhr_service.reason}")
 
 
-def mhr_worker_loop() -> None:
-    """Evaluate MHR off the event loop so heavy inference never blocks the WS send."""
-    while True:
-        try:
-            data = ros_bridge.get_latest_data()
-            human_poses = data.get("human_poses") or {}
-            poses = human_poses.get("poses", []) if isinstance(human_poses, dict) else []
-            mhr_service.update(poses)
-        except Exception as exc:  # pragma: no cover - defensive
-            print(f"[MHR] worker recovering: {exc}")
-        time.sleep(0.08)
+app.include_router(create_api_router(registry, transport, ros_bridge, mhr_service, server_state, active_websockets))
 
 
-# Canonical REST /api/v1 endpoints
-@app.get("/api/v1/catalog")
-async def get_catalog() -> JSONResponse:
-    """Return all messages and signals loaded dynamically from YAML files."""
-    return JSONResponse(
-        {
-            "source": registry.source_description,
-            "total_messages": len(registry.messages_by_id),
-            "messages": registry.export_catalog(),
-        }
-    )
-
-
-@app.get("/api/v1/status")
-async def get_status() -> JSONResponse:
-    """Return backend status, interface, and live frame counter."""
-    return JSONResponse(
-        {
-            "total_frames": total_frames,
-            "uptime_sec": round(time.time() - start_time, 1),
-            "active_clients": len(active_websockets),
-            "contracts_source": registry.source_description,
-            "can": {
-                "interface": transport.interface if transport else "can2",
-                "connected": bool(transport.is_connected) if transport else False,
-                "simulated": bool(transport.is_simulated) if transport else False,
-                "bus_rate_hz": _refresh_telemetry_summary()["bus_rate_hz"],
-                "last_error": transport.last_error if transport else None,
-            },
-            "telemetry": _refresh_telemetry_summary(),
-            "ros": _ros_snapshot()["ros_status"],
-        }
-    )
-
-
-@app.get("/api/v1/ros")
-async def get_ros_data() -> JSONResponse:
-    """Return live ROS 2 perception and planning bridge state."""
-    return JSONResponse(ros_bridge.get_latest_data())
-
-
-@app.get("/api/v1/mhr/meta")
-async def get_mhr_meta() -> JSONResponse:
-    """Return MHR availability and static topology metadata (joints, rest skeleton)."""
-    meta = mhr_service.topology_meta()
-    meta.update(mhr_service.describe())
-    return JSONResponse(meta)
-
-
-@app.get("/api/v1/mhr/topology")
-async def get_mhr_topology() -> Response:
-    """Return packed little-endian uint32 triangle indices for the MHR mesh."""
-    if not mhr_service.available:
-        return JSONResponse({"error": mhr_service.reason}, status_code=503)
-    return Response(
-        content=mhr_service.topology_payload(),
-        media_type="application/octet-stream",
-        headers={"Cache-Control": "no-store"},
-    )
-
-
-@app.get("/api/v1/camera/stream")
-async def camera_stream():
-    """MJPEG live camera stream from perception debug image."""
-    async def frame_generator():
-        while True:
-            jpeg = ros_bridge.get_latest_jpeg()
-            if jpeg:
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
-                )
-            await asyncio.sleep(0.04)  # ~25 FPS
-    return StreamingResponse(
-        frame_generator(),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-    )
-
-
-@app.get("/camera")
-async def standalone_camera_page():
-    """Serve a dedicated standalone live camera viewer window."""
-    html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>E-Trike Perception • Live Camera Stream</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #080808;
-      color: #f1f5f9;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    header {
-      background: #0f172a;
-      border-bottom: 1px solid #1e293b;
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 48px;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .pulse-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 10px #10b981;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-    .title {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      color: #38bdf8;
-      font-family: monospace;
-    }
-    .badges {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .badge {
-      font-size: 11px;
-      font-family: monospace;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: #1e293b;
-      color: #94a3b8;
-      border: 1px solid #334155;
-    }
-    .badge.cyan {
-      color: #38bdf8;
-      border-color: #0284c7;
-      background: rgba(14, 165, 233, 0.1);
-    }
-    .btn {
-      background: #1e293b;
-      color: #cbd5e1;
-      border: 1px solid #334155;
-      padding: 4px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .btn:hover {
-      background: #334155;
-      color: #fff;
-    }
-    main {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #000;
-      position: relative;
-      overflow: hidden;
-    }
-    img.stream {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-    }
-    .status-overlay {
-      position: absolute;
-      bottom: 12px;
-      left: 12px;
-      background: rgba(15, 23, 42, 0.85);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-family: monospace;
-      font-size: 11px;
-      color: #38bdf8;
-      backdrop-filter: blur(8px);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <div class="brand">
-      <div class="pulse-dot"></div>
-      <div class="title">E-TRIKE • KINECT v2 PERCEPTION STREAM</div>
-    </div>
-    <div class="badges">
-      <span class="badge cyan">YOLO26x + RTMPose-s (SimCC)</span>
-      <span class="badge">1080p @ 25 Hz</span>
-      <button class="btn" onclick="toggleFullscreen()">Fullscreen (F)</button>
-    </div>
-  </header>
-  <main id="mainViewer">
-    <img id="streamImg" class="stream" src="/api/v1/camera/stream" alt="Live Perception Stream" />
-    <div class="status-overlay">
-      <span>● LIVE</span>
-      <span>17 COCO Keypoints</span>
-      <span id="timestamp"></span>
-    </div>
-  </main>
-  <script>
-    function updateClock() {
-      document.getElementById('timestamp').innerText = new Date().toLocaleTimeString();
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    function toggleFullscreen() {
-      const elem = document.documentElement;
-      if (!document.fullscreenElement) {
-        elem.requestFullscreen().catch(err => alert(err.message));
-      } else {
-        document.exitFullscreen();
-      }
-    }
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'f' || e.key === 'F') toggleFullscreen();
-    });
-  </script>
-</body>
-</html>"""
-    return HTMLResponse(content=html)
-
-
-@app.get("/api/v1/camera/snapshot")
-async def camera_snapshot():
-    """Return single fresh JPEG snapshot."""
-    jpeg = ros_bridge.get_latest_jpeg()
-    if jpeg:
-        return Response(content=jpeg, media_type="image/jpeg")
-    return JSONResponse({"status": "no_frame"}, status_code=404)
-
-
-# Canonical WebSocket /ws/v1/stream endpoint
 @app.websocket("/ws/v1/stream")
-@app.websocket("/ws")  # fallback alias
+@app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     async with _send_lock:
@@ -780,7 +228,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     try:
         snapshot = {
             "type": "snapshot",
-            "total_frames": total_frames,
+            "total_frames": server_state.total_frames,
             "uptime_sec": round(time.time() - start_time, 1),
             "frames": list(latest_frames.values()),
             "telemetry": telemetry_summary,
@@ -796,96 +244,31 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             active_websockets.discard(websocket)
 
 
-# High-speed binary WebSocket endpoint for real LiDAR pointcloud stream
 @app.websocket("/ws/v1/lidar")
 @app.websocket("/ws/lidar")
 async def websocket_lidar_endpoint(websocket: WebSocket) -> None:
-    """Stream real Hesai XT32 PointCloud2 frames as raw binary Float32 buffers."""
     await websocket.accept()
     last_sent_ts: float = 0.0
     try:
         while True:
-            if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
-                frame_bytes, count, ts = ros_bridge.lidar_streamer.get_latest_frame()
-                if frame_bytes and ts > last_sent_ts:
-                    last_sent_ts = ts
-                    await websocket.send_bytes(frame_bytes)
-            await asyncio.sleep(0.033)  # ~30 Hz cap
+            cloud_bytes, ts = ros_bridge.get_latest_pointcloud_binary()
+            if cloud_bytes and ts > last_sent_ts:
+                last_sent_ts = ts
+                await websocket.send_bytes(cloud_bytes)
+            await asyncio.sleep(0.033)
     except (WebSocketDisconnect, asyncio.CancelledError):
         pass
 
 
-@app.get("/api/v1/lidar/status")
-async def get_lidar_status() -> JSONResponse:
-    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
-        diag = ros_bridge.lidar_streamer.get_diagnostics()
-        return JSONResponse(diag)
-    return JSONResponse({"online": False, "point_count": 0, "timestamp": 0.0, "total_frames": 0})
-
-
-@app.get("/api/v1/lidar/diagnostics")
-async def get_lidar_diagnostics() -> JSONResponse:
-    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
-        diag = ros_bridge.lidar_streamer.get_diagnostics()
-        diag.update({
-            "sensor_model": "PandarXT32M (XT32M2X)",
-            "driver": "Nebula Hesai Wrapper (UDP :2368)",
-            "output_frame": "base_link -> three_js",
-            "active_mode": ros_bridge.lidar_streamer.filter_mode,
-        })
-        return JSONResponse(diag)
-    return JSONResponse({"online": False, "error": "lidar_streamer unavailable"})
-
-
-@app.post("/api/v1/lidar/mode")
-async def set_lidar_mode(mode: str) -> JSONResponse:
-    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
-        if mode in ("filtered", "raw", "inspection"):
-            ros_bridge.lidar_streamer.filter_mode = mode
-            return JSONResponse({"success": True, "mode": mode})
-        return JSONResponse({"success": False, "error": f"Invalid mode '{mode}'"}, status_code=400)
-    return JSONResponse({"success": False, "error": "lidar_streamer unavailable"}, status_code=503)
-
-
-@app.post("/api/v1/lidar/density")
-async def set_lidar_density(stride: int = 2, target_points: Optional[int] = None) -> JSONResponse:
-    if ros_bridge and hasattr(ros_bridge, "lidar_streamer"):
-        ros_bridge.lidar_streamer.set_density(stride=stride, target_points=target_points)
-        return JSONResponse({
-            "success": True,
-            "stride": ros_bridge.lidar_streamer.decimation_stride,
-            "target_points": ros_bridge.lidar_streamer.target_points,
-        })
-    return JSONResponse({"success": False, "error": "lidar_streamer unavailable"}, status_code=503)
-
-
-
-# Serve built React frontend if dist exists
 if FRONTEND_DIST.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
-    if (FRONTEND_DIST / "models").is_dir():
-        app.mount("/models", StaticFiles(directory=str(FRONTEND_DIST / "models")), name="models")
-
-    @app.get("/")
-    async def serve_root():
-        return FileResponse(FRONTEND_DIST / "index.html")
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
-    async def serve_react_app(full_path: str):
-        file_path = FRONTEND_DIST / full_path
-        if full_path and file_path.is_file():
+    async def serve_spa(full_path: str) -> Any:
+        file_path = (FRONTEND_DIST / full_path).resolve()
+        if file_path.is_file() and str(file_path).startswith(str(FRONTEND_DIST.resolve())):
             return FileResponse(file_path)
         return FileResponse(FRONTEND_DIST / "index.html")
-else:
-    @app.get("/")
-    async def fallback_index():
-        return HTMLResponse(
-            "<html><body style='background:#0d1117;color:#fff;font-family:sans-serif;padding:40px;'>"
-            "<h2>⚡ AV Dashboard Backend Ready</h2>"
-            "<p>API is running. Build frontend with: <code>cd tools/av_dashboard/frontend && pnpm build</code></p>"
-            "<p>API Docs: <a style='color:#38bdf8' href='/docs'>/docs</a></p>"
-            "</body></html>"
-        )
 
 
 def main() -> None:
@@ -899,10 +282,7 @@ def main() -> None:
     args = parser.parse_args()
 
     registry = ContractRegistry(contracts_dir=args.yaml_dir)
-    print(f"[AV Dashboard] Loaded {len(registry.messages_by_id)} messages from: {registry.source_description}")
-
     transport = create_transport(interface=args.interface, sim=args.sim)
-
     print(f"[AV Dashboard] Serving live dashboard at http://{args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 

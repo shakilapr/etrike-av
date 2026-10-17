@@ -1,31 +1,12 @@
 import React from 'react';
 import { useCanStore } from '../store/canStore';
 import { ShieldAlert, AlertTriangle, Lightbulb } from 'lucide-react';
+import { SpeedometerGauge } from './gauges/SpeedometerGauge';
+import { SteeringGauge } from './gauges/SteeringGauge';
+import { BrakeGauge } from './gauges/BrakeGauge';
 
 export const TelemetrySidebar: React.FC = () => {
   const telemetry = useCanStore((state) => state.telemetry);
-
-  // Speedometer calculation (0 to 15 km/h for E-Trike)
-  const maxSpeed = 15;
-  const speedActClamped = Math.min(Math.max(telemetry.speed_act_kmh, 0), maxSpeed);
-  const speedCmdClamped = Math.min(Math.max(telemetry.speed_cmd_kmh, 0), maxSpeed);
-  // Speed arc angles: from -135deg to +45deg (total 180deg)
-  const speedActAngle = -135 + (speedActClamped / maxSpeed) * 180;
-  const speedCmdAngle = -135 + (speedCmdClamped / maxSpeed) * 180;
-
-  // Steering calculation (-45 to +45 deg)
-  const maxSteer = 45;
-  const steerActClamped = Math.min(Math.max(telemetry.steer_act_deg, -maxSteer), maxSteer);
-  const steerCmdClamped = Math.min(Math.max(telemetry.steer_cmd_deg, -maxSteer), maxSteer);
-  // -90deg is straight up (0 deg steer). Range: -135deg (-45 steer) to -45deg (+45 steer)
-  const steerActAngle = -90 + (steerActClamped / maxSteer) * 45;
-  const steerCmdAngle = -90 + (steerCmdClamped / maxSteer) * 45;
-
-  // Brake pressure (0 to 5000 kPa per brk.yaml)
-  const maxBrake = 5000;
-  const brakeActPercent = Math.min(Math.max((telemetry.brake_act_kpa / maxBrake) * 100, 0), 100);
-  const brakeCmdPercent = Math.min(Math.max((telemetry.brake_cmd_kpa / maxBrake) * 100, 0), 100);
-
   const gears = ['P', 'R', 'N', 'D', 'S'];
 
   return (
@@ -180,178 +161,23 @@ export const TelemetrySidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* Gauge 1: Speedometer (Dual Arc Commanded vs Feedback) */}
-        <div className="bg-[#0a0a0a] p-3 rounded-lg border border-neutral-800">
-          <div className="flex items-center justify-between text-[10px] font-mono text-neutral-300 font-semibold mb-1">
-            <span>SPEEDOMETER</span>
-            <span className="text-neutral-400">0 - 50 km/h</span>
-          </div>
+        {/* Speedometer */}
+        <SpeedometerGauge
+          speedActKmh={telemetry.speed_act_kmh}
+          speedCmdKmh={telemetry.speed_cmd_kmh}
+        />
 
-          <div className="relative flex flex-col items-center justify-center py-1">
-            <svg viewBox="0 0 160 92" className="w-44 overflow-visible">
-              {/* Dial Track Background */}
-              <path
-                d="M 20 85 A 60 60 0 0 1 140 85"
-                fill="none"
-                stroke="#262626"
-                strokeWidth="10"
-                strokeLinecap="round"
-              />
-              {/* Dial Graduation Ticks (0, 10, 20, 30, 40, 50) */}
-              {[0, 10, 20, 30, 40, 50].map((v) => {
-                const angle = -135 + (v / 50) * 180;
-                const rad = (angle * Math.PI) / 180;
-                const x1 = 80 + 53 * Math.cos(rad);
-                const y1 = 85 + 53 * Math.sin(rad);
-                const x2 = 80 + 60 * Math.cos(rad);
-                const y2 = 85 + 60 * Math.sin(rad);
-                return (
-                  <line
-                    key={v}
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
-                    stroke="#525252"
-                    strokeWidth="1.5"
-                  />
-                );
-              })}
+        {/* Steering Arc */}
+        <SteeringGauge
+          steerActDeg={telemetry.steer_act_deg}
+          steerCmdDeg={telemetry.steer_cmd_deg}
+        />
 
-              {/* Commanded Speed Pointer (Cyan dashed line) */}
-              <line
-                x1="80"
-                y1="85"
-                x2={80 + 58 * Math.cos((speedCmdAngle * Math.PI) / 180)}
-                y2={85 + 58 * Math.sin((speedCmdAngle * Math.PI) / 180)}
-                stroke="#06b6d4"
-                strokeWidth="2.5"
-                strokeDasharray="4 2"
-              />
-              {/* Actual Speed Needle (Emerald solid with glow) */}
-              <line
-                x1="80"
-                y1="85"
-                x2={80 + 54 * Math.cos((speedActAngle * Math.PI) / 180)}
-                y2={85 + 54 * Math.sin((speedActAngle * Math.PI) / 180)}
-                stroke="#10b981"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-              />
-              <circle cx="80" cy="85" r="5" fill="#10b981" />
-              <circle cx="80" cy="85" r="2.5" fill="#000000" />
-            </svg>
-
-            {/* Digital Readout */}
-            <div className="text-center mt-[-6px]">
-              <div className="text-3xl font-mono font-black text-emerald-400 tracking-tight tabular-nums drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">
-                {telemetry.speed_act_kmh.toFixed(1)}
-              </div>
-              <div className="text-[11px] font-mono text-neutral-400 flex items-center justify-center gap-2 mt-0.5">
-                <span className="font-semibold text-neutral-300">km/h</span>
-                <span className="text-neutral-600">|</span>
-                <span className="text-cyan-300 font-bold bg-[#141414] px-1.5 py-0.5 rounded border border-neutral-700">
-                  CMD: {telemetry.speed_cmd_kmh.toFixed(1)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Gauge 2: Steering Arc (-45° to +45°) */}
-        <div className="bg-[#0a0a0a] p-3 rounded-lg border border-neutral-800">
-          <div className="flex items-center justify-between text-[10px] font-mono text-neutral-300 font-semibold mb-1">
-            <span>STEERING ANGLE</span>
-            <span className="text-neutral-400">&plusmn;45.0&deg;</span>
-          </div>
-
-          <div className="relative flex flex-col items-center justify-center py-1">
-            <svg viewBox="0 0 160 70" className="w-44 overflow-visible">
-              {/* Neutral Center reference line */}
-              <line x1="80" y1="16" x2="80" y2="60" stroke="#525252" strokeWidth="1" strokeDasharray="2 2" />
-              {/* Arc background */}
-              <path
-                d="M 38 60 A 60 60 0 0 1 122 60"
-                fill="none"
-                stroke="#262626"
-                strokeWidth="8"
-                strokeLinecap="round"
-              />
-              {/* Commanded angle pointer */}
-              <line
-                x1="80"
-                y1="60"
-                x2={80 + 52 * Math.cos((steerCmdAngle * Math.PI) / 180)}
-                y2={60 + 52 * Math.sin((steerCmdAngle * Math.PI) / 180)}
-                stroke="#06b6d4"
-                strokeWidth="2.5"
-                strokeDasharray="3 2"
-              />
-              {/* Actual angle needle */}
-              <line
-                x1="80"
-                y1="60"
-                x2={80 + 50 * Math.cos((steerActAngle * Math.PI) / 180)}
-                y2={60 + 50 * Math.sin((steerActAngle * Math.PI) / 180)}
-                stroke="#10b981"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-              />
-              <circle cx="80" cy="60" r="4" fill="#10b981" />
-            </svg>
-
-            {/* Readout */}
-            <div className="text-center mt-[-4px]">
-              <div className="text-2xl font-mono font-black text-emerald-400 tabular-nums drop-shadow-[0_0_6px_rgba(16,185,129,0.3)]">
-                {telemetry.steer_act_deg > 0 ? `+${telemetry.steer_act_deg.toFixed(1)}` : telemetry.steer_act_deg.toFixed(1)}&deg;
-              </div>
-              <div className="text-[11px] font-mono text-neutral-400 mt-0.5">
-                CMD:{' '}
-                <span className="text-cyan-300 font-bold bg-[#141414] px-1.5 py-0.5 rounded border border-neutral-700">
-                  {telemetry.steer_cmd_deg.toFixed(1)}&deg;
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Gauge 3: Brake Pressure Meter */}
-        <div className="bg-[#0a0a0a] p-3 rounded-lg border border-neutral-800">
-          <div className="flex items-center justify-between text-[10px] font-mono text-neutral-300 font-semibold mb-2">
-            <span>HYDRAULIC BRAKE</span>
-            <span className="text-neutral-400">0 - 1500 kPa</span>
-          </div>
-
-          <div className="space-y-2">
-            {/* Feedback Bar */}
-            <div>
-              <div className="flex justify-between text-[10px] font-mono mb-1 text-neutral-300">
-                <span className="text-emerald-400 font-bold">FEEDBACK</span>
-                <span className="text-neutral-100 tabular-nums font-bold">{telemetry.brake_act_kpa.toFixed(0)} kPa</span>
-              </div>
-              <div className="w-full h-2.5 bg-[#141414] rounded-full overflow-hidden border border-neutral-800">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-100 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
-                  style={{ width: `${brakeActPercent}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Command Bar */}
-            <div>
-              <div className="flex justify-between text-[10px] font-mono mb-1 text-neutral-300">
-                <span className="text-cyan-400 font-bold">COMMAND</span>
-                <span className="text-neutral-200 tabular-nums font-bold">{telemetry.brake_cmd_kpa.toFixed(0)} kPa</span>
-              </div>
-              <div className="w-full h-2 bg-[#141414] rounded-full overflow-hidden border border-neutral-800">
-                <div
-                  className="h-full bg-cyan-400 rounded-full transition-all duration-100 shadow-[0_0_6px_rgba(6,182,212,0.4)]"
-                  style={{ width: `${brakeCmdPercent}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Hydraulic Brake */}
+        <BrakeGauge
+          brakeActKpa={telemetry.brake_act_kpa}
+          brakeCmdKpa={telemetry.brake_cmd_kpa}
+        />
       </div>
 
       {/* Footer Info */}

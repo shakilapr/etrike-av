@@ -9,63 +9,15 @@ from __future__ import annotations
 import glob
 import os
 import subprocess
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
-# Colorblind-safe, high-contrast palette for signal allocations in the 64-bit matrix
-SIGNAL_PALETTE = [
-    "#38bdf8",  # Sky Blue
-    "#34d399",  # Emerald Green
-    "#fbbf24",  # Amber Yellow
-    "#f87171",  # Coral Red
-    "#a78bfa",  # Violet Purple
-    "#f472b6",  # Pink
-    "#2dd4bf",  # Teal
-    "#fb923c",  # Orange
-    "#818cf8",  # Indigo
-    "#a3e635",  # Lime Green
-    "#e879f9",  # Fuchsia
-    "#60a5fa",  # Blue
-]
+from .contracts_decoder import decode_can_frame
+from .contracts_models import SIGNAL_PALETTE, MessageDef, SignalDef
 
-
-@dataclass
-class SignalDef:
-    name: str
-    byte: int
-    bit: int
-    bits: int
-    endian: str = "little"  # "little" (Intel) or "big" (Motorola)
-    signed: bool = False
-    scale: float = 1.0
-    offset: float = 0.0
-    min_val: Optional[float] = None
-    max_val: Optional[float] = None
-    unit: str = ""
-    comment: str = ""
-    color: str = "#38bdf8"
-
-
-@dataclass
-class MessageDef:
-    key: str
-    name: str
-    dlc: int
-    id: int
-    id_hex: str
-    bus: str = "high"
-    buses: List[str] = field(default_factory=list)
-    sender: str = ""
-    receivers: List[str] = field(default_factory=list)
-    cycle_ms: int = 0
-    access: str = "RX"  # "TX" (Host sends) or "RX" (Host receives)
-    signals: List[SignalDef] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+__all__ = ["SignalDef", "MessageDef", "SIGNAL_PALETTE", "ContractRegistry", "decode_can_frame"]
 
 
 class ContractRegistry:
@@ -88,7 +40,6 @@ class ContractRegistry:
                     self.source_description = str(p.resolve())
                     return candidates
 
-        # Default workspace search locations
         potential_paths = [
             Path(__file__).resolve().parents[1] / "contracts",
             Path("tools/av_dashboard/contracts"),
@@ -101,7 +52,6 @@ class ContractRegistry:
             Path(__file__).resolve().parents[3] / "protocol" / "contracts",
         ]
 
-
         for p in potential_paths:
             if p.is_dir():
                 found = sorted(p.glob("*.yaml"))
@@ -110,7 +60,6 @@ class ContractRegistry:
                     return found
 
         return []
-
 
     def _load_from_git(self, remote_ref: str = "etrike/main") -> Dict[str, Any]:
         """Fallback to loading YAML contracts directly from git remote if local files are missing."""
@@ -161,7 +110,6 @@ class ContractRegistry:
                 dlc = int(raw_msg.get("dlc", 8))
                 msg_byte_order = raw_msg.get("byte_order", "little")
 
-                # Parse signals from either layout.fields or signals
                 raw_fields = raw_msg.get("layout", {}).get("fields", []) or raw_msg.get("signals", [])
                 signals: List[SignalDef] = []
                 for idx, s in enumerate(raw_fields):
@@ -187,7 +135,6 @@ class ContractRegistry:
                     )
                     signals.append(sig)
 
-                # Parse instances (IDs per bus)
                 instances = raw_msg.get("instances", [])
                 if not instances:
                     raw_id = raw_msg.get("id")
@@ -206,20 +153,13 @@ class ContractRegistry:
                     else:
                         receivers = list(receivers)
 
-                    # Infer Access relative to Host computer:
-                    if inst_sender.lower() == "host" or "hmi" in key.lower():
-                        access = "TX"
-                    else:
-                        access = "RX"
+                    access = "TX" if (inst_sender.lower() == "host" or "hmi" in key.lower()) else "RX"
 
                     existing = self.messages_by_id.get(can_id)
                     if existing is not None and existing.key == key:
                         if bus not in existing.buses:
                             existing.buses.append(bus)
-                        if "high" in existing.buses and "low" in existing.buses:
-                            existing.bus = "high/low"
-                        else:
-                            existing.bus = existing.buses[0]
+                        existing.bus = "high/low" if ("high" in existing.buses and "low" in existing.buses) else existing.buses[0]
                         for r in receivers:
                             if r not in existing.receivers:
                                 existing.receivers.append(r)
@@ -249,86 +189,7 @@ class ContractRegistry:
         return self.messages_by_id.get(can_id)
 
     def decode_frame(self, can_id: int, data: bytes) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-        """Decode payload bytes for a CAN ID into physical values and a 64-bit matrix."""
-        msg_def = self.get_message(can_id)
-        decoded_signals: Dict[str, Any] = {}
-        data_len = len(data)
-
-        padded_bytes = bytearray(data[:8])
-        if len(padded_bytes) < 8:
-            padded_bytes.extend(b"\x00" * (8 - len(padded_bytes)))
-
-        bit_owner: Dict[int, SignalDef] = {}
-        if msg_def:
-            for sig in msg_def.signals:
-                start_bit = sig.byte * 8 + sig.bit
-                for b_offset in range(sig.bits):
-                    global_bit = start_bit + b_offset
-                    if global_bit < 64:
-                        bit_owner[global_bit] = sig
-
-                raw_val = 0
-                if sig.endian == "big" and sig.bit == 0 and (sig.bits % 8 == 0):
-                    n_bytes = sig.bits // 8
-                    for bi in range(n_bytes):
-                        if sig.byte + bi < data_len:
-                            raw_val = (raw_val << 8) | data[sig.byte + bi]
-                elif sig.endian == "big" and (sig.bit + sig.bits) <= 8:
-                    mask = (1 << sig.bits) - 1
-                    if sig.byte < data_len:
-                        raw_val = (data[sig.byte] >> sig.bit) & mask
-                elif sig.endian == "big":
-                    # Unaligned or non-byte-multiple big-endian signal across byte boundaries
-                    remaining = sig.bits
-                    cur_byte = sig.byte
-                    cur_bit = sig.bit
-                    while remaining > 0 and cur_byte < data_len:
-                        take = min(remaining, 8 - cur_bit)
-                        mask = (1 << take) - 1
-                        chunk = (data[cur_byte] >> cur_bit) & mask
-                        raw_val = (raw_val << take) | chunk
-                        remaining -= take
-                        cur_byte += 1
-                        cur_bit = 0
-                else:
-                    for b_offset in range(sig.bits):
-                        g_bit = start_bit + b_offset
-                        byte_idx = g_bit // 8
-                        bit_idx = g_bit % 8
-                        if byte_idx < data_len:
-                            bit_val = (data[byte_idx] >> bit_idx) & 1
-                            raw_val |= bit_val << b_offset
-
-                if sig.signed and (raw_val & (1 << (sig.bits - 1))):
-                    raw_val -= 1 << sig.bits
-
-                phys_val = raw_val * sig.scale + sig.offset
-                decoded_signals[sig.name] = {
-                    "raw": raw_val,
-                    "value": round(phys_val, 4) if isinstance(phys_val, float) else phys_val,
-                    "unit": sig.unit,
-                    "color": sig.color,
-                }
-
-        bit_cells: List[Dict[str, Any]] = []
-        for byte_idx in range(8):
-            b_val = padded_bytes[byte_idx] if byte_idx < data_len else 0
-            for bit_col in range(7, -1, -1):
-                global_bit = byte_idx * 8 + bit_col
-                bit_val = (b_val >> bit_col) & 1
-                owner = bit_owner.get(global_bit)
-                bit_cells.append(
-                    {
-                        "index": global_bit,
-                        "byte": byte_idx,
-                        "bit": bit_col,
-                        "val": bit_val,
-                        "owner": owner.name if owner else None,
-                        "color": owner.color if owner else None,
-                    }
-                )
-
-        return decoded_signals, bit_cells
+        return decode_can_frame(self.get_message(can_id), data)
 
     def export_catalog(self) -> List[Dict[str, Any]]:
         sorted_msgs = sorted(self.messages_by_id.values(), key=lambda m: m.id)

@@ -1,31 +1,10 @@
 import React from 'react';
 import { useCanStore } from '../../store/canStore';
-import {
-  Eye,
-  Camera,
-  ExternalLink,
-  Layers,
-  Activity,
-  ChevronLeft,
-  ChevronRight,
-  TriangleAlert,
-  Car,
-  Gauge,
-  Bone,
-  Cloud,
-} from 'lucide-react';
-import {
-  ParkTelltale,
-  BrakeTelltale,
-  HoldTelltale,
-  ReadyTelltale,
-  EpsTelltale,
-  EstopTelltale,
-  EcuTempTelltale,
-  CanBusTelltale,
-  HighBeamTelltale,
-  HazardTelltale,
-} from './AutomotiveTelltales';
+import { HudTopHorizon } from './hud/HudTopHorizon';
+import { HudChassisDynamics } from './hud/HudChassisDynamics';
+import { HudPowertrainBus } from './hud/HudPowertrainBus';
+import { HudBottomControls } from './hud/HudBottomControls';
+import { HudVisibilityToggles } from './hud/HudVisibilityToggles';
 
 export const CockpitHud: React.FC = () => {
   const {
@@ -40,8 +19,6 @@ export const CockpitHud: React.FC = () => {
     isConnected,
     rosStatus,
     perceptionObjects,
-    demoPedestrian,
-    toggleDemoPedestrian,
     showTukTuk,
     showSpeed,
     showSkeletons,
@@ -52,32 +29,24 @@ export const CockpitHud: React.FC = () => {
     toggleShowPointCloud,
   } = useCanStore();
 
-  // Speed calculation
   const speedVal = speedUnit === 'mph'
     ? telemetry.speed_act_kmh * 0.621371
     : telemetry.speed_act_kmh;
-  const targetSpeedVal = speedUnit === 'mph'
-    ? telemetry.speed_cmd_kmh * 0.621371
-    : telemetry.speed_cmd_kmh;
 
   const isAuto = telemetry.mode === 'AUTONOMOUS' || telemetry.mode === 'AUTO';
   const isEstop = telemetry.estop || telemetry.mode === 'ESTOP';
 
-  // Turn signals & lights (ISO telltales from telemetry)
   const isTurnLeft = telemetry.lights_act.left;
   const isTurnRight = telemetry.lights_act.right;
   const isHighBeam = telemetry.lights_act.headlight;
   const isHazard = telemetry.lights_act.hazard;
   const isBrakeLight = telemetry.lights_act.brake;
 
-  // Steering & Stability values
   const steerActual = telemetry.steer_act_deg;
   const steerCmd = telemetry.steer_cmd_deg;
   const brakePressure = telemetry.brake_act_kpa;
   const brakePercent = Math.min((brakePressure / 5000) * 100, 100);
 
-  // Deep CAN Diagnostic Signals from contracts
-  // 0x310 steer_diag
   const steerDiagFrame = framesById[0x310]?.signals;
   const steerFault = Boolean(steerDiagFrame?.['fault']?.value);
   const steerCurrent = typeof steerDiagFrame?.['motor_current']?.value === 'number'
@@ -87,14 +56,12 @@ export const CockpitHud: React.FC = () => {
     ? steerDiagFrame['ecu_temp'].value
     : null;
 
-  // 0x311 brake_diag
   const brakeDiagFrame = framesById[0x311]?.signals;
   const brakeFault = Boolean(brakeDiagFrame?.['fault']?.value);
   const brakeTemp = typeof brakeDiagFrame?.['ecu_temp']?.value === 'number'
     ? brakeDiagFrame['ecu_temp'].value
     : null;
 
-  // 0x620 rt_diag_rpt & 0x600 sys_diag_rpt (CAN Controller Health)
   const rtDiagFrame = framesById[0x620]?.signals;
   const sysDiagFrame = framesById[0x600]?.signals;
   const hasRtDiag = Boolean(framesById[0x620] || framesById[0x600]);
@@ -112,12 +79,10 @@ export const CockpitHud: React.FC = () => {
       ? sysDiagFrame['rec'].value
       : 0;
 
-  // CAN Bus link & source status
   const busRateHz = typeof telemetry.bus_rate_hz === 'number' ? telemetry.bus_rate_hz : 0.0;
   const canConnected = Boolean(telemetry.can_connected);
   const telemetrySource = telemetry.telemetry_source ?? 'OFFLINE';
 
-  // Derived Vehicle States for Telltales
   const isPark = telemetry.gear === 'P';
   const isBraking = brakePressure > 100 || isBrakeLight;
   const isHold = telemetry.speed_act_kmh < 0.5 && brakePressure > 250;
@@ -125,7 +90,6 @@ export const CockpitHud: React.FC = () => {
   const isEpsWarning = steerFault || (framesById[0x310] !== undefined && Math.abs(steerCmd - steerActual) > 5.0);
   const maxEcuTemp = Math.max(steerTemp ?? 0, brakeTemp ?? 0);
 
-  // Yaw rate from motion report (0x121), host drive cmd (0x300), or ROS odometry
   const yawRate121 = framesById[0x121]?.signals?.['yaw_rate_mrad_s']?.value;
   const yawRate300 = framesById[0x300]?.signals?.['yaw_rate_mrad_s']?.value;
   const yawRate = typeof yawRate121 === 'number'
@@ -136,13 +100,11 @@ export const CockpitHud: React.FC = () => {
     ? Math.round(rosStatus.ego_yaw_rate_mrad_s)
     : 0;
 
-  // Motor / Powertrain from 0x206 & 0x120 (or commanded demand in bench mode)
   const motorRpm = typeof telemetry.motor_rpm === 'number' ? telemetry.motor_rpm : null;
   const throttlePercent = typeof telemetry.throttle_pct === 'number'
     ? Math.min(Math.max(Math.round(telemetry.throttle_pct), 0), 100)
     : Math.min(Math.round((Math.abs(telemetry.speed_cmd_kmh) / 10.8) * 100), 100);
 
-  // Autoware perception: forward-corridor proximity watch (ahead = negative Z)
   const corridorThreats = perceptionObjects
     .map((o) => ({ obj: o, dist: -o.z }))
     .filter((e) => e.dist > 0 && e.dist < 25 && Math.abs(e.obj.x) < 3.0)
@@ -151,7 +113,6 @@ export const CockpitHud: React.FC = () => {
   const threatIsPed = nearestThreat?.obj.label === 'PEDESTRIAN';
   const showThreat = Boolean(nearestThreat && nearestThreat.dist < (threatIsPed ? 12 : 8));
 
-  // Autoware link status wording — honest about why objects may be absent.
   const rosPoseOk = rosStatus.pose_ok !== false;
   let rosStatusText: string;
   let rosDot: string;
@@ -181,7 +142,6 @@ export const CockpitHud: React.FC = () => {
 
   return (
     <>
-      {/* ================= DYNAMIC BRAKING RED GRADIENT FLARE (FROM BELOW) ================= */}
       <div
         className="fixed inset-x-0 bottom-0 pointer-events-none transition-all duration-100 ease-out z-10"
         style={{
@@ -191,473 +151,91 @@ export const CockpitHud: React.FC = () => {
         }}
       />
 
-      {/* ================= FULL-SCREEN E-STOP EMERGENCY PULSING STROBE ================= */}
       {isEstop && (
         <div className="fixed inset-0 pointer-events-none z-20 animate-[pulse_1.2s_ease-in-out_infinite] bg-rose-950/25 border-8 border-rose-600/80 shadow-[inset_0_0_100px_rgba(225,29,72,0.65)]" />
       )}
 
-      {/* ================= MAIN COCKPIT HUD CONTAINER ================= */}
       <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 select-none font-mono z-30">
-        {/* ================= TOP ZONE (PRIMARY SIGHTLINE & ISO TELLTALES) ================= */}
-        <div className="flex items-start justify-between relative">
-          {/* Top-Left: Peripheral Left Turn (56px) & ISO Telltales Cluster */}
-          <div className="flex items-center gap-3">
-            {/* Left Turn Indicator - 56px high-visibility circle */}
-            <div
-              className={`w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all duration-150 ${
-                isTurnLeft || isHazard
-                  ? 'bg-emerald-500 text-black border-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.95)] animate-pulse'
-                  : 'bg-[#080808]/85 text-neutral-700 border-neutral-800'
-              }`}
-              title="Left Turn Indicator (Peripheral Field)"
-            >
-              <ChevronLeft className="w-8 h-8 stroke-[3]" />
-            </div>
+        <HudTopHorizon
+          isTurnLeft={isTurnLeft}
+          isTurnRight={isTurnRight}
+          isHazard={isHazard}
+          isPark={isPark}
+          isBraking={isBraking}
+          brakeFault={brakeFault}
+          isHold={isHold}
+          isReady={isReady}
+          gear={telemetry.gear}
+          showSpeed={showSpeed}
+          busRateHz={busRateHz}
+          speedVal={speedVal}
+          speedUnit={speedUnit}
+          isEpsWarning={isEpsWarning}
+          steerFault={steerFault}
+          isEstop={isEstop}
+          maxEcuTemp={maxEcuTemp}
+          isConnected={isConnected}
+          mcpBusOff={mcpBusOff}
+          mcpTec={mcpTec}
+          mcpRec={mcpRec}
+          isHighBeam={isHighBeam}
+        />
 
-            {/* ISO 2575 Telltale Bank - Left Pod: PARK, BRAKE, HOLD, READY */}
-            <div className="flex items-center gap-1.5 bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 p-1 rounded-xl shadow-xl">
-              <ParkTelltale active={isPark} />
-              <BrakeTelltale active={isBraking || brakeFault} />
-              <HoldTelltale active={isHold} />
-              <ReadyTelltale active={isReady} />
-            </div>
-          </div>
-
-          {/* Top-Center Primary Horizon: PRND Transmission & Speedometer */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-0 flex flex-col items-center">
-            {/* PRND Transmission Selector */}
-            <div className="flex items-center gap-2 bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 px-3 py-1 rounded-xl shadow-xl mb-1 pointer-events-auto">
-              {['P', 'R', 'N', 'D', 'S'].map((gearLetter) => {
-                const isSelected = telemetry.gear === gearLetter;
-                return (
-                  <div
-                    key={gearLetter}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-black transition-all ${
-                      isSelected
-                        ? 'bg-cyan-500 text-black shadow-[0_0_14px_rgba(6,182,212,0.9)] scale-110 border border-cyan-300'
-                        : 'text-neutral-500 hover:text-neutral-400 bg-neutral-900/50'
-                    }`}
-                  >
-                    {gearLetter}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Primary Speedometer Digits (Automotive Glance Sizing: 80-96px) */}
-            {showSpeed && (
-              <div className="flex flex-col items-center drop-shadow-[0_6px_20px_rgba(0,0,0,0.95)]">
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-7xl lg:text-8xl font-black tracking-tight tabular-nums font-mono leading-none ${
-                    (telemetry.bus_rate_hz ?? 0) > 0 ? 'text-white' : 'text-neutral-500'
-                  }`}>
-                    {(telemetry.bus_rate_hz ?? 0) > 0 ? speedVal.toFixed(0) : '--'}
-                  </span>
-                  <span className="text-base lg:text-lg font-black text-neutral-400 uppercase tracking-widest">
-                    {speedUnit}
-                  </span>
-                </div>
-                {(telemetry.bus_rate_hz ?? 0) === 0 && (
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500/90 bg-amber-950/40 border border-amber-800/50 px-2 py-0.5 rounded mt-1">
-                    CAN TELEMETRY OFFLINE
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Top-Right: ISO Telltales Cluster & Peripheral Right Turn (56px) */}
-          <div className="flex items-center gap-3">
-            {/* ISO 2575 Telltale Bank - Right Pod: EPS, ESTOP, TEMP, CAN, HIGH BEAM, HAZARD */}
-            <div className="flex items-center gap-1.5 bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 p-1 rounded-xl shadow-xl">
-              <EpsTelltale active={isEpsWarning} fault={steerFault} />
-              <EstopTelltale active={isEstop} />
-              <EcuTempTelltale active={maxEcuTemp > 60} temp={maxEcuTemp} />
-              <CanBusTelltale active={isConnected && !mcpBusOff} busOff={mcpBusOff} errorCount={mcpTec + mcpRec} />
-              <HighBeamTelltale active={isHighBeam} />
-              <HazardTelltale active={isHazard} />
-            </div>
-
-            {/* Right Turn Indicator - 56px */}
-            <div
-              className={`w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all duration-150 ${
-                isTurnRight || isHazard
-                  ? 'bg-emerald-500 text-black border-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.95)] animate-pulse'
-                  : 'bg-[#080808]/85 text-neutral-700 border-neutral-800'
-              }`}
-              title="Right Turn Indicator (Peripheral Field)"
-            >
-              <ChevronRight className="w-8 h-8 stroke-[3]" />
-            </div>
-          </div>
-        </div>
-
-        {/* ================= MIDDLE INSTRUMENT PODS (FLOATING IN-SPACE HUD) ================= */}
         <div className="flex justify-between items-center px-4">
-          {/* Left Wing: Chassis & Steering Dynamics (Floating HUD) */}
-          <div className="w-72 lg:w-80 space-y-3 pointer-events-auto drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
-            <div className="flex items-center justify-between border-b border-neutral-800/60 pb-1.5">
-              <span className="text-xs uppercase font-black text-neutral-400 tracking-wider">
-                CHASSIS DYNAMICS
-              </span>
-              <span className="text-[10px] text-cyan-400 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/60 font-bold">
-                3-WHEELER
-              </span>
-            </div>
+          <HudChassisDynamics
+            steerActual={steerActual}
+            steerCmd={steerCmd}
+            steerCurrent={steerCurrent}
+            steerTemp={steerTemp}
+            yawRate={yawRate}
+            brakePressure={brakePressure}
+            brakePercent={brakePercent}
+            brakeTemp={brakeTemp}
+            brakeFault={brakeFault}
+            hasBrakeFrame={framesById[0x311] !== undefined}
+          />
 
-            {/* Steering Angle with Floating Bi-Directional Light-Tube Bar */}
-            <div>
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm font-semibold text-neutral-300">Steering</span>
-                <span className="text-2xl font-black tabular-nums text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">
-                  {steerActual > 0 ? `+${steerActual.toFixed(1)}°` : `${steerActual.toFixed(1)}°`}
-                </span>
-              </div>
-              {/* Floating Gauge Bar with Center Detent */}
-              <div className="h-3.5 bg-neutral-900/90 rounded-full relative overflow-hidden border border-neutral-700/60 shadow-inner">
-                <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-neutral-300 -translate-x-1/2 z-10" />
-                {/* Target Command Marker */}
-                <div
-                  className="absolute top-0 bottom-0 w-1.5 bg-cyan-300 -translate-x-1/2 z-20 shadow-[0_0_8px_rgba(6,182,212,1)]"
-                  style={{ left: `${50 + (steerCmd / 45) * 50}%` }}
-                  title={`Commanded Steer: ${steerCmd.toFixed(1)}°`}
-                />
-                {/* Actual Steer Fill */}
-                <div
-                  className="h-full bg-emerald-400 transition-all duration-75 absolute top-0 shadow-[0_0_10px_rgba(52,211,153,0.8)]"
-                  style={{
-                    left: steerActual < 0 ? `${50 + (steerActual / 45) * 50}%` : '50%',
-                    width: `${(Math.abs(steerActual) / 45) * 50}%`,
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-neutral-400 mt-1 font-mono">
-                <span>-45°</span>
-                <span className="text-cyan-400 font-bold">CMD: {steerCmd.toFixed(1)}°</span>
-                <span>+45°</span>
-              </div>
-            </div>
-
-            {/* Steering Actuator Diagnostics (Floating Telemetry Row) */}
-            <div className="flex justify-between items-center text-xs py-1 border-b border-neutral-900/80 font-mono">
-              <span className="text-neutral-400">
-                EPS Current: <span className="text-cyan-300 font-bold">{steerCurrent !== null ? `${steerCurrent}A` : '--'}</span>
-              </span>
-              <span className="text-neutral-400">
-                ECU: <span className="text-amber-300 font-bold">{steerTemp !== null ? `${steerTemp}°C` : '--'}</span>
-              </span>
-            </div>
-
-            {/* Yaw Rate */}
-            <div className="flex justify-between items-baseline pt-0.5">
-              <span className="text-sm font-semibold text-neutral-300">Yaw Rate</span>
-              <div>
-                <span className="text-2xl font-black text-white tabular-nums">
-                  {yawRate}
-                </span>
-                <span className="text-xs text-neutral-400 ml-1.5 font-bold">mrad/s</span>
-              </div>
-            </div>
-
-            {/* Hydraulic Brake Bar (Floating Light-Tube) */}
-            <div className="pt-0.5 border-t border-neutral-900/80">
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm font-semibold text-neutral-300">Hydraulic Brake</span>
-                <span
-                  className={`text-2xl font-black tabular-nums ${
-                    brakePressure > 50 ? 'text-rose-400 drop-shadow-[0_0_10px_rgba(244,63,94,0.6)]' : 'text-neutral-200'
-                  }`}
-                >
-                  {brakePressure} <span className="text-xs font-normal text-neutral-400">kPa</span>
-                </span>
-              </div>
-              <div className="h-3 bg-neutral-900/90 rounded-full overflow-hidden border border-neutral-700/60 shadow-inner">
-                <div
-                  className={`h-full transition-all duration-75 ${
-                    brakePressure > 100
-                      ? 'bg-gradient-to-r from-amber-500 to-rose-500 shadow-[0_0_14px_rgba(244,63,94,0.9)]'
-                      : 'bg-neutral-600'
-                  }`}
-                  style={{ width: `${brakePercent}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-neutral-400 mt-1 font-mono">
-                <span>Brake ECU: <span className="text-neutral-300">{brakeTemp !== null ? `${brakeTemp}°C` : '--'}</span></span>
-                <span className={brakeFault ? 'text-rose-400 font-bold' : 'text-emerald-400 font-semibold'}>
-                  {brakeFault ? 'BRAKE FAULT' : framesById[0x311] ? 'NORMAL' : 'NO 0x311'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Wing: Powertrain & CAN Bus Telemetry (Floating HUD) */}
-          <div className="w-72 lg:w-80 space-y-3 pointer-events-auto drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
-            <div className="flex items-center justify-between border-b border-neutral-800/60 pb-1.5">
-              <span className="text-xs uppercase font-black text-neutral-400 tracking-wider">
-                POWERTRAIN & BUS
-              </span>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded border font-bold ${
-                  telemetrySource === 'ECU_FEEDBACK'
-                    ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/60'
-                    : telemetrySource === 'BENCH_CMD' || telemetrySource === 'ROS_SIM'
-                    ? 'text-cyan-300 bg-cyan-950/40 border-cyan-800/60'
-                    : telemetrySource === 'SIMULATED'
-                    ? 'text-amber-300 bg-amber-950/40 border-amber-800/60'
-                    : 'text-neutral-400 bg-neutral-900/60 border-neutral-700/60'
-                }`}
-              >
-                {telemetrySource === 'ECU_FEEDBACK'
-                  ? 'ECU LIVE'
-                  : telemetrySource === 'BENCH_CMD'
-                  ? 'BENCH CMD'
-                  : telemetrySource === 'ROS_SIM'
-                  ? 'ROS SIM'
-                  : telemetrySource === 'SIMULATED'
-                  ? 'DEMO SIM'
-                  : 'CAN OFFLINE'}
-              </span>
-            </div>
-
-            {/* Motor RPM & Floating Throttle Power Bar */}
-            <div>
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm font-semibold text-neutral-300">Electric Motor</span>
-                <span className="text-2xl font-black tabular-nums text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
-                  {motorRpm !== null ? motorRpm.toLocaleString() : '--'}{' '}
-                  <span className="text-xs font-normal text-neutral-400">RPM</span>
-                </span>
-              </div>
-              {/* Floating Throttle Tube */}
-              <div className="h-3.5 bg-neutral-900/90 rounded-full overflow-hidden border border-neutral-700/60 shadow-inner">
-                <div
-                  className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 transition-all duration-75 shadow-[0_0_12px_rgba(6,182,212,0.8)]"
-                  style={{ width: `${throttlePercent}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-neutral-400 mt-1 font-mono">
-                <span>IDLE</span>
-                <span className="text-neutral-300 font-bold">{throttlePercent}% DEMAND</span>
-                <span>PEAK</span>
-              </div>
-            </div>
-
-            {/* CAN Bus Update Rate */}
-            <div className="flex justify-between items-baseline pt-0.5 border-t border-neutral-900/80">
-              <span className="text-sm font-semibold text-neutral-300">
-                Bus Rate ({telemetry.can_interface || 'can2'})
-              </span>
-              <div className="flex items-center gap-2">
-                <Activity className={`w-4 h-4 ${busRateHz > 0 ? 'text-cyan-400 animate-pulse' : 'text-neutral-600'}`} />
-                <span
-                  className={`text-2xl font-black tabular-nums ${
-                    busRateHz > 0
-                      ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]'
-                      : 'text-neutral-500'
-                  }`}
-                >
-                  {busRateHz.toFixed(1)} Hz
-                </span>
-              </div>
-            </div>
-
-            {/* CAN Controller Counters (Floating Diagnostic Row) */}
-            <div className="flex justify-between items-center text-xs py-1 border-b border-neutral-900/80 font-mono">
-              <span className="text-neutral-400">TEC: <span className="text-emerald-400 font-bold">{hasRtDiag ? mcpTec : '--'}</span></span>
-              <span className="text-neutral-400">REC: <span className="text-emerald-400 font-bold">{hasRtDiag ? mcpRec : '--'}</span></span>
-              <span
-                className={
-                  mcpBusOff
-                    ? 'text-rose-400 font-bold'
-                    : canConnected
-                    ? 'text-emerald-400 font-bold'
-                    : 'text-neutral-500 font-bold'
-                }
-              >
-                {mcpBusOff ? 'BUS OFF' : canConnected ? 'LINK UP' : 'WAITING'}
-              </span>
-            </div>
-
-            {/* Total Frames */}
-            <div className="flex justify-between items-baseline pt-0.5">
-              <span className="text-sm font-semibold text-neutral-300">CAN Telemetry Frames</span>
-              <span className="text-base font-bold text-neutral-200 tabular-nums">
-                {totalFrames.toLocaleString()}
-              </span>
-            </div>
-          </div>
+          <HudPowertrainBus
+            telemetrySource={telemetrySource}
+            motorRpm={motorRpm}
+            throttlePercent={throttlePercent}
+            canInterface={telemetry.can_interface}
+            busRateHz={busRateHz}
+            hasRtDiag={hasRtDiag}
+            mcpTec={mcpTec}
+            mcpRec={mcpRec}
+            mcpBusOff={mcpBusOff}
+            canConnected={canConnected}
+            totalFrames={totalFrames}
+          />
         </div>
 
-        {/* ================= BOTTOM CONSOLE (TRANSMISSION & CONTROLS) ================= */}
-        <div className="flex items-end justify-between relative px-2">
-          {/* Bottom-Left: Camera Presets (44px touch targets) */}
-          <div className="flex items-center gap-2 bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 p-1.5 rounded-xl pointer-events-auto shadow-xl">
-            <Camera className="w-4 h-4 text-neutral-400 ml-1.5 mr-0.5" />
-            {(['chase', 'cabin', 'orbit'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setCameraMode(mode)}
-                className={`h-10 px-3.5 rounded-lg text-xs font-black uppercase transition-all ${
-                  cameraMode === mode
-                    ? 'bg-neutral-800 text-cyan-300 shadow-md border border-neutral-700'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                {mode === 'orbit' ? '360°' : mode}
-              </button>
-            ))}
-          </div>
+        <HudBottomControls
+          cameraMode={cameraMode}
+          setCameraMode={setCameraMode}
+          showThreat={showThreat}
+          nearestThreat={nearestThreat}
+          threatIsPed={threatIsPed}
+          isAuto={isAuto}
+          rosDot={rosDot}
+          rosStatus={rosStatus}
+          rosPoseOk={rosPoseOk}
+          rosStatusText={rosStatusText}
+          speedUnit={speedUnit}
+          setSpeedUnit={setSpeedUnit}
+          toggleActiveView={toggleActiveView}
+        />
 
-          {/* Bottom-Center: Autoware Perception Radar, Drive Mode & Link Status */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 flex flex-col items-center pointer-events-none gap-1">
-            {/* Proximity warning banner (Symbol + Text + Colour) */}
-            {showThreat && nearestThreat && (
-              <div
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border font-mono font-black text-xs shadow-2xl animate-pulse ${
-                  threatIsPed
-                    ? 'bg-amber-950/90 border-amber-400 text-amber-300'
-                    : 'bg-rose-950/90 border-rose-400 text-rose-300'
-                }`}
-              >
-                <TriangleAlert className="w-4 h-4" />
-                <span>
-                  {threatIsPed ? 'PEDESTRIAN' : nearestThreat.obj.label} AHEAD • {nearestThreat.dist.toFixed(1)} m
-                  {nearestThreat.obj.x < -0.5 ? ' • LEFT' : nearestThreat.obj.x > 0.5 ? ' • RIGHT' : ''}
-                </span>
-              </div>
-            )}
-
-            <span className="text-[11px] text-neutral-300 uppercase tracking-widest font-black drop-shadow-md">
-              {isAuto ? 'AUTONOMOUS DRIVING SYSTEM • DRIVE-BY-WIRE ACTIVE' : 'MANUAL DRIVE OVERRIDE'}
-            </span>
-            <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold tracking-wider">
-              <div className={`w-2 h-2 rounded-full ${rosDot}`} />
-              <span
-                className={
-                  rosStatus.active && rosPoseOk
-                    ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]'
-                    : rosStatus.active
-                    ? 'text-amber-400'
-                    : 'text-neutral-500'
-                }
-              >
-                {rosStatusText}
-              </span>
-            </div>
-          </div>
-
-          {/* Bottom-Right: Speed Unit Switcher & Return to CAN Monitor (44px touch targets) */}
-          <div className="flex items-center gap-3 pointer-events-auto">
-            {/* Units Switcher */}
-            <div className="flex bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 p-1 rounded-xl text-xs">
-              <button
-                onClick={() => setSpeedUnit('km/h')}
-                className={`h-9 px-3 rounded-lg transition-all font-black ${
-                  speedUnit === 'km/h' ? 'bg-neutral-800 text-white shadow' : 'text-neutral-500 hover:text-neutral-300'
-                }`}
-              >
-                KM/H
-              </button>
-              <button
-                onClick={() => setSpeedUnit('mph')}
-                className={`h-9 px-3 rounded-lg transition-all font-black ${
-                  speedUnit === 'mph' ? 'bg-neutral-800 text-white shadow' : 'text-neutral-500 hover:text-neutral-300'
-                }`}
-              >
-                MPH
-              </button>
-            </div>
-
-            {/* Pop out dedicated Camera Window */}
-            <button
-              onClick={() => {
-                window.open(
-                  '/camera',
-                  'ETrikeLiveCamera',
-                  'width=1024,height=640,menubar=no,toolbar=no,location=no,status=no'
-                );
-              }}
-              className="flex items-center gap-2 bg-[#080808]/95 hover:bg-neutral-900 text-cyan-300 border border-cyan-500/40 px-3.5 h-11 rounded-xl text-xs font-black transition-all shadow-xl"
-              title="Open Live Camera in a separate window"
-            >
-              <Camera className="w-4 h-4 text-cyan-400" />
-              <span>LIVE CAMERA</span>
-              <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
-            </button>
-
-            {/* Quick return to CAN Monitor */}
-            <button
-              onClick={toggleActiveView}
-              className="flex items-center gap-2 bg-[#080808]/95 hover:bg-neutral-900 text-neutral-200 border border-neutral-700/80 px-4 h-11 rounded-xl text-xs font-black transition-all shadow-xl"
-              title="Switch back to CAN Bus Engineering Monitor (Tab)"
-            >
-              <Eye className="w-4 h-4 text-cyan-400" />
-              <span>CAN MONITOR</span>
-              <span className="text-[10px] text-neutral-400 bg-neutral-900 px-1.5 py-0.5 rounded border border-neutral-700 font-bold">
-                Tab
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* ================= RIGHT-SIDE VISIBILITY TOGGLES (QUICK ICON BUTTONS) ================= */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-2.5 bg-[#080808]/90 backdrop-blur-xl border border-neutral-800/90 p-2 rounded-2xl pointer-events-auto shadow-2xl z-40">
-          {/* TukTuk Ego Vehicle Toggle */}
-          <button
-            onClick={toggleShowTukTuk}
-            title={showTukTuk ? "Hide E-Trike Model (TukTuk)" : "Show E-Trike Model (TukTuk)"}
-            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
-              showTukTuk
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 shadow-[0_0_12px_rgba(6,182,212,0.35)]'
-                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
-            }`}
-          >
-            <Car className="w-4 h-4" />
-            <span className="text-[9px] font-black tracking-tighter mt-0.5">TUK</span>
-          </button>
-
-          {/* Speed Display Toggle */}
-          <button
-            onClick={toggleShowSpeed}
-            title={showSpeed ? "Hide Speedometer Display" : "Show Speedometer Display"}
-            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
-              showSpeed
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.35)]'
-                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
-            }`}
-          >
-            <Gauge className="w-4 h-4" />
-            <span className="text-[9px] font-black tracking-tighter mt-0.5">SPD</span>
-          </button>
-
-          {/* Skeletons Toggle */}
-          <button
-            onClick={toggleShowSkeletons}
-            title={showSkeletons ? "Hide RTMPose Keypoint Skeletons" : "Show RTMPose Keypoint Skeletons"}
-            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
-              showSkeletons
-                ? 'bg-amber-500/20 text-amber-300 border-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
-                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
-            }`}
-          >
-            <Bone className="w-4 h-4" />
-            <span className="text-[9px] font-black tracking-tighter mt-0.5">SKEL</span>
-          </button>
-
-          {/* Point Cloud Toggle */}
-          <button
-            onClick={toggleShowPointCloud}
-            title={showPointCloud ? "Hide LiDAR Point Cloud" : "Show LiDAR Point Cloud"}
-            className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all border ${
-              showPointCloud
-                ? 'bg-violet-500/20 text-violet-300 border-violet-400/60 shadow-[0_0_12px_rgba(167,139,250,0.35)]'
-                : 'bg-neutral-900/80 text-neutral-500 border-neutral-800 hover:text-neutral-300'
-            }`}
-          >
-            <Cloud className="w-4 h-4" />
-            <span className="text-[9px] font-black tracking-tighter mt-0.5">PTS</span>
-          </button>
-        </div>
+        <HudVisibilityToggles
+          showTukTuk={showTukTuk}
+          showSpeed={showSpeed}
+          showSkeletons={showSkeletons}
+          showPointCloud={showPointCloud}
+          toggleShowTukTuk={toggleShowTukTuk}
+          toggleShowSpeed={toggleShowSpeed}
+          toggleShowSkeletons={toggleShowSkeletons}
+          toggleShowPointCloud={toggleShowPointCloud}
+        />
       </div>
     </>
   );
