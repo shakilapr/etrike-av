@@ -144,30 +144,66 @@ export class RoadEnvironment {
     this.pathPulseOffset += dt * 2.5;
 
     if (plannedTrajectory && plannedTrajectory.length >= 3) {
-      // Use real Autoware Universe trajectory waypoints
+      // Use real Autoware Universe trajectory waypoints with tangent-normal extrusion
+      const trajLen = plannedTrajectory.length;
       for (let j = 0; j <= segments; j++) {
         const t = j / segments;
-        const ptIdx = Math.min(Math.floor(t * (plannedTrajectory.length - 1)), plannedTrajectory.length - 1);
+        const ptIdx = Math.min(Math.floor(t * (trajLen - 1)), trajLen - 1);
+        const nextIdx = Math.min(ptIdx + 1, trajLen - 1);
         const pt = plannedTrajectory[ptIdx];
+        const nextPt = plannedTrajectory[nextIdx];
+
+        let dx = nextPt.x - pt.x;
+        let dz = nextPt.z - pt.z;
+        if (ptIdx === nextIdx && ptIdx > 0) {
+          const prevPt = plannedTrajectory[ptIdx - 1];
+          dx = pt.x - prevPt.x;
+          dz = pt.z - prevPt.z;
+        }
+        const len = Math.hypot(dx, dz);
+        const nx = len > 0.001 ? -dz / len : 1.0;
+        const nz = len > 0.001 ? dx / len : 0.0;
+
         const vIdx = j * 2;
-        pos.setXYZ(vIdx, pt.x - halfRibbonWidth, 0.02, pt.z);
-        pos.setXYZ(vIdx + 1, pt.x + halfRibbonWidth, 0.02, pt.z);
+        pos.setXYZ(vIdx, pt.x - halfRibbonWidth * nx, 0.02, pt.z - halfRibbonWidth * nz);
+        pos.setXYZ(vIdx + 1, pt.x + halfRibbonWidth * nx, 0.02, pt.z + halfRibbonWidth * nz);
       }
     } else {
-      // Kinematic vehicle curvature fallback
+      // Kinematic bicycle model curvature fallback with normal extrusion
       const L = 2.0; // Wheelbase
       const steerRad = (steerDeg * Math.PI) / 180;
-      const kappa = Math.tan(steerRad) / L;
       const length = 32.0;
 
-      for (let j = 0; j <= segments; j++) {
-        const t = j / segments;
-        const z = -t * length;
-        const curveX = -0.45 * kappa * z * z;
+      if (Math.abs(steerRad) < 0.001) {
+        // Straight-line path
+        for (let j = 0; j <= segments; j++) {
+          const t = j / segments;
+          const z = -t * length;
+          const vIdx = j * 2;
+          pos.setXYZ(vIdx, -halfRibbonWidth, 0.02, z);
+          pos.setXYZ(vIdx + 1, halfRibbonWidth, 0.02, z);
+        }
+      } else {
+        const R = L / Math.tan(steerRad);
+        const kappa = 1.0 / R;
 
-        const vIdx = j * 2;
-        pos.setXYZ(vIdx, curveX - halfRibbonWidth, 0.02, z);
-        pos.setXYZ(vIdx + 1, curveX + halfRibbonWidth, 0.02, z);
+        for (let j = 0; j <= segments; j++) {
+          const t = j / segments;
+          const s = t * length;
+          const theta = s * kappa;
+
+          // Kinematic arc starting at (0, 0, 0) heading forward (-Z)
+          const curveX = -R * (1.0 - Math.cos(theta));
+          const curveZ = -R * Math.sin(theta);
+
+          // Unit normal perpendicular to tangent: t = (-sin(theta), -cos(theta)) => n = (cos(theta), -sin(theta))
+          const nx = Math.cos(theta);
+          const nz = -Math.sin(theta);
+
+          const vIdx = j * 2;
+          pos.setXYZ(vIdx, curveX - halfRibbonWidth * nx, 0.02, curveZ - halfRibbonWidth * nz);
+          pos.setXYZ(vIdx + 1, curveX + halfRibbonWidth * nx, 0.02, curveZ + halfRibbonWidth * nz);
+        }
       }
     }
     pos.needsUpdate = true;

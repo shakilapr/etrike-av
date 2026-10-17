@@ -111,7 +111,15 @@ export const useCanStore = create<CanState>((set, get) => ({
     }
   })(),
   zoomToast: null,
-  activeView: 'cockpit',
+  activeView: (() => {
+    try {
+      const v = localStorage.getItem('av_dashboard_active_view');
+      if (v === 'monitor' || v === 'cockpit' || v === 'radar') return v;
+      return 'cockpit';
+    } catch {
+      return 'cockpit';
+    }
+  })(),
   cameraMode: (() => {
     try {
       const mode = localStorage.getItem('av_dashboard_camera_mode');
@@ -122,7 +130,7 @@ export const useCanStore = create<CanState>((set, get) => ({
     }
   })(),
   speedUnit: 'km/h',
-  demoPedestrian: true,
+  demoPedestrian: false,
   showTukTuk: (() => {
     try {
       const v = localStorage.getItem('av_dashboard_show_tuktuk');
@@ -264,7 +272,6 @@ export const useCanStore = create<CanState>((set, get) => ({
         };
 
         ws.onmessage = (event) => {
-          if (get().isPaused) return;
           try {
             const data = JSON.parse(event.data);
             const updates: Partial<CanState> = {};
@@ -278,7 +285,9 @@ export const useCanStore = create<CanState>((set, get) => ({
             if (data.telemetry) {
               updates.telemetry = data.telemetry;
             }
-            if (data.frames && Array.isArray(data.frames)) {
+            // Freeze CAN message list / packet inspector ONLY when paused.
+            // Safety telemetry, ROS status, perception, and trajectory must NEVER freeze!
+            if (!get().isPaused && data.frames && Array.isArray(data.frames)) {
               const currentFrames = { ...get().framesById };
               for (const f of data.frames) {
                 currentFrames[f.id] = f;

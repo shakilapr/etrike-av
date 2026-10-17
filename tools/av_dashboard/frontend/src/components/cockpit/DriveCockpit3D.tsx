@@ -138,12 +138,11 @@ export const DriveCockpit3D: React.FC = () => {
       );
 
       // Update Surrounding Traffic, Pedestrians & Obstacles.
-      // Hide objects entirely until ego pose is valid, otherwise every actor would
-      // pile up at the origin while localization is still converging.
-      const poseOk = state.rosStatus.pose_ok !== false;
+      // Detections in relative base_link frame remain visible even during localization convergence;
+      // HUD indicates localization health via rosStatus.pose_ok banner.
       traffic.update(
         telemetry.speed_act_kmh,
-        poseOk ? state.perceptionObjects : [],
+        state.perceptionObjects,
         state.rosStatus.active,
         dt,
         state.humanPoses || state.rosStatus.human_poses,

@@ -90,3 +90,7 @@ node_modules/
 # Meta Momentum Human Rig (MHR) assets — large, Apache-2.0, fetched on demand
 /tools/av_dashboard/backend/data/mhr_assets/
 
+# Temporary / Scratch exports
+/tem/
+
+

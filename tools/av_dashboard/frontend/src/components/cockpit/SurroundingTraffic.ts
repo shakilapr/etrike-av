@@ -1375,7 +1375,9 @@ export class SurroundingTraffic {
 
     const rawPoses = humanPoses?.poses;
 
-    // 1. Spatial NMS on incoming perceptionList: suppress duplicate pedestrian detections within 2.2m
+    // 1. Cross-sensor spatial fusion on incoming perceptionList:
+    // Only fuse detections if they share the same ID OR represent cross-modality duplicates (Camera vs LiDAR within 1.1m).
+    // NEVER merge two distinct tracks from the same sensor!
     const rawList: PerceptionObject[] = [...(perceptionList || [])];
     const dedupList: PerceptionObject[] = [];
     const pedProvPriority = (p?: string) => {
@@ -1390,7 +1392,12 @@ export class SurroundingTraffic {
       let matchIdx = -1;
       for (let i = 0; i < dedupList.length; i++) {
         const acc = dedupList[i];
-        if (acc.label === 'PEDESTRIAN' && Math.hypot(obj.x - acc.x, obj.z - acc.z) < 2.2) {
+        if (acc.label !== 'PEDESTRIAN') continue;
+        const sameId = obj.id && acc.id && String(obj.id) === String(acc.id);
+        const dist = Math.hypot(obj.x - acc.x, obj.z - acc.z);
+        // Only consider cross-modality merge if sensor types differ and distance is close (< 1.1m)
+        const diffSensors = pedProvPriority(obj.sensor) !== pedProvPriority(acc.sensor);
+        if (sameId || (diffSensors && dist < 1.1)) {
           matchIdx = i;
           break;
         }
@@ -1416,7 +1423,7 @@ export class SurroundingTraffic {
     // 2. Correlate every detected human pose with an actor, unifying IDs to det_N
     if (rawPoses && rawPoses.length > 0) {
       rawPoses.forEach((pose, pIdx) => {
-        const targetX = pose.y_base;
+        const targetX = -pose.y_base;
         const targetZ = 1.0 - pose.x_base;
         let matchedObj: PerceptionObject | undefined = undefined;
         for (const obj of effectiveList) {
@@ -1541,11 +1548,11 @@ export class SurroundingTraffic {
           // Dynamically scale bounding box & mesh height to LiDAR cluster dimensions if provided
           if (obj.dz && obj.dz > 0.8 && obj.dz < 2.5) {
             if (actor.pedBoxMesh) {
-              actor.pedBoxMesh.scale.set(Math.max(0.45, obj.dx || 0.70), obj.dz, Math.max(0.45, obj.dy || 0.70));
+              actor.pedBoxMesh.scale.set(Math.max(0.45, obj.dy || 0.70), obj.dz, Math.max(0.45, obj.dx || 0.70));
               actor.pedBoxMesh.position.y = obj.dz * 0.5;
             }
             if (actor.pedEdgesMesh) {
-              actor.pedEdgesMesh.scale.set(Math.max(0.45, obj.dx || 0.70), obj.dz, Math.max(0.45, obj.dy || 0.70));
+              actor.pedEdgesMesh.scale.set(Math.max(0.45, obj.dy || 0.70), obj.dz, Math.max(0.45, obj.dx || 0.70));
               actor.pedEdgesMesh.position.y = obj.dz * 0.5;
             }
             if (actor.humanObjMesh) {

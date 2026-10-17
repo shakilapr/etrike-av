@@ -138,8 +138,8 @@ class LidarStreamer:
             # 4. Transform from base_link (REP-103) to Three.js world coordinates:
             # base_link: +X forward from rear axle, +Y left, +Z up from ground
             # Three.js: +X right, +Y up, -Z forward (wheelbase center at Z=0.0, rear axle at Z=+1.0m)
-            # Basis matrix: X_three = Y_base (corrected Left-Right mirroring), Y_three = Z_base, Z_three = 1.0 - X_base
-            three_x = base_y
+            # Basis matrix: X_three = -Y_base (ROS +Y left -> Three.js -X left), Y_three = Z_base, Z_three = 1.0 - X_base
+            three_x = -base_y
             three_y = base_z
             three_z = 1.0 - base_x
 

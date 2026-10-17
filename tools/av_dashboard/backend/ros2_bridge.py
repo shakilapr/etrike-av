@@ -605,16 +605,16 @@ class Ros2Bridge:
         # Base_link: forward (+X), left (+Y)
         base_x = cos_yaw * dx + sin_yaw * dy
         base_y = -sin_yaw * dx + cos_yaw * dy
-        # The base_link -> Three.js basis (x=+Y, z=-X) is a mirror, so headings are
-        # negated to stay consistent with _relative_transform and the LiDAR cloud.
-        rel_yaw = -(yaw - ego_yaw)
+        # Standard ROS REP-103 to Three.js orientation:
+        # Standard right-handed transform: Yaw angle theta around ROS +Z (Up) maps
+        # identically to rotation around Three.js +Y (Up) when Three.js X = -base_y and Z = -base_x.
+        rel_yaw = yaw - ego_yaw
 
         # Three.js: right (+X), up (+Y), forward (-Z). The scene origin is the
         # wheelbase center, so base_link (REP-103, ground projection of the rear
         # axle) sits at Z = +1.0 m. This MUST match LidarStreamer.process_pointcloud
-        # and the rendered Tuktuk model, otherwise the LiDAR cloud, perception
-        # boxes and the planned trajectory cannot coexist in one frame.
-        three_x = base_y
+        # and the rendered Tuktuk model, where left is -X and right is +X.
+        three_x = -base_y
         three_y = dz
         three_z = BASE_LINK_TO_SCENE_Z_OFFSET - base_x
 
@@ -624,10 +624,10 @@ class Ros2Bridge:
     def _relative_transform(x: float, y: float, z: float, yaw: float) -> Tuple[float, float, float, float]:
         """Convert an already base_link-relative pose (base: +X fwd, +Y left) to Three.js."""
         return (
-            round(y, 2),
+            round(-y, 2),
             round(z, 2),
             round(BASE_LINK_TO_SCENE_Z_OFFSET - x, 2),
-            round(-yaw, 2),
+            round(yaw, 2),
         )
 
     def _classify(self, obj: Any) -> str:
@@ -1028,7 +1028,7 @@ class Ros2Bridge:
                     track_id = f"fuse_{m.id}"
                     if self._human_poses and isinstance(self._human_poses, dict):
                         for p in self._human_poses.get("poses", []):
-                            p_x = float(p.get("y_base", 0.0))
+                            p_x = -float(p.get("y_base", 0.0))
                             p_z = round(BASE_LINK_TO_SCENE_Z_OFFSET - float(p.get("x_base", 0.0)), 2)
                             if math.hypot(tx - p_x, tz - p_z) < 2.5:
                                 track_id = str(p.get("id")) or track_id

@@ -377,9 +377,10 @@ class FusionMeshNode(LifecycleNode):
                         "yaw": math.atan2(-co_pos[1], -co_pos[0]),
                     })
 
-        # 2b. Spatial NMS: Guarantee exactly 1 track per physical person (suppress duplicates within 1.8m)
+        # 2b. Spatial Deduplication: Suppress true physical duplicates (< 0.45m shoulder overlap)
+        # or cross-modality leftovers (FUSED overriding leftover CAMERA_ONLY/LIDAR_ONLY within 0.8m).
+        # Distinct detections (e.g. two people walking 1.0m apart) must ALWAYS be preserved.
         clean_tracks: List[Dict[str, Any]] = []
-        # Sort priority: FUSED > CAMERA_ONLY > LIDAR_ONLY, then higher confidence
         type_priority = {"FUSED": 3, "CAMERA_ONLY": 2, "LIDAR_ONLY": 1}
         sorted_tracks = sorted(
             fused_tracks,
@@ -388,10 +389,19 @@ class FusionMeshNode(LifecycleNode):
         )
         for candidate in sorted_tracks:
             c_pos = candidate["pos"]
-            overlap = any(
-                float(np.linalg.norm(c_pos[:2] - accepted["pos"][:2])) < 1.8
-                for accepted in clean_tracks
-            )
+            c_type = candidate["type"]
+            overlap = False
+            for accepted in clean_tracks:
+                dist = float(np.linalg.norm(c_pos[:2] - accepted["pos"][:2]))
+                a_type = accepted["type"]
+                # 1. Physical volume overlap (center-to-center distance < 0.45m)
+                if dist < 0.45:
+                    overlap = True
+                    break
+                # 2. Cross-modality leftover: FUSED already explains this location within 0.8m
+                if a_type == "FUSED" and c_type != "FUSED" and dist < 0.8:
+                    overlap = True
+                    break
             if not overlap:
                 clean_tracks.append(candidate)
         fused_tracks = clean_tracks

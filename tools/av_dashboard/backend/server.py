@@ -775,7 +775,8 @@ async def camera_snapshot():
 @app.websocket("/ws")  # fallback alias
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
-    active_websockets.add(websocket)
+    async with _send_lock:
+        active_websockets.add(websocket)
     try:
         snapshot = {
             "type": "snapshot",
@@ -791,7 +792,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except (WebSocketDisconnect, asyncio.CancelledError):
         pass
     finally:
-        active_websockets.discard(websocket)
+        async with _send_lock:
+            active_websockets.discard(websocket)
 
 
 # High-speed binary WebSocket endpoint for real LiDAR pointcloud stream
