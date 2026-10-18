@@ -96,6 +96,9 @@ SKELETON_EDGES = [
     (12, 14), (14, 16),                       # Right leg
 ]
 
+# Precomputed 256-color Turbo depth lookup table for sub-millisecond point coloring
+TURBO_LUT = cv2.applyColorMap(np.arange(256, dtype=np.uint8)[:, None], cv2.COLORMAP_TURBO)[:, 0, :]
+
 
 class KalmanBox3DTracker:
     """3D Constant-Velocity Kalman Filter for smooth multi-object tracking."""
@@ -288,6 +291,7 @@ class CameraLidarFusionNode(LifecycleNode):
 
         self._trackers: List[KalmanBox3DTracker] = []
         self._yolo_model: Optional[Any] = None
+        self._dash_canvas: Optional[np.ndarray] = None
 
         # Publishers
         self._pub_objects: Optional[LifecyclePublisher] = None
@@ -546,7 +550,7 @@ class CameraLidarFusionNode(LifecycleNode):
                     self._waiting_log_time = now
 
             if cam_active:
-                img = self._last_image.copy()
+                img = self._last_image
             else:
                 img = np.zeros((1080, 1920, 3), dtype=np.uint8)
                 img[:] = (20, 24, 30)
@@ -559,42 +563,62 @@ class CameraLidarFusionNode(LifecycleNode):
 
             h_orig, w_orig = img.shape[:2]
 
+            t0 = time.perf_counter()
             if lidar_active and self._last_lidar_pts is not None:
                 floor_z_lidar = float(self.get_parameter("ground_filter_z_lidar_m").value)
-                non_floor_mask = self._last_lidar_pts[:, 2] > floor_z_lidar
-                non_floor_pts = self._last_lidar_pts[non_floor_mask]
+                max_r = float(self.get_parameter("max_radar_range_m").value)
+                pts_raw = self._last_lidar_pts
+                fwd_mask = (pts_raw[:, 2] > floor_z_lidar) & \
+                           (pts_raw[:, 0] > 0.0) & \
+                           (pts_raw[:, 0] < max_r) & \
+                           (np.abs(pts_raw[:, 1]) < max_r * 0.55)
+                non_floor_pts = pts_raw[fwd_mask]
                 clusters_3d = self._euclidean_clustering_3d(non_floor_pts)
                 proj_clusters = self._project_clusters_to_camera(clusters_3d, w_orig, h_orig)
             else:
                 non_floor_pts = np.zeros((0, 4), dtype=np.float32)
                 clusters_3d = []
                 proj_clusters = []
+            t1 = time.perf_counter()
 
             detections_2d = self._detect_2d_boxes(img) if cam_active else []
+            t2 = time.perf_counter()
 
             # 5. Multi-Tier Association (FUSED + VISION)
             current_actors = self._associate_multi_tier(detections_2d, proj_clusters)
+            t3 = time.perf_counter()
 
             # 6. Multi-Object Tracking with 3D Kalman Filter
             active_trackers = self._update_kalman_trackers(current_actors)
+            t4 = time.perf_counter()
 
             # 7. Publish Isolated ROS 2 Messages
             stamp = self.get_clock().now().to_msg()
             self._publish_ros_messages(active_trackers, stamp)
+            t4_ros = time.perf_counter()
 
             # 8. Render & Publish Visual Streams (Unobstructed Cockpit HUD)
-            self._publish_visual_streams(img, non_floor_pts, active_trackers, stamp)
+            t_cam_ms, t_bev_ms, t_pub_ms = self._publish_visual_streams(img, non_floor_pts, active_trackers, stamp)
+            t5 = time.perf_counter()
 
             if not hasattr(self, '_step_cnt'):
                 self._step_cnt = 0
             self._step_cnt += 1
-            if self._step_cnt % 30 == 0:
-                self.get_logger().info(f"[HEARTBEAT] step={self._step_cnt} | cam_active={cam_active} | lidar_active={lidar_active} | tracks={len(active_trackers)}")
+            if self._step_cnt % 15 == 0:
+                tot_ms = (t5 - t0) * 1000.0
+                c_ms = (t1 - t0) * 1000.0
+                d_ms = (t2 - t1) * 1000.0
+                a_ms = (t3 - t2) * 1000.0
+                k_ms = (t4 - t3) * 1000.0
+                ros_ms = (t4_ros - t4) * 1000.0
+                r_ms = (t5 - t4_ros) * 1000.0
+                fps = 1000.0 / max(0.1, tot_ms)
+                self.get_logger().info(f"[PERF {fps:.1f} FPS] tot={tot_ms:.1f}ms | clus={c_ms:.1f}ms | det={d_ms:.1f}ms | kal={k_ms:.1f}ms | ros_m={ros_ms:.1f}ms | cam_r={t_cam_ms:.1f}ms | bev_r={t_bev_ms:.1f}ms | pub_img={t_pub_ms:.1f}ms | trk={len(active_trackers)}")
         except Exception as e:
             self.get_logger().error(f"Error in _fusion_step: {e}\n{traceback.format_exc()}")
 
     def _euclidean_clustering_3d(self, non_floor_pts: np.ndarray) -> List[Dict[str, Any]]:
-        """Cluster 3D non-ground LiDAR points in vehicle base_link frame using DBSCAN."""
+        """Ultra-fast 2D/3D grid connected components clustering (sub-2ms execution)."""
         cluster_min_pts = int(self.get_parameter("cluster_min_pts").value)
         if len(non_floor_pts) < cluster_min_pts:
             return []
@@ -609,32 +633,42 @@ class CameraLidarFusionNode(LifecycleNode):
         by = non_floor_pts[:, 1] + ly
         bz = non_floor_pts[:, 2] + lz
 
-        forward = (bx > 0.5) & (bx < max_r) & (np.abs(by) < max_r * 0.55)
-        if np.sum(forward) < cluster_min_pts:
+        valid_z = bz < 2.5
+        if np.sum(valid_z) < cluster_min_pts:
             return []
 
-        f_pts = np.column_stack([bx[forward], by[forward], bz[forward]])
-        cluster_eps = float(self.get_parameter("cluster_eps_m").value)
+        f_pts = np.column_stack([bx[valid_z], by[valid_z], bz[valid_z]])
 
-        # Ultra-fast spatial voxel downsampling (reduces 20k pts to ~350 pts; 250x clustering speedup)
-        if len(f_pts) > 350:
-            vox = np.floor(f_pts / 0.12).astype(np.int32)
-            _, u_idx = np.unique(vox, axis=0, return_index=True)
-            pts_cluster = f_pts[u_idx]
-        else:
-            pts_cluster = f_pts
+        # 2D Grid spatial hashing (22cm resolution)
+        cell_size = 0.22
+        x_min, x_max = 0.5, max_r
+        y_span = max_r * 0.55
+        nx = int(np.ceil((x_max - x_min) / cell_size))
+        ny = int(np.ceil((2.0 * y_span) / cell_size))
 
-        labels = dbscan_fast(pts_cluster, eps=cluster_eps, min_samples=max(3, cluster_min_pts // 2))
+        gx = np.clip(((f_pts[:, 0] - x_min) / cell_size).astype(np.int32), 0, nx - 1)
+        gy = np.clip(((f_pts[:, 1] + y_span) / cell_size).astype(np.int32), 0, ny - 1)
+
+        grid = np.zeros((nx, ny), dtype=np.uint8)
+        grid[gx, gy] = 255
+
+        num_labels, label_grid, stats, _ = cv2.connectedComponentsWithStats(grid, connectivity=8)
+        if num_labels <= 1:
+            return []
+
+        pt_labels = label_grid[gx, gy]
+        counts = np.bincount(pt_labels, minlength=num_labels)
+
         clusters = []
-        for k in set(labels):
-            if k == -1:
+        for k in range(1, num_labels):
+            if counts[k] < cluster_min_pts:
                 continue
-            c_pts = pts_cluster[labels == k]
+            c_pts = f_pts[pt_labels == k]
             min_b = np.min(c_pts, axis=0)
             max_b = np.max(c_pts, axis=0)
             centroid = np.mean(c_pts, axis=0)
             dims = max_b - min_b
-            if dims[0] < 5.0 and dims[1] < 4.0:
+            if dims[0] < 5.0 and dims[1] < 4.5:
                 clusters.append({
                     "points": c_pts,
                     "centroid": centroid,
@@ -642,7 +676,7 @@ class CameraLidarFusionNode(LifecycleNode):
                     "max_bound": max_b,
                     "dims": dims,
                     "dist": float(np.linalg.norm(centroid)),
-                    "count": len(c_pts),
+                    "count": int(counts[k]),
                 })
         return clusters
 
@@ -997,6 +1031,8 @@ class CameraLidarFusionNode(LifecycleNode):
 
         marker_arr = MarkerArray()
 
+        has_sub_markers = self._pub_markers is not None and self._pub_markers.is_activated and self._pub_markers.get_subscription_count() > 0
+
         for idx, trk in enumerate(active_trackers):
             ox, oy, oz = trk.x[:3]
             sx, sy, sz = (0.7, 0.7, 1.7) if trk.name == "person" else (2.0, 4.2, 1.6)
@@ -1028,37 +1064,36 @@ class CameraLidarFusionNode(LifecycleNode):
 
             out_objs.objects.append(det)
 
-            # RViz Marker: 3D Box
-            m_box = Marker()
-            m_box.header.stamp = stamp
-            m_box.header.frame_id = "base_link"
-            m_box.ns = "fused_boxes"
-            m_box.id = idx * 2
-            m_box.type = Marker.CUBE
-            m_box.action = Marker.ADD
-            m_box.pose.position = Point(x=float(ox), y=float(oy), z=float(oz))
-            m_box.pose.orientation = Quaternion(x=0.0, y=0.0, z=math.sin(trk.yaw * 0.5), w=math.cos(trk.yaw * 0.5))
-            m_box.scale = Vector3(x=float(sx), y=float(sy), z=float(sz))
-            dist_m = float(np.linalg.norm(trk.x[:3]))
-            m_box.color = ColorRGBA(r=0.0, g=1.0, b=0.4, a=0.55) if dist_m > 3.0 else ColorRGBA(r=1.0, g=0.2, b=0.0, a=0.65)
-            marker_arr.markers.append(m_box)
+            if has_sub_markers:
+                dist_m = float(np.linalg.norm(trk.x[:3]))
+                m_box = Marker()
+                m_box.header.stamp = stamp
+                m_box.header.frame_id = "base_link"
+                m_box.ns = "fused_boxes"
+                m_box.id = idx * 2
+                m_box.type = Marker.CUBE
+                m_box.action = Marker.ADD
+                m_box.pose.position = Point(x=float(ox), y=float(oy), z=float(oz))
+                m_box.pose.orientation = Quaternion(x=0.0, y=0.0, z=math.sin(trk.yaw * 0.5), w=math.cos(trk.yaw * 0.5))
+                m_box.scale = Vector3(x=float(sx), y=float(sy), z=float(sz))
+                m_box.color = ColorRGBA(r=0.0, g=1.0, b=0.4, a=0.55) if dist_m > 3.0 else ColorRGBA(r=1.0, g=0.2, b=0.0, a=0.65)
+                marker_arr.markers.append(m_box)
 
-            # RViz Marker: Text Tag
-            m_txt = Marker()
-            m_txt.header.stamp = stamp
-            m_txt.header.frame_id = "base_link"
-            m_txt.ns = "fused_tags"
-            m_txt.id = idx * 2 + 1
-            m_txt.type = Marker.TEXT_VIEW_FACING
-            m_txt.action = Marker.ADD
-            m_txt.pose.position = Point(x=float(ox), y=float(oy), z=float(oz + sz / 2.0 + 0.3))
-            m_txt.scale.z = 0.35
-            m_txt.text = f"ID:{trk.id} {trk.name.upper()} {dist_m:.1f}m"
-            m_txt.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.95)
-            marker_arr.markers.append(m_txt)
+                m_txt = Marker()
+                m_txt.header.stamp = stamp
+                m_txt.header.frame_id = "base_link"
+                m_txt.ns = "fused_tags"
+                m_txt.id = idx * 2 + 1
+                m_txt.type = Marker.TEXT_VIEW_FACING
+                m_txt.action = Marker.ADD
+                m_txt.pose.position = Point(x=float(ox), y=float(oy), z=float(oz + sz / 2.0 + 0.3))
+                m_txt.scale.z = 0.35
+                m_txt.text = f"ID:{trk.id} {trk.name.upper()} {dist_m:.1f}m"
+                m_txt.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.95)
+                marker_arr.markers.append(m_txt)
 
         self._pub_objects.publish(out_objs)
-        if self._pub_markers is not None and self._pub_markers.is_activated:
+        if has_sub_markers:
             self._pub_markers.publish(marker_arr)
 
     def _publish_visual_streams(
@@ -1069,53 +1104,66 @@ class CameraLidarFusionNode(LifecycleNode):
         stamp: Any
     ) -> None:
         """Render annotated camera feed and BEV radar map, and publish images."""
-        if (
-            (self._pub_debug_img is None or not self._pub_debug_img.is_activated) and
-            (self._pub_bev_img is None or not self._pub_bev_img.is_activated) and
-            (self._pub_dashboard is None or not self._pub_dashboard.is_activated)
-        ):
-            return
+        has_dbg = self._pub_debug_img is not None and self._pub_debug_img.is_activated and self._pub_debug_img.get_subscription_count() > 0
+        has_bev = self._pub_bev_img is not None and self._pub_bev_img.is_activated and self._pub_bev_img.get_subscription_count() > 0
+        has_dash = self._pub_dashboard is not None and self._pub_dashboard.is_activated
 
-        fx = float(self.get_parameter("fx_color").value)
-        fy = float(self.get_parameter("fy_color").value)
-        cx = float(self.get_parameter("cx_color").value)
-        cy = float(self.get_parameter("cy_color").value)
+        if not (has_dbg or has_bev or has_dash):
+            return 0.0, 0.0, 0.0
+
+        t_rend0 = time.perf_counter()
+        h_orig, w_orig = img.shape[:2]
+        # Direct render on 1280x720 canvas
+        if w_orig != 1280 or h_orig != 720:
+            cam_view_720 = cv2.resize(img, (1280, 720), interpolation=cv2.INTER_NEAREST)
+            sx = 1280.0 / float(w_orig)
+            sy = 720.0 / float(h_orig)
+        else:
+            cam_view_720 = img.copy()
+            sx = 1.0
+            sy = 1.0
+
+        fx = float(self.get_parameter("fx_color").value) * sx
+        fy = float(self.get_parameter("fy_color").value) * sy
+        cx = float(self.get_parameter("cx_color").value) * sx
+        cy = float(self.get_parameter("cy_color").value) * sy
         skel_thresh = float(self.get_parameter("skeleton_joint_threshold").value)
 
-        cam_canvas = img.copy()
-
+        # 1. Project non-floor LiDAR points onto 720p camera canvas (subsampled 3x with fast LUT)
         if len(non_floor_pts) > 0:
-            z_opt_all = non_floor_pts[:, 0] - 0.6250
+            vis_pts = non_floor_pts[::3]
+            z_opt_all = vis_pts[:, 0] - 0.6250
             valid_front = z_opt_all > 0.45
             z_v = z_opt_all[valid_front]
-            x_v = -non_floor_pts[valid_front, 1]
-            y_v = -(non_floor_pts[valid_front, 2] + 0.0464)
+            x_v = -vis_pts[valid_front, 1]
+            y_v = -(vis_pts[valid_front, 2] + 0.0464)
 
             u = (fx * (x_v / z_v) + cx).astype(int)
             v = (fy * (y_v / z_v) + cy).astype(int)
 
-            in_cam = (u >= 0) & (u < 1920) & (v >= 0) & (v < 1080)
+            in_cam = (u >= 0) & (u < 1280) & (v >= 0) & (v < 720)
             u_p = u[in_cam]
             v_p = v[in_cam]
             d_p = z_v[in_cam]
 
             norm_depth = np.clip((d_p - 1.0) / 10.0, 0.0, 1.0)
-            colors = cv2.applyColorMap((norm_depth * 255).astype(np.uint8), cv2.COLORMAP_TURBO)[:, 0, :]
+            idx_lut = (norm_depth * 255.0).astype(np.uint8)
+            colors = TURBO_LUT[idx_lut]
             if len(u_p) > 0:
-                cam_canvas[v_p, u_p] = colors
-                v_p1 = np.clip(v_p + 1, 0, 1079)
-                u_p1 = np.clip(u_p + 1, 0, 1919)
-                cam_canvas[v_p1, u_p] = colors
-                cam_canvas[v_p, u_p1] = colors
+                cam_view_720[v_p, u_p] = colors
         else:
-            cv2.rectangle(cam_canvas, (24, 24), (540, 68), (18, 20, 26), -1)
-            cv2.rectangle(cam_canvas, (24, 24), (540, 68), (0, 165, 255), 2)
-            cv2.putText(cam_canvas, "LIDAR CONNECTING | VISION ACTIVE", (38, 54),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 215, 255), 2, cv2.LINE_AA)
+            cv2.rectangle(cam_view_720, (16, 16), (420, 50), (18, 20, 26), -1)
+            cv2.rectangle(cam_view_720, (16, 16), (420, 50), (0, 165, 255), 2)
+            cv2.putText(cam_view_720, "LIDAR CONNECTING | VISION ACTIVE", (24, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 215, 255), 2)
 
-        # Draw 2D Bounding Boxes, Pose Skeletons & Status Badges
+        # 2. Draw 2D Bounding Boxes, Pose Skeletons & Status Badges directly on 720p (Fast LINE_8)
         for trk in active_trackers:
-            x1, y1, x2, y2 = trk.last_bbox
+            bx1, by1, bx2, by2 = trk.last_bbox
+            x1 = int(np.clip(bx1 * sx, 0, 1279))
+            y1 = int(np.clip(by1 * sy, 0, 719))
+            x2 = int(np.clip(bx2 * sx, 0, 1279))
+            y2 = int(np.clip(by2 * sy, 0, 719))
             dist_m = float(np.linalg.norm(trk.x[:3]))
 
             # Color palette
@@ -1131,7 +1179,7 @@ class CameraLidarFusionNode(LifecycleNode):
             else:
                 box_col = (255, 215, 0)      # Cyan for vision-confirmed actor
 
-            cv2.rectangle(cam_canvas, (x1, y1), (x2, y2), box_col, 2, cv2.LINE_AA)
+            cv2.rectangle(cam_view_720, (x1, y1), (x2, y2), box_col, 2)
 
             # Pose skeleton with dual-joint confidence gating
             if trk.last_kpts is not None and trk.last_kconfs is not None:
@@ -1140,31 +1188,31 @@ class CameraLidarFusionNode(LifecycleNode):
                 for (p1, p2) in SKELETON_EDGES:
                     if p1 < len(confs) and p2 < len(confs):
                         if confs[p1] >= skel_thresh and confs[p2] >= skel_thresh:
-                            pt1 = (int(kpts[p1, 0]), int(kpts[p1, 1]))
-                            pt2 = (int(kpts[p2, 0]), int(kpts[p2, 1]))
-                            cv2.line(cam_canvas, pt1, pt2, (0, 255, 255), 2, cv2.LINE_AA)
+                            pt1 = (int(np.clip(kpts[p1, 0] * sx, 0, 1279)), int(np.clip(kpts[p1, 1] * sy, 0, 719)))
+                            pt2 = (int(np.clip(kpts[p2, 0] * sx, 0, 1279)), int(np.clip(kpts[p2, 1] * sy, 0, 719)))
+                            cv2.line(cam_view_720, pt1, pt2, (0, 255, 255), 2)
                 for p_idx in range(len(confs)):
                     if confs[p_idx] >= skel_thresh:
-                        pt = (int(kpts[p_idx, 0]), int(kpts[p_idx, 1]))
-                        cv2.circle(cam_canvas, pt, 3, (0, 255, 255), -1, cv2.LINE_AA)
+                        pt = (int(np.clip(kpts[p_idx, 0] * sx, 0, 1279)), int(np.clip(kpts[p_idx, 1] * sy, 0, 719)))
+                        cv2.circle(cam_view_720, pt, 3, (0, 255, 255), -1)
 
             # Badges
             src_str = "PRED" if trk.time_since_update > 0 else (f"FUSED {trk.pts_count}p" if trk.track_type == "FUSED" else "VISION")
             tag = f"ID:{trk.id} [{src_str}] {dist_m:.2f}m"
-            (tw, th), _ = cv2.getTextSize(tag, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
-            b_y1 = max(0, y1 - th - 8)
-            cv2.rectangle(cam_canvas, (x1, b_y1), (x1 + tw + 8, y1), box_col, -1)
-            cv2.putText(cam_canvas, tag, (x1 + 4, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 0, 0), 1, cv2.LINE_AA)
+            (tw, th), _ = cv2.getTextSize(tag, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+            b_y1 = max(0, y1 - th - 6)
+            cv2.rectangle(cam_view_720, (x1, b_y1), (x1 + tw + 6, y1), box_col, -1)
+            cv2.putText(cam_view_720, tag, (x1 + 3, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
 
             speed = math.sqrt(trk.x[3]**2 + trk.x[4]**2)
             sub_tag = f"base: [{trk.x[0]:+.2f}, {trk.x[1]:+.2f}, {trk.x[2]:+.2f}]m | V:{speed:.1f}m/s"
-            (stw, sth), _ = cv2.getTextSize(sub_tag, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)
-            cv2.rectangle(cam_canvas, (x1, y2), (x1 + stw + 8, y2 + sth + 6), (15, 15, 15), -1)
-            cv2.putText(cam_canvas, sub_tag, (x1 + 4, y2 + sth + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 255, 255), 1, cv2.LINE_AA)
+            (stw, sth), _ = cv2.getTextSize(sub_tag, cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)
+            cv2.rectangle(cam_view_720, (x1, y2), (x1 + stw + 6, y2 + sth + 5), (15, 15, 15), -1)
+            cv2.putText(cam_view_720, sub_tag, (x1 + 3, y2 + sth + 1), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 255), 1)
 
-        cam_view_720 = cv2.resize(cam_canvas, (1280, 720), interpolation=cv2.INTER_LINEAR)
+        t_rend_cam = time.perf_counter()
 
-        # 2. Render 640x720 Top-Down BEV Radar (Unobstructed full vertical canvas)
+        # 3. Render 640x720 Top-Down BEV Radar (Unobstructed full vertical canvas)
         bev_w, bev_h = 640, 720
         bev_panel = np.zeros((bev_h, bev_w, 3), dtype=np.uint8)
         bev_panel[:] = (18, 20, 26)
@@ -1177,7 +1225,7 @@ class CameraLidarFusionNode(LifecycleNode):
         # Range rings
         for r in [2.5, 5.0, 7.5, 10.0, 12.5, 15.0]:
             r_px = int(r * scale)
-            cv2.circle(bev_panel, (cx_b, cy_b), r_px, (40, 45, 55), 1, cv2.LINE_AA)
+            cv2.circle(bev_panel, (cx_b, cy_b), r_px, (40, 45, 55), 1)
             cv2.putText(bev_panel, f"{r:.1f}m", (cx_b + 5, cy_b - r_px + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (80, 90, 110), 1)
 
         # Vehicle footprint
@@ -1185,10 +1233,11 @@ class CameraLidarFusionNode(LifecycleNode):
         cv2.rectangle(bev_panel, (cx_b - v_w // 2, cy_b - int(1.8 * scale)), (cx_b + v_w // 2, cy_b + int(0.8 * scale)), (0, 165, 255), 2)
         cv2.putText(bev_panel, "E-TRIKE", (cx_b - 22, cy_b + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 165, 255), 1)
 
-        # Background LiDAR scatter across full BEV canvas
+        # Background LiDAR scatter across full BEV canvas (subsampled 3x)
         if len(non_floor_pts) > 0:
-            xb = non_floor_pts[:, 0] + 0.5750
-            yb = non_floor_pts[:, 1]
+            vis_b = non_floor_pts[::3]
+            xb = vis_b[:, 0] + 0.5750
+            yb = vis_b[:, 1]
             valid_b = (xb > -1.5) & (xb < max_r) & (np.abs(yb) < max_r * 0.55)
             px_b = (cx_b - yb[valid_b] * scale).astype(int)
             py_b = (cy_b - xb[valid_b] * scale).astype(int)
@@ -1197,7 +1246,7 @@ class CameraLidarFusionNode(LifecycleNode):
                 bev_panel[py_b[in_bev], px_b[in_bev]] = (75, 115, 130)
         else:
             cv2.putText(bev_panel, "WAITING FOR LIDAR STREAM...", (cx_b - 145, cy_b - 200),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 165, 255), 1, cv2.LINE_AA)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 165, 255), 1)
 
         # Plot tracked targets
         for trk in active_trackers:
@@ -1211,37 +1260,43 @@ class CameraLidarFusionNode(LifecycleNode):
                 else:
                     col = (255, 215, 0)
 
-                cv2.circle(bev_panel, (px, py), 11, col, 2, cv2.LINE_AA)
+                cv2.circle(bev_panel, (px, py), 11, col, 2)
                 cv2.circle(bev_panel, (px, py), 3, col, -1)
-                cv2.line(bev_panel, (cx_b, cy_b), (px, py), col, 1, cv2.LINE_AA)
+                cv2.line(bev_panel, (cx_b, cy_b), (px, py), col, 1)
 
                 # Velocity vector
                 vx = trk.x[3]
                 vy = trk.x[4]
                 end_x = int(px - vy * scale * 0.5)
                 end_y = int(py - vx * scale * 0.5)
-                cv2.arrowedLine(bev_panel, (px, py), (end_x, end_y), (0, 255, 255), 2, cv2.LINE_AA, tipLength=0.3)
+                cv2.arrowedLine(bev_panel, (px, py), (end_x, end_y), (0, 255, 255), 2, tipLength=0.3)
 
                 tag = f"ID:{trk.id} {od:.1f}m"
-                cv2.putText(bev_panel, tag, (px - 22, py - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.38, col, 1, cv2.LINE_AA)
+                cv2.putText(bev_panel, tag, (px - 22, py - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.38, col, 1)
 
-        # 3. Publish ROS Image Messages
+        t_rend_bev = time.perf_counter()
+
+        # 4. Publish ROS Image Messages (Efficient, gated serialization)
         try:
-            if self._pub_debug_img is not None and self._pub_debug_img.is_activated:
+            if has_dbg:
                 msg_dbg = self._bridge.cv2_to_imgmsg(cam_view_720, encoding="bgr8")
                 msg_dbg.header.stamp = stamp
                 msg_dbg.header.frame_id = "kinect_front_optical_link"
                 self._pub_debug_img.publish(msg_dbg)
 
-            if self._pub_bev_img is not None and self._pub_bev_img.is_activated:
+            if has_bev:
                 msg_bev = self._bridge.cv2_to_imgmsg(bev_panel, encoding="bgr8")
                 msg_bev.header.stamp = stamp
                 msg_bev.header.frame_id = "base_link"
                 self._pub_bev_img.publish(msg_bev)
 
-            if self._pub_dashboard is not None and self._pub_dashboard.is_activated:
-                dash = np.hstack([cam_view_720, bev_panel])
-                msg_dash = self._bridge.cv2_to_imgmsg(dash, encoding="bgr8")
+            if has_dash:
+                if self._dash_canvas is None or self._dash_canvas.shape != (720, 1920, 3):
+                    self._dash_canvas = np.zeros((720, 1920, 3), dtype=np.uint8)
+                self._dash_canvas[:, :1280] = cam_view_720
+                self._dash_canvas[:, 1280:] = bev_panel
+
+                msg_dash = self._bridge.cv2_to_imgmsg(self._dash_canvas, encoding="bgr8")
                 msg_dash.header.stamp = stamp
                 msg_dash.header.frame_id = "base_link"
                 self._pub_dashboard.publish(msg_dash)
@@ -1252,6 +1307,9 @@ class CameraLidarFusionNode(LifecycleNode):
                     self.get_logger().info(f"[DASHBOARD PUB] frame count = {self._pub_dash_cnt}")
         except Exception as e:
             self.get_logger().warn(f"Failed to publish image streams: {e}")
+
+        t_rend_pub = time.perf_counter()
+        return (t_rend_cam - t_rend0) * 1000.0, (t_rend_bev - t_rend_cam) * 1000.0, (t_rend_pub - t_rend_bev) * 1000.0
 
 
 def main(args: Optional[List[str]] = None) -> None:

@@ -44,6 +44,8 @@ class FusionViewerNode(Node):
         self._bridge = CvBridge() if _HAS_BRIDGE else None
         self._last_img: Optional[np.ndarray] = None
         self._last_rx_time: float = time.time()
+        self._has_new_frame: bool = False
+        self._stale_drawn: bool = False
         self._window_title = "E-Trike Real-Time Camera + LiDAR Fusion"
 
         cv2.namedWindow(self._window_title, cv2.WINDOW_NORMAL)
@@ -73,38 +75,52 @@ class FusionViewerNode(Node):
                 raw = np.frombuffer(msg.data, dtype=np.uint8)
                 self._last_img = raw.reshape((msg.height, msg.width, 3))
             self._last_rx_time = time.time()
+            self._has_new_frame = True
+            self._stale_drawn = False
         except Exception as e:
             self.get_logger().warn(f"Failed to decode dashboard frame: {e}")
 
     def render_tick(self) -> bool:
-        """Render frame to window and poll keys. Returns False on quit."""
+        """Render frame to window on new frame arrival or state transition."""
         now = time.time()
 
-        if self._last_img is not None:
-            # Check for stale stream (> 5.0s)
-            if now - self._last_rx_time > 5.0:
+        if self._has_new_frame and self._last_img is not None:
+            cv2.imshow(self._window_title, self._last_img)
+            self._has_new_frame = False
+            key = cv2.waitKey(1) & 0xFF
+            if key in (27, ord('q'), ord('Q')):
+                return False
+        elif self._last_img is not None and (now - self._last_rx_time > 5.0):
+            if not self._stale_drawn:
                 disp = self._last_img.copy()
                 cv2.rectangle(disp, (40, 40), (600, 110), (0, 0, 180), -1)
                 cv2.putText(disp, "STREAM PAUSED / RECONNECTING...", (60, 85),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
                 cv2.imshow(self._window_title, disp)
-            else:
-                cv2.imshow(self._window_title, self._last_img)
+                self._stale_drawn = True
+            key = cv2.waitKey(10) & 0xFF
+            if key in (27, ord('q'), ord('Q')):
+                return False
+        elif self._last_img is None:
+            if not hasattr(self, '_splash_drawn') or (now - getattr(self, '_splash_time', 0.0) > 1.0):
+                splash = np.zeros((540, 1440, 3), dtype=np.uint8)
+                splash[:] = (20, 24, 32)
+                cv2.putText(splash, "E-TRIKE CAMERA + LIDAR REAL-TIME FUSION", (120, 220),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 255), 2)
+                cv2.putText(splash, "Waiting for /bench_perception/fusion/dashboard stream...", (120, 280),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.75, (180, 180, 180), 2)
+                cv2.putText(splash, "Topics: /kinect_front/color/image_raw + /sensing/lidar/top/pointcloud_raw_ex", (120, 330),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (100, 200, 100), 1)
+                cv2.imshow(self._window_title, splash)
+                self._splash_drawn = True
+                self._splash_time = now
+            key = cv2.waitKey(10) & 0xFF
+            if key in (27, ord('q'), ord('Q')):
+                return False
         else:
-            # Standby splash screen
-            splash = np.zeros((540, 1440, 3), dtype=np.uint8)
-            splash[:] = (20, 24, 32)
-            cv2.putText(splash, "E-TRIKE CAMERA + LIDAR REAL-TIME FUSION", (120, 220),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 255, 255), 2)
-            cv2.putText(splash, "Waiting for /bench_perception/fusion/dashboard stream...", (120, 280),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.75, (180, 180, 180), 2)
-            cv2.putText(splash, "Topics: /kinect_front/color/image_raw + /sensing/lidar/top/pointcloud_raw_ex", (120, 330),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (100, 200, 100), 1)
-            cv2.imshow(self._window_title, splash)
-
-        key = cv2.waitKey(1) & 0xFF
-        if key in (27, ord('q'), ord('Q')):
-            return False
+            key = cv2.waitKey(2) & 0xFF
+            if key in (27, ord('q'), ord('Q')):
+                return False
 
         return True
 
