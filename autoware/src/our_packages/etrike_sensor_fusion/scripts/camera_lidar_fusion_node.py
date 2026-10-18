@@ -1181,10 +1181,18 @@ def main(args: Optional[List[str]] = None) -> None:
     except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
         pass
     finally:
-        node.trigger_deactivate()
-        node.trigger_shutdown()
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            if rclpy.ok():
+                node.trigger_deactivate()
+                node.trigger_shutdown()
+        except Exception:
+            pass
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
