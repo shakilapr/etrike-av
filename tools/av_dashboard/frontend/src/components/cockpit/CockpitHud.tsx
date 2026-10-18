@@ -85,7 +85,7 @@ export const CockpitHud: React.FC = () => {
 
   const isPark = telemetry.gear === 'P';
   const isBraking = brakePressure > 100 || isBrakeLight;
-  const isHold = telemetry.speed_act_kmh < 0.5 && brakePressure > 250;
+  const isHold = isPark || (Math.abs(telemetry.speed_act_kmh) < 0.1 && brakePressure > 2500 && (telemetry.gear === 'N' || isEstop));
   const isReady = isConnected && (canConnected || rosStatus.active) && !isEstop;
   const isEpsWarning = steerFault || (framesById[0x310] !== undefined && Math.abs(steerCmd - steerActual) > 5.0);
   const maxEcuTemp = Math.max(steerTemp ?? 0, brakeTemp ?? 0);

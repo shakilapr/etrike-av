@@ -83,6 +83,7 @@ export interface TelemetrySummary {
   can_connected?: boolean;
   is_simulated?: boolean;
   can_interface?: string;
+  actuator_feedback_confirmed?: boolean;
   telemetry_source?: 'ECU_FEEDBACK' | 'BENCH_CMD' | 'ROS_SIM' | 'SIMULATED' | 'OFFLINE';
 }
 
@@ -100,6 +101,7 @@ export interface PerceptionObject {
   sensor?: 'fused' | 'camera' | 'lidar' | string;
   fused?: boolean;
   distance?: number;
+  frame_id?: string;
 }
 
 export interface TrajectoryPoint {

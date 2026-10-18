@@ -44,6 +44,7 @@ telemetry_summary: Dict[str, Any] = {
     "can_connected": False,
     "is_simulated": False,
     "can_interface": "can2",
+    "actuator_feedback_confirmed": False,
     "telemetry_source": "OFFLINE",
 }
 
@@ -83,10 +84,13 @@ def refresh_telemetry_summary(transport: Any, ros_bridge: Any) -> Dict[str, Any]
 
     if transport and transport.is_simulated:
         telemetry_summary["telemetry_source"] = "SIMULATED"
+        telemetry_summary["actuator_feedback_confirmed"] = True
     elif has_hw_feedback:
         telemetry_summary["telemetry_source"] = "ECU_FEEDBACK"
+        telemetry_summary["actuator_feedback_confirmed"] = True
     elif has_host_cmd:
         telemetry_summary["telemetry_source"] = "BENCH_CMD"
+        telemetry_summary["actuator_feedback_confirmed"] = False
         telemetry_summary["speed_act_kmh"] = telemetry_summary["speed_cmd_kmh"]
         telemetry_summary["steer_act_deg"] = telemetry_summary["steer_cmd_deg"]
         telemetry_summary["brake_act_kpa"] = telemetry_summary["brake_cmd_kpa"]
@@ -106,6 +110,7 @@ def refresh_telemetry_summary(transport: Any, ros_bridge: Any) -> Dict[str, Any]
         veh_ros = ros_data.get("vehicle_status") or {}
         if ros_data.get("has_ego_pose") or veh_ros.get("fresh"):
             telemetry_summary["telemetry_source"] = "ROS_SIM"
+            telemetry_summary["actuator_feedback_confirmed"] = True
             ego_spd = float(veh_ros.get("speed_act_kmh") if veh_ros.get("speed_act_kmh") is not None else ros_data.get("ego_speed_kmh", 0.0))
             cmd_spd = float(veh_ros.get("speed_cmd_kmh") if veh_ros.get("speed_cmd_kmh") is not None else ego_spd)
             telemetry_summary["speed_act_kmh"] = round(ego_spd, 1)
@@ -123,6 +128,7 @@ def refresh_telemetry_summary(transport: Any, ros_bridge: Any) -> Dict[str, Any]
                 telemetry_summary["lights_act"] = dict(veh_ros["lights"])
         else:
             telemetry_summary["telemetry_source"] = "OFFLINE"
+            telemetry_summary["actuator_feedback_confirmed"] = False
 
     if (now - last_hw_rx_time.get(0x206, 0.0)) >= FEEDBACK_FRESH_SEC:
         telemetry_summary["motor_rpm"] = None

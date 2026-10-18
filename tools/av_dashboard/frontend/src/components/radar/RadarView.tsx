@@ -27,7 +27,14 @@ export const RadarView: React.FC = () => {
   }, []);
 
   const poseOk = rosStatus.pose_ok !== false;
-  const rawObjects: PerceptionObject[] = poseOk ? perceptionObjects : [];
+  const localObjects = perceptionObjects.filter(
+    (o) => !o.frame_id || o.frame_id === 'base_link' || o.frame_id === ''
+  );
+  const rawObjects: PerceptionObject[] = poseOk
+    ? perceptionObjects
+    : localObjects.length > 0
+    ? localObjects
+    : perceptionObjects;
 
   const objects: ProcessedRadarObject[] = [...rawObjects]
     .map((obj) => {

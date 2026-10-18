@@ -52,7 +52,7 @@ bash ~/av_project/scripts/record_raw_sensors.sh
 
 Open Camera-LiDAR Fusion
 ```bash
-bash ~/av_project/scripts/camera-lidar-fuision.sh
+bash ~/av_project/scripts/camera-lidar-fusion.sh
 ```
 
 Close Camera-LiDAR Fusion

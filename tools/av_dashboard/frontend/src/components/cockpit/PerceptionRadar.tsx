@@ -39,7 +39,14 @@ export const PerceptionRadar: React.FC = () => {
   const rosStatus = useCanStore((s) => s.rosStatus);
 
   const poseOk = rosStatus.pose_ok !== false;
-  const objects: PerceptionObject[] = poseOk ? perceptionObjects : [];
+  const localObjects = perceptionObjects.filter(
+    (o) => !o.frame_id || o.frame_id === 'base_link' || o.frame_id === ''
+  );
+  const objects: PerceptionObject[] = poseOk
+    ? perceptionObjects
+    : localObjects.length > 0
+    ? localObjects
+    : perceptionObjects;
 
   return (
     <div className="flex flex-col items-center gap-1">

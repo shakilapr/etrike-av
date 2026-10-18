@@ -23,13 +23,21 @@ echo "======================================================================"
 
 # 1. Stop host viewer launchers and X11 camera windows
 echo "--> 1. Stopping host-side camera scripts and viewers..."
-pkill -INT -f "yolo-camera.sh" 2>/dev/null || true
+pkill -INT -f "yolo-camera" 2>/dev/null || true
 pkill -INT -f "yolo_cam_viewer" 2>/dev/null || true
+pkill -INT -f "camera-lidar-fusion" 2>/dev/null || true
+pkill -INT -f "camera-lidar-fuision" 2>/dev/null || true
+pkill -INT -f "fusion_viewer" 2>/dev/null || true
+pkill -INT -f "camera_lidar_fusion_node" 2>/dev/null || true
 pkill -INT -f "open_cockpit_and_camera_monitor" 2>/dev/null || true
 pkill -INT -f "rqt_image_view" 2>/dev/null || true
 sleep 0.5
-pkill -9 -f "yolo-camera.sh" 2>/dev/null || true
+pkill -9 -f "yolo-camera" 2>/dev/null || true
 pkill -9 -f "yolo_cam_viewer" 2>/dev/null || true
+pkill -9 -f "camera-lidar-fusion" 2>/dev/null || true
+pkill -9 -f "camera-lidar-fuision" 2>/dev/null || true
+pkill -9 -f "fusion_viewer" 2>/dev/null || true
+pkill -9 -f "camera_lidar_fusion_node" 2>/dev/null || true
 pkill -9 -f "open_cockpit_and_camera_monitor" 2>/dev/null || true
 pkill -9 -f "rqt_image_view" 2>/dev/null || true
 
@@ -39,9 +47,11 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
     docker exec -u root "$CONTAINER" bash -c "
         # Viewer window
         pkill -INT -f 'yolo_cam_viewer' 2>/dev/null || true
+        pkill -INT -f 'fusion_viewer' 2>/dev/null || true
         # YOLO & RTMPose perception
         pkill -INT -f 'yolo_perception_node' 2>/dev/null || true
         pkill -INT -f 'fusion_mesh_node' 2>/dev/null || true
+        pkill -INT -f 'camera_lidar_fusion_node' 2>/dev/null || true
         pkill -INT -f 'bench_perception_node' 2>/dev/null || true
         # Kinect v2 hardware driver
         pkill -INT -f 'kinect2_node_exec' 2>/dev/null || true
@@ -50,11 +60,13 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         sleep 0.5
         # Force terminate any remaining camera processes
         pkill --signal SIGKILL -f 'yolo_cam_viewer' 2>/dev/null || true
+        pkill --signal SIGKILL -f 'fusion_viewer' 2>/dev/null || true
         pkill --signal SIGKILL -f 'kinect2_node_exec' 2>/dev/null || true
         pkill --signal SIGKILL -f 'single_kinect' 2>/dev/null || true
         pkill --signal SIGKILL -f 'dual_kinect' 2>/dev/null || true
         pkill --signal SIGKILL -f 'yolo_perception_node' 2>/dev/null || true
         pkill --signal SIGKILL -f 'fusion_mesh_node' 2>/dev/null || true
+        pkill --signal SIGKILL -f 'camera_lidar_fusion_node' 2>/dev/null || true
         pkill --signal SIGKILL -f 'static_transform_publisher.*kinect' 2>/dev/null || true
         rm -f /tmp/yolo_cam_viewer.py 2>/dev/null || true
     " 2>/dev/null || true
