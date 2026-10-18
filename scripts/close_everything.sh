@@ -148,6 +148,9 @@ if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
         pkill --signal SIGKILL -f "yolo-camera" 2>/dev/null || true
         pkill --signal SIGKILL -f "yolo_perception_node" 2>/dev/null || true
         pkill --signal SIGKILL -f "fusion_mesh_node" 2>/dev/null || true
+        pkill --signal SIGKILL -f "camera_lidar_fusion_node" 2>/dev/null || true
+        pkill --signal SIGKILL -f "fusion_viewer" 2>/dev/null || true
+        pkill --signal SIGKILL -f "camera-lidar-fuision" 2>/dev/null || true
         pkill --signal SIGKILL -f "perception" 2>/dev/null || true
         pkill --signal SIGKILL -f "static_transform_publisher.*kinect" 2>/dev/null || true
         pkill --signal SIGKILL -f "robot_state_publisher" 2>/dev/null || true
@@ -198,6 +201,9 @@ pkill -9 -f "record_slam" 2>/dev/null || true
 # Camera & Perception GUI windows and scripts (host & X11)
 pkill -9 -f "yolo-camera" 2>/dev/null || true
 pkill -9 -f "yolo_cam_viewer" 2>/dev/null || true
+pkill -9 -f "camera-lidar-fuision" 2>/dev/null || true
+pkill -9 -f "fusion_viewer" 2>/dev/null || true
+pkill -9 -f "camera_lidar_fusion_node" 2>/dev/null || true
 pkill -9 -f "open_cockpit_and_camera_monitor" 2>/dev/null || true
 pkill -9 -f "rqt_image_view" 2>/dev/null || true
 pkill -9 -f "kinect2_node_exec" 2>/dev/null || true

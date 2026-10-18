@@ -1,0 +1,45 @@
+/**:
+  ros__parameters:
+    # Execution & Telemetry
+    publish_rate_hz: 15.0
+    sensor_timeout_sec: 1.2
+
+    # Sensor Inputs (Read-Only)
+    camera_image_topic: "/kinect_front/color/image_raw"
+    lidar_points_topic: "/sensing/lidar/top/pointcloud_raw_ex"
+    camera_info_topic: "/kinect_front/color/camera_info"
+    camera_objects_topic: "/bench_perception/objects"
+
+    # Strictly Isolated Bench Outputs (Never published to Autoware Universe)
+    output_objects_topic: "/bench_perception/fusion/objects"
+    output_markers_topic: "/bench_perception/fusion/markers"
+    output_debug_image_topic: "/bench_perception/fusion/debug_image"
+    output_bev_image_topic: "/bench_perception/fusion/bev_image"
+    output_dashboard_topic: "/bench_perception/fusion/dashboard"
+
+    # Calibrated Extrinsics (relative to base_link)
+    lidar_mount_x: 0.5750
+    lidar_mount_y: 0.0000
+    lidar_mount_z: 1.7464
+    camera_mount_x: 1.2000
+    camera_mount_y: 0.0000
+    camera_mount_z: 1.0000
+    camera_pitch_rad: 0.0000
+
+    # Optical Intrinsics Fallback (Kinect v2 Color 1080p)
+    fx_color: 1081.372
+    fy_color: 1081.372
+    cx_color: 959.5
+    cy_color: 539.5
+
+    # 3D Clustering & Outlier Rejection
+    ground_filter_z_m: 0.15
+    cluster_eps_m: 0.45
+    cluster_min_pts: 3
+    box_inner_margin: 0.08
+    max_radar_range_m: 15.0
+
+    # Standalone YOLO Fallback (active if /bench_perception/objects is silent)
+    auto_run_yolo: true
+    yolo_model_path: "/workspace/av_project/yolov8n.pt"
+    confidence_threshold: 0.40

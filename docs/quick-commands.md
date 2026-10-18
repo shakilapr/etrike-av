@@ -50,4 +50,14 @@ Record 30s Raw Sensors (Jetson Local Only)
 bash ~/av_project/scripts/record_raw_sensors.sh
 ```
 
+Open Camera-LiDAR Fusion
+```bash
+bash ~/av_project/scripts/camera-lidar-fuision.sh
+```
+
+Close Camera-LiDAR Fusion
+```bash
+bash ~/av_project/scripts/close_fusion.sh
+```
+
 
