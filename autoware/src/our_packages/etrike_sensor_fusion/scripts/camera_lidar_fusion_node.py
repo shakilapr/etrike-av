@@ -18,11 +18,11 @@
 Fuses:
   1. 1080p RGB Camera (/kinect_front/color/image_raw)
   2. 32-beam 3D LiDAR (/sensing/lidar/top/pointcloud_raw_ex)
-  3. 2D Bounding Boxes & Poses (/bench_perception/objects or internal YOLO26x/YOLOv8)
+  3. 2D Bounding Boxes & Poses (/bench_perception/objects & /bench_perception/human_poses)
 
 Core Production-Grade Algorithms:
   - Floor Plane Removal (Z_lidar > -1.40m) preventing floor-obstacle point bridging.
-  - 3D Metric Euclidean DBSCAN Clustering directly in base_link.
+  - High-speed 3D Metric Euclidean DBSCAN Clustering directly in base_link (via scipy.spatial.cKDTree).
   - Multi-Tier Perception (FUSED + VISION): Retains 100% of detected people.
   - 3D Constant-Velocity Kalman Multi-Object Tracking with Adaptive Covariance.
   - Confidence-Gated Pose Skeleton Rendering (>= 0.40 joint threshold, zero spiderwebs).
@@ -40,6 +40,7 @@ Guaranteed zero interference with Autoware Universe simulation or vehicle planni
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import sys
@@ -64,20 +65,15 @@ from autoware_perception_msgs.msg import (
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Point, Quaternion, Vector3
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from std_msgs.msg import ColorRGBA, Header
+from std_msgs.msg import ColorRGBA, Header, String
 from visualization_msgs.msg import Marker, MarkerArray
 
 try:
     from scipy.optimize import linear_sum_assignment
+    from scipy.spatial import cKDTree
     _HAS_SCIPY = True
 except ImportError:
     _HAS_SCIPY = False
-
-try:
-    from sklearn.cluster import DBSCAN
-    _HAS_SKLEARN = True
-except ImportError:
-    _HAS_SKLEARN = False
 
 
 # 17 COCO Keypoints & Topology
@@ -181,6 +177,41 @@ def compute_iou_2d(box1: Tuple[int, int, int, int], box2: Tuple[int, int, int, i
     return float(inter_area) / float(union) if union > 0 else 0.0
 
 
+def dbscan_fast(pts: np.ndarray, eps: float = 0.28, min_samples: int = 4) -> np.ndarray:
+    """Fast KD-tree accelerated DBSCAN clustering using scipy.spatial.cKDTree."""
+    if not _HAS_SCIPY or len(pts) < min_samples:
+        return np.full(len(pts), -1, dtype=int)
+
+    tree = cKDTree(pts)
+    neighbors = tree.query_ball_point(pts, r=eps)
+    labels = np.full(len(pts), -1, dtype=int)
+    cluster_id = 0
+    visited = np.zeros(len(pts), dtype=bool)
+
+    for i in range(len(pts)):
+        if visited[i]:
+            continue
+        visited[i] = True
+        nb = neighbors[i]
+        if len(nb) < min_samples:
+            continue
+        labels[i] = cluster_id
+        queue = list(nb)
+        head = 0
+        while head < len(queue):
+            pt_idx = queue[head]
+            head += 1
+            if not visited[pt_idx]:
+                visited[pt_idx] = True
+                pt_nb = neighbors[pt_idx]
+                if len(pt_nb) >= min_samples:
+                    queue.extend(pt_nb)
+            if labels[pt_idx] == -1:
+                labels[pt_idx] = cluster_id
+        cluster_id += 1
+    return labels
+
+
 class CameraLidarFusionNode(LifecycleNode):
     """LifecycleNode fusing 3D LiDAR and Camera streams into isolated 3D perception."""
 
@@ -194,6 +225,7 @@ class CameraLidarFusionNode(LifecycleNode):
         self.declare_parameter("lidar_points_topic", "/sensing/lidar/top/pointcloud_raw_ex")
         self.declare_parameter("camera_info_topic", "/kinect_front/color/camera_info")
         self.declare_parameter("camera_objects_topic", "/bench_perception/objects")
+        self.declare_parameter("camera_poses_topic", "/bench_perception/human_poses")
 
         self.declare_parameter("output_objects_topic", "/bench_perception/fusion/objects")
         self.declare_parameter("output_markers_topic", "/bench_perception/fusion/markers")
@@ -242,6 +274,8 @@ class CameraLidarFusionNode(LifecycleNode):
         self._last_lidar_time: float = 0.0
         self._last_camera_objects: List[Dict[str, Any]] = []
         self._last_camera_objects_time: float = 0.0
+        self._last_camera_poses: List[Dict[str, Any]] = []
+        self._last_camera_poses_time: float = 0.0
 
         self._trackers: List[KalmanBox3DTracker] = []
         self._yolo_model: Optional[Any] = None
@@ -258,6 +292,7 @@ class CameraLidarFusionNode(LifecycleNode):
         self._sub_lidar: Optional[Any] = None
         self._sub_cam_info: Optional[Any] = None
         self._sub_objects: Optional[Any] = None
+        self._sub_poses: Optional[Any] = None
         self._timer: Optional[Any] = None
 
         self.get_logger().info(f"{node_name} initialized in UNCONFIGURED state.")
@@ -295,13 +330,12 @@ class CameraLidarFusionNode(LifecycleNode):
         self._pub_bev_img = self.create_lifecycle_publisher(Image, out_bev_topic, qos_sensor)
         self._pub_dashboard = self.create_lifecycle_publisher(Image, out_dash_topic, qos_sensor)
 
-        # Load standalone YOLO model if enabled
+        # Load standalone YOLO model if enabled and available
         if bool(self.get_parameter("auto_run_yolo").value):
             model_path = str(self.get_parameter("yolo_model_path").value)
             candidates = [
                 model_path,
                 "/workspace/av_project/data/ml_models/yolo26x-pose.pt",
-                "/workspace/av_project/data/ml_models/yolov8x-pose-p6.pt",
                 "/workspace/av_project/yolov8n.pt",
                 "yolov8n.pt"
             ]
@@ -312,18 +346,20 @@ class CameraLidarFusionNode(LifecycleNode):
                     self.get_logger().info(f"Loading YOLO model: {valid_path}")
                     self._yolo_model = YOLO(valid_path)
                 except Exception as e:
-                    self.get_logger().warn(f"Could not load fallback YOLO model: {e}")
+                    self.get_logger().warn(f"Fallback YOLO model unavailable ({e}); will use upstream detections.")
 
         # Subscriptions
         img_topic = str(self.get_parameter("camera_image_topic").value)
         lidar_topic = str(self.get_parameter("lidar_points_topic").value)
         info_topic = str(self.get_parameter("camera_info_topic").value)
         objs_topic = str(self.get_parameter("camera_objects_topic").value)
+        poses_topic = str(self.get_parameter("camera_poses_topic").value)
 
         self._sub_image = self.create_subscription(Image, img_topic, self._on_image, qos_sensor)
         self._sub_lidar = self.create_subscription(PointCloud2, lidar_topic, self._on_lidar, qos_sensor)
         self._sub_cam_info = self.create_subscription(CameraInfo, info_topic, self._on_camera_info, qos_sensor)
         self._sub_objects = self.create_subscription(DetectedObjects, objs_topic, self._on_camera_objects, qos_pub)
+        self._sub_poses = self.create_subscription(String, poses_topic, self._on_camera_poses, qos_pub)
 
         self.get_logger().info("Configuration complete. Isolated publishers & subscriptions ready.")
         return TransitionCallbackReturn.SUCCESS
@@ -351,6 +387,7 @@ class CameraLidarFusionNode(LifecycleNode):
         self._sub_lidar = None
         self._sub_cam_info = None
         self._sub_objects = None
+        self._sub_poses = None
         self._pub_objects = None
         self._pub_markers = None
         self._pub_debug_img = None
@@ -445,6 +482,15 @@ class CameraLidarFusionNode(LifecycleNode):
         self._last_camera_objects = extracted
         self._last_camera_objects_time = time.time()
 
+    def _on_camera_poses(self, msg: String) -> None:
+        """Ingest skeletal pose estimates from /bench_perception/human_poses."""
+        try:
+            payload = json.loads(msg.data)
+            self._last_camera_poses = payload.get("poses", [])
+            self._last_camera_poses_time = time.time()
+        except Exception as e:
+            self.get_logger().warn(f"Failed to parse human poses: {e}")
+
     # --------------------------------------------------------------------------
     # Fusion Pipeline Execution
     # --------------------------------------------------------------------------
@@ -475,7 +521,7 @@ class CameraLidarFusionNode(LifecycleNode):
         non_floor_mask = lidar_pts[:, 2] > floor_z_lidar
         non_floor_pts = lidar_pts[non_floor_mask]
 
-        # 2. 3D Euclidean DBSCAN Clustering directly in base_link
+        # 2. 3D Euclidean DBSCAN Clustering directly in base_link (Fast cKDTree DBSCAN)
         clusters_3d = self._euclidean_clustering_3d(non_floor_pts)
 
         # 3. Project 3D Clusters into 2D Image Frustums
@@ -504,7 +550,6 @@ class CameraLidarFusionNode(LifecycleNode):
             return []
 
         # Transform to base_link
-        # LiDAR mount: X=0.5750, Y=0.0, Z=1.7464
         lx = float(self.get_parameter("lidar_mount_x").value)
         ly = float(self.get_parameter("lidar_mount_y").value)
         lz = float(self.get_parameter("lidar_mount_z").value)
@@ -521,29 +566,26 @@ class CameraLidarFusionNode(LifecycleNode):
         f_pts = np.column_stack([bx[forward], by[forward], bz[forward]])
         cluster_eps = float(self.get_parameter("cluster_eps_m").value)
 
+        labels = dbscan_fast(f_pts, eps=cluster_eps, min_samples=cluster_min_pts)
         clusters = []
-        if _HAS_SKLEARN:
-            db = DBSCAN(eps=cluster_eps, min_samples=cluster_min_pts, algorithm="kd_tree", n_jobs=-1).fit(f_pts)
-            labels = db.labels_
-            for k in set(labels):
-                if k == -1:
-                    continue
-                c_pts = f_pts[labels == k]
-                min_b = np.min(c_pts, axis=0)
-                max_b = np.max(c_pts, axis=0)
-                centroid = np.mean(c_pts, axis=0)
-                dims = max_b - min_b
-                # Reject massive background planes
-                if dims[0] < 5.0 and dims[1] < 4.0:
-                    clusters.append({
-                        "points": c_pts,
-                        "centroid": centroid,
-                        "min_bound": min_b,
-                        "max_bound": max_b,
-                        "dims": dims,
-                        "dist": float(np.linalg.norm(centroid)),
-                        "count": len(c_pts),
-                    })
+        for k in set(labels):
+            if k == -1:
+                continue
+            c_pts = f_pts[labels == k]
+            min_b = np.min(c_pts, axis=0)
+            max_b = np.max(c_pts, axis=0)
+            centroid = np.mean(c_pts, axis=0)
+            dims = max_b - min_b
+            if dims[0] < 5.0 and dims[1] < 4.0:
+                clusters.append({
+                    "points": c_pts,
+                    "centroid": centroid,
+                    "min_bound": min_b,
+                    "max_bound": max_b,
+                    "dims": dims,
+                    "dist": float(np.linalg.norm(centroid)),
+                    "count": len(c_pts),
+                })
         return clusters
 
     def _project_clusters_to_camera(self, clusters: List[Dict[str, Any]], img_w: int, img_h: int) -> List[Dict[str, Any]]:
@@ -607,9 +649,9 @@ class CameraLidarFusionNode(LifecycleNode):
         return proj_clusters
 
     def _detect_2d_boxes(self, img: np.ndarray) -> List[Dict[str, Any]]:
-        """Obtain 2D bounding boxes and pose skeletons from local YOLO or upstream topic."""
+        """Obtain 2D bounding boxes and pose skeletons from upstream topic or local YOLO."""
         now = time.time()
-        # 1. If upstream YOLO is publishing recent objects, use them
+        # 1. Prefer upstream GPU TensorRT detections from /bench_perception/objects if active
         if self._last_camera_objects and (now - self._last_camera_objects_time < 1.5):
             h, w = img.shape[:2]
             fx = float(self.get_parameter("fx_color").value)
@@ -619,8 +661,14 @@ class CameraLidarFusionNode(LifecycleNode):
             cam_x = float(self.get_parameter("camera_mount_x").value)
             cam_z = float(self.get_parameter("camera_mount_z").value)
 
+            # Match with recent human poses if available
+            poses_dict: Dict[str, Any] = {}
+            if self._last_camera_poses and (now - self._last_camera_poses_time < 1.5):
+                for p_item in self._last_camera_poses:
+                    poses_dict[p_item.get("id", "")] = p_item
+
             boxes = []
-            for obj in self._last_camera_objects:
+            for idx, obj in enumerate(self._last_camera_objects):
                 px, py, pz = obj["pos_hint"]
                 sx, sy, sz = obj["size"]
 
@@ -641,20 +689,41 @@ class CameraLidarFusionNode(LifecycleNode):
                 y1 = int(np.clip(v_c - bh * 0.5, 0, h - 1))
                 y2 = int(np.clip(v_c + bh * 0.5, 0, h - 1))
 
+                # Extract keypoints if present
+                kpts_arr = None
+                kconfs_arr = None
+                yaw_val = 0.0
+                det_key = f"det_{idx}"
+                if det_key in poses_dict:
+                    p_info = poses_dict[det_key]
+                    yaw_val = float(p_info.get("yaw", 0.0))
+                    raw_kpts = p_info.get("keypoints", {})
+                    if raw_kpts:
+                        kpts_arr = np.zeros((17, 2), dtype=np.float32)
+                        kconfs_arr = np.zeros(17, dtype=np.float32)
+                        for kp_idx, kp_name in enumerate(["nose", "left_eye", "right_eye", "left_ear", "right_ear",
+                                                          "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+                                                          "left_wrist", "right_wrist", "left_hip", "right_hip",
+                                                          "left_knee", "right_knee", "left_ankle", "right_ankle"]):
+                            if kp_name in raw_kpts:
+                                item = raw_kpts[kp_name]
+                                kpts_arr[kp_idx] = [item[0], item[1]]
+                                kconfs_arr[kp_idx] = item[2] if len(item) > 2 else 0.85
+
                 if x2 > x1 + 10 and y2 > y1 + 10:
                     boxes.append({
                         "name": obj["class"],
                         "conf": obj["conf"],
                         "bbox": (x1, y1, x2, y2),
                         "pos_hint": np.array([px, py, pz], dtype=np.float32),
-                        "kpts": None,
-                        "kconfs": None,
-                        "yaw": 0.0,
+                        "kpts": kpts_arr,
+                        "kconfs": kconfs_arr,
+                        "yaw": yaw_val,
                     })
             if boxes:
                 return boxes
 
-        # 2. Local YOLO inference with Pose keypoint extraction
+        # 2. Local YOLO fallback if model exists
         boxes = []
         if self._yolo_model is not None:
             conf_thresh = float(self.get_parameter("confidence_threshold").value)
