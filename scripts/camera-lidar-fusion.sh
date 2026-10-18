@@ -144,7 +144,7 @@ fi
 if ! docker exec "$CONTAINER" pgrep -f "static_transform_publisher.*kinect_front" >/dev/null 2>&1; then
     docker exec -d "$CONTAINER" bash -c "
         source /opt/ros/humble/setup.bash
-        ros2 run tf2_ros static_transform_publisher --x 1.2 --y 0.0 --z 1.0 --yaw 0.0 --pitch 0.0 --roll 0.0 --frame-id base_link --child-frame-id kinect_front_link
+        ros2 run tf2_ros static_transform_publisher --x 1.2 --y 0.0 --z 1.7 --yaw 0.0 --pitch 0.0 --roll 0.0 --frame-id base_link --child-frame-id kinect_front_link
     "
     docker exec -d "$CONTAINER" bash -c "
         source /opt/ros/humble/setup.bash

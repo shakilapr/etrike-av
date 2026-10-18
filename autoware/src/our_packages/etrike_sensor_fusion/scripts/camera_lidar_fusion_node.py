@@ -18,7 +18,15 @@
 Fuses:
   1. 1080p RGB Camera (/kinect_front/color/image_raw)
   2. 32-beam 3D LiDAR (/sensing/lidar/top/pointcloud_raw_ex)
-  3. 2D Bounding Boxes (/bench_perception/objects or internal YOLOv8)
+  3. 2D Bounding Boxes & Poses (/bench_perception/objects or internal YOLO26x/YOLOv8)
+
+Core Production-Grade Algorithms:
+  - Floor Plane Removal (Z_lidar > -1.40m) preventing floor-obstacle point bridging.
+  - 3D Metric Euclidean DBSCAN Clustering directly in base_link.
+  - Multi-Tier Perception (FUSED + VISION): Retains 100% of detected people.
+  - 3D Constant-Velocity Kalman Multi-Object Tracking with Adaptive Covariance.
+  - Confidence-Gated Pose Skeleton Rendering (>= 0.40 joint threshold, zero spiderwebs).
+  - Unobstructed 1920x720 Cockpit HUD (1280x720 Camera 3D + 640x720 15m Top-Down BEV Radar).
 
 Outputs (Strictly Isolated under /bench_perception/fusion/*):
   - /bench_perception/fusion/objects (autoware_perception_msgs/DetectedObjects)
@@ -59,6 +67,119 @@ from sensor_msgs.msg import CameraInfo, Image, PointCloud2
 from std_msgs.msg import ColorRGBA, Header
 from visualization_msgs.msg import Marker, MarkerArray
 
+try:
+    from scipy.optimize import linear_sum_assignment
+    _HAS_SCIPY = True
+except ImportError:
+    _HAS_SCIPY = False
+
+try:
+    from sklearn.cluster import DBSCAN
+    _HAS_SKLEARN = True
+except ImportError:
+    _HAS_SKLEARN = False
+
+
+# 17 COCO Keypoints & Topology
+SKELETON_EDGES = [
+    (0, 1), (0, 2), (1, 3), (2, 4),           # Head
+    (5, 6),                                   # Shoulders
+    (5, 7), (7, 9),                           # Left arm
+    (6, 8), (8, 10),                          # Right arm
+    (5, 11), (6, 12), (11, 12),               # Torso
+    (11, 13), (13, 15),                       # Left leg
+    (12, 14), (14, 16),                       # Right leg
+]
+
+
+class KalmanBox3DTracker:
+    """3D Constant-Velocity Kalman Filter for smooth multi-object tracking."""
+
+    _count = 0
+
+    def __init__(self, init_pos: np.ndarray, name: str, conf: float, track_type: str = "FUSED") -> None:
+        KalmanBox3DTracker._count += 1
+        self.id = KalmanBox3DTracker._count
+        self.name = name
+        self.conf = conf
+        self.track_type = track_type  # "FUSED" or "VISION"
+        self.hits = 1
+        self.time_since_update = 0
+
+        # State: [x, y, z, vx, vy, vz]
+        self.x = np.zeros(6, dtype=np.float32)
+        self.x[:3] = init_pos[:3]
+
+        # Covariance
+        self.P = np.eye(6, dtype=np.float32) * 1.0
+        self.P[3:, 3:] *= 10.0
+
+        # Process noise
+        self.Q = np.eye(6, dtype=np.float32) * 0.05
+        self.Q[3:, 3:] *= 0.5
+
+        self.last_bbox: Tuple[int, int, int, int] = (0, 0, 0, 0)
+        self.last_kpts: Optional[np.ndarray] = None
+        self.last_kconfs: Optional[np.ndarray] = None
+        self.pts_count = 0
+        self.yaw = 0.0
+        self.history_dist: List[float] = [float(np.linalg.norm(init_pos[:3]))]
+
+    def predict(self, dt: float = 0.066) -> np.ndarray:
+        F = np.eye(6, dtype=np.float32)
+        F[0, 3] = dt
+        F[1, 4] = dt
+        F[2, 5] = dt
+
+        self.x = F @ self.x
+        self.P = F @ self.P @ F.T + self.Q
+        self.time_since_update += 1
+        return self.x[:3]
+
+    def update(self, pos: np.ndarray, bbox: Tuple[int, int, int, int], pts_count: int,
+               track_type: str, kpts: Optional[np.ndarray] = None,
+               kconfs: Optional[np.ndarray] = None, yaw: float = 0.0) -> None:
+        self.time_since_update = 0
+        self.hits += 1
+        self.pts_count = pts_count
+        self.track_type = track_type
+        self.last_bbox = bbox
+        self.last_kpts = kpts
+        self.last_kconfs = kconfs
+        self.yaw = yaw
+
+        # Adaptive measurement noise based on source
+        R = np.diag([0.04, 0.04, 0.04]).astype(np.float32) if track_type == "FUSED" else np.diag([0.15, 0.15, 0.30]).astype(np.float32)
+
+        H = np.zeros((3, 6), dtype=np.float32)
+        H[0, 0] = H[1, 1] = H[2, 2] = 1.0
+
+        y = pos - (H @ self.x)
+        S = H @ self.P @ H.T + R
+        K = self.P @ H.T @ np.linalg.inv(S)
+
+        self.x = self.x + K @ y
+        self.P = (np.eye(6, dtype=np.float32) - K @ H) @ self.P
+        self.history_dist.append(float(np.linalg.norm(self.x[:3])))
+
+
+def compute_iou_2d(box1: Tuple[int, int, int, int], box2: Tuple[int, int, int, int]) -> float:
+    """Calculate Intersection over Union (IoU) between two 2D bounding boxes."""
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+
+    inter_w = max(0, x2 - x1)
+    inter_h = max(0, y2 - y1)
+    inter_area = inter_w * inter_h
+
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    union = area1 + area2 - inter_area
+
+    return float(inter_area) / float(union) if union > 0 else 0.0
+
 
 class CameraLidarFusionNode(LifecycleNode):
     """LifecycleNode fusing 3D LiDAR and Camera streams into isolated 3D perception."""
@@ -80,28 +201,38 @@ class CameraLidarFusionNode(LifecycleNode):
         self.declare_parameter("output_bev_image_topic", "/bench_perception/fusion/bev_image")
         self.declare_parameter("output_dashboard_topic", "/bench_perception/fusion/dashboard")
 
+        # Calibrated Extrinsics (relative to base_link)
         self.declare_parameter("lidar_mount_x", 0.5750)
         self.declare_parameter("lidar_mount_y", 0.0000)
         self.declare_parameter("lidar_mount_z", 1.7464)
         self.declare_parameter("camera_mount_x", 1.2000)
         self.declare_parameter("camera_mount_y", 0.0000)
-        self.declare_parameter("camera_mount_z", 1.0000)
+        self.declare_parameter("camera_mount_z", 1.7000)
         self.declare_parameter("camera_pitch_rad", 0.0000)
 
+        # Intrinsics
         self.declare_parameter("fx_color", 1081.372)
         self.declare_parameter("fy_color", 1081.372)
         self.declare_parameter("cx_color", 959.5)
         self.declare_parameter("cy_color", 539.5)
 
-        self.declare_parameter("ground_filter_z_m", 0.15)
-        self.declare_parameter("cluster_eps_m", 0.45)
-        self.declare_parameter("cluster_min_pts", 3)
-        self.declare_parameter("box_inner_margin", 0.08)
+        # 3D Filtering & Clustering
+        self.declare_parameter("ground_filter_z_lidar_m", -1.40)
+        self.declare_parameter("cluster_eps_m", 0.28)
+        self.declare_parameter("cluster_min_pts", 4)
+        self.declare_parameter("box_inner_margin", 0.05)
         self.declare_parameter("max_radar_range_m", 15.0)
 
+        # Multi-Tier Association & Tracking
+        self.declare_parameter("hungarian_dist_gate_m", 1.80)
+        self.declare_parameter("kalman_association_gate_m", 1.80)
+        self.declare_parameter("kalman_max_coast_frames", 3)
+
+        # Standalone YOLO Fallback
         self.declare_parameter("auto_run_yolo", True)
-        self.declare_parameter("yolo_model_path", "/workspace/av_project/yolov8n.pt")
-        self.declare_parameter("confidence_threshold", 0.40)
+        self.declare_parameter("yolo_model_path", "/workspace/av_project/data/ml_models/yolo26x-pose.pt")
+        self.declare_parameter("confidence_threshold", 0.30)
+        self.declare_parameter("skeleton_joint_threshold", 0.40)
 
         # Internal state
         self._bridge: CvBridge = CvBridge()
@@ -112,6 +243,7 @@ class CameraLidarFusionNode(LifecycleNode):
         self._last_camera_objects: List[Dict[str, Any]] = []
         self._last_camera_objects_time: float = 0.0
 
+        self._trackers: List[KalmanBox3DTracker] = []
         self._yolo_model: Optional[Any] = None
 
         # Publishers
@@ -166,13 +298,19 @@ class CameraLidarFusionNode(LifecycleNode):
         # Load standalone YOLO model if enabled
         if bool(self.get_parameter("auto_run_yolo").value):
             model_path = str(self.get_parameter("yolo_model_path").value)
-            if not os.path.exists(model_path) and os.path.exists("yolov8n.pt"):
-                model_path = "yolov8n.pt"
-            if os.path.exists(model_path):
+            candidates = [
+                model_path,
+                "/workspace/av_project/data/ml_models/yolo26x-pose.pt",
+                "/workspace/av_project/data/ml_models/yolov8x-pose-p6.pt",
+                "/workspace/av_project/yolov8n.pt",
+                "yolov8n.pt"
+            ]
+            valid_path = next((p for p in candidates if os.path.exists(p)), None)
+            if valid_path is not None:
                 try:
                     from ultralytics import YOLO
-                    self.get_logger().info(f"Loading fallback YOLO model: {model_path}")
-                    self._yolo_model = YOLO(model_path)
+                    self.get_logger().info(f"Loading YOLO model: {valid_path}")
+                    self._yolo_model = YOLO(valid_path)
                 except Exception as e:
                     self.get_logger().warn(f"Could not load fallback YOLO model: {e}")
 
@@ -220,6 +358,7 @@ class CameraLidarFusionNode(LifecycleNode):
         self._pub_dashboard = None
         self._last_image = None
         self._last_lidar_pts = None
+        self._trackers.clear()
         return TransitionCallbackReturn.SUCCESS
 
     def on_shutdown(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -278,16 +417,14 @@ class CameraLidarFusionNode(LifecycleNode):
             self.get_logger().warn(f"Failed to decode LiDAR pointcloud: {e}")
 
     def _on_camera_objects(self, msg: DetectedObjects) -> None:
-        """Ingest upstream YOLO detections from /bench_perception/objects."""
+        """Ingest upstream detections from /bench_perception/objects."""
         extracted = []
         for obj in msg.objects:
             conf = float(obj.existence_probability)
-            cls_name = "object"
+            cls_name = "person"
             if obj.classification:
                 lbl = obj.classification[0].label
-                if lbl == ObjectClassification.PEDESTRIAN:
-                    cls_name = "person"
-                elif lbl == ObjectClassification.CAR:
+                if lbl == ObjectClassification.CAR:
                     cls_name = "car"
                 elif lbl == ObjectClassification.BICYCLE:
                     cls_name = "bicycle"
@@ -322,7 +459,6 @@ class CameraLidarFusionNode(LifecycleNode):
         lidar_active = (self._last_lidar_pts is not None) and ((now - self._last_lidar_time) < timeout_sec)
 
         if not cam_active or not lidar_active:
-            # Emit empty heartbeat / keep alive
             empty_objs = DetectedObjects()
             empty_objs.header.stamp = self.get_clock().now().to_msg()
             empty_objs.header.frame_id = "base_link"
@@ -334,64 +470,146 @@ class CameraLidarFusionNode(LifecycleNode):
         h_orig, w_orig = img.shape[:2]
         lidar_pts = self._last_lidar_pts
 
-        # 1. Project LiDAR points into Optical Frame and Image Plane
-        proj = self._project_points(lidar_pts, w_orig, h_orig)
+        # 1. Floor Ground Removal (Z_lidar > -1.40m eliminates bridging)
+        floor_z_lidar = float(self.get_parameter("ground_filter_z_lidar_m").value)
+        non_floor_mask = lidar_pts[:, 2] > floor_z_lidar
+        non_floor_pts = lidar_pts[non_floor_mask]
 
-        # 2. Get 2D Detections (Received from /bench_perception/objects or local YOLO)
+        # 2. 3D Euclidean DBSCAN Clustering directly in base_link
+        clusters_3d = self._euclidean_clustering_3d(non_floor_pts)
+
+        # 3. Project 3D Clusters into 2D Image Frustums
+        proj_clusters = self._project_clusters_to_camera(clusters_3d, w_orig, h_orig)
+
+        # 4. Get 2D Detections & Keypoints
         detections_2d = self._detect_2d_boxes(img)
 
-        # 3. 3D Spatial Association & Euclidean Clustering
-        fused_objects = self._fuse_detections(detections_2d, proj)
+        # 5. Multi-Tier Association (FUSED + VISION)
+        current_actors = self._associate_multi_tier(detections_2d, proj_clusters)
 
-        # 4. Publish Isolated ROS 2 Messages
+        # 6. Multi-Object Tracking with 3D Kalman Filter
+        active_trackers = self._update_kalman_trackers(current_actors)
+
+        # 7. Publish Isolated ROS 2 Messages
         stamp = self.get_clock().now().to_msg()
-        self._publish_ros_messages(fused_objects, stamp)
+        self._publish_ros_messages(active_trackers, stamp)
 
-        # 5. Render & Publish Visual Debug Streams
-        self._publish_visual_streams(img, proj, fused_objects, stamp)
+        # 8. Render & Publish Visual Streams (Unobstructed Cockpit HUD)
+        self._publish_visual_streams(img, non_floor_pts, active_trackers, stamp)
 
-    def _project_points(self, lidar_pts: np.ndarray, img_w: int, img_h: int) -> Dict[str, np.ndarray]:
-        """Project 3D LiDAR points into camera coordinates and image pixels."""
+    def _euclidean_clustering_3d(self, non_floor_pts: np.ndarray) -> List[Dict[str, Any]]:
+        """Cluster 3D non-ground LiDAR points in vehicle base_link frame using DBSCAN."""
+        cluster_min_pts = int(self.get_parameter("cluster_min_pts").value)
+        if len(non_floor_pts) < cluster_min_pts:
+            return []
+
+        # Transform to base_link
+        # LiDAR mount: X=0.5750, Y=0.0, Z=1.7464
+        lx = float(self.get_parameter("lidar_mount_x").value)
+        ly = float(self.get_parameter("lidar_mount_y").value)
+        lz = float(self.get_parameter("lidar_mount_z").value)
+        max_r = float(self.get_parameter("max_radar_range_m").value)
+
+        bx = non_floor_pts[:, 0] + lx
+        by = non_floor_pts[:, 1] + ly
+        bz = non_floor_pts[:, 2] + lz
+
+        forward = (bx > 0.5) & (bx < max_r) & (np.abs(by) < max_r * 0.55)
+        if np.sum(forward) < cluster_min_pts:
+            return []
+
+        f_pts = np.column_stack([bx[forward], by[forward], bz[forward]])
+        cluster_eps = float(self.get_parameter("cluster_eps_m").value)
+
+        clusters = []
+        if _HAS_SKLEARN:
+            db = DBSCAN(eps=cluster_eps, min_samples=cluster_min_pts, algorithm="kd_tree", n_jobs=-1).fit(f_pts)
+            labels = db.labels_
+            for k in set(labels):
+                if k == -1:
+                    continue
+                c_pts = f_pts[labels == k]
+                min_b = np.min(c_pts, axis=0)
+                max_b = np.max(c_pts, axis=0)
+                centroid = np.mean(c_pts, axis=0)
+                dims = max_b - min_b
+                # Reject massive background planes
+                if dims[0] < 5.0 and dims[1] < 4.0:
+                    clusters.append({
+                        "points": c_pts,
+                        "centroid": centroid,
+                        "min_bound": min_b,
+                        "max_bound": max_b,
+                        "dims": dims,
+                        "dist": float(np.linalg.norm(centroid)),
+                        "count": len(c_pts),
+                    })
+        return clusters
+
+    def _project_clusters_to_camera(self, clusters: List[Dict[str, Any]], img_w: int, img_h: int) -> List[Dict[str, Any]]:
+        """Project 3D clusters into 2D camera pixels using calibrated extrinsics."""
         fx = float(self.get_parameter("fx_color").value)
         fy = float(self.get_parameter("fy_color").value)
         cx = float(self.get_parameter("cx_color").value)
         cy = float(self.get_parameter("cy_color").value)
 
-        # Extrinsics
-        # base_link: lidar=(0.575, 0, 1.7464), kinect=(1.20, 0, 1.00)
-        # Optical: X_opt = -Y_lidar, Y_opt = -(Z_lidar + 0.7464), Z_opt = X_lidar - 0.6250
-        x_l = lidar_pts[:, 0]
-        y_l = lidar_pts[:, 1]
-        z_l = lidar_pts[:, 2]
+        cam_x = float(self.get_parameter("camera_mount_x").value)
+        cam_y = float(self.get_parameter("camera_mount_y").value)
+        cam_z = float(self.get_parameter("camera_mount_z").value)
 
-        z_opt = x_l - 0.6250
-        x_opt = -y_l
-        y_opt = -(z_l + 0.7464)
+        proj_clusters = []
+        for c in clusters:
+            centroid = c["centroid"]
+            min_b = c["min_bound"]
+            max_b = c["max_bound"]
 
-        front_mask = z_opt > 0.45
-        pts_valid = lidar_pts[front_mask]
-        z_opt = z_opt[front_mask]
-        x_opt = x_opt[front_mask]
-        y_opt = y_opt[front_mask]
+            z_opt = centroid[0] - cam_x
+            if z_opt < 0.4:
+                continue
+            x_opt = -(centroid[1] - cam_y)
+            y_opt = -(centroid[2] - cam_z)
 
-        u = fx * (x_opt / z_opt) + cx
-        v = fy * (y_opt / z_opt) + cy
+            u_c = int(fx * (x_opt / z_opt) + cx)
+            v_c = int(fy * (y_opt / z_opt) + cy)
 
-        in_bounds = (u >= 0) & (u < img_w) & (v >= 0) & (v < img_h)
+            corners_base = np.array([
+                [min_b[0], min_b[1], min_b[2]],
+                [min_b[0], min_b[1], max_b[2]],
+                [min_b[0], max_b[1], min_b[2]],
+                [min_b[0], max_b[1], max_b[2]],
+                [max_b[0], min_b[1], min_b[2]],
+                [max_b[0], min_b[1], max_b[2]],
+                [max_b[0], max_b[1], min_b[2]],
+                [max_b[0], max_b[1], max_b[2]],
+            ])
 
-        return {
-            "u": u[in_bounds].astype(int),
-            "v": v[in_bounds].astype(int),
-            "depth": z_opt[in_bounds],
-            "base_x": pts_valid[in_bounds, 0] + 0.5750,
-            "base_y": pts_valid[in_bounds, 1],
-            "base_z": pts_valid[in_bounds, 2] + 1.7464,
-        }
+            z_corn = corners_base[:, 0] - cam_x
+            if np.any(z_corn < 0.3):
+                continue
+            x_corn = -(corners_base[:, 1] - cam_y)
+            y_corn = -(corners_base[:, 2] - cam_z)
+
+            u_arr = fx * (x_corn / z_corn) + cx
+            v_arr = fy * (y_corn / z_corn) + cy
+
+            u1, u2 = int(np.clip(np.min(u_arr), 0, img_w - 1)), int(np.clip(np.max(u_arr), 0, img_w - 1))
+            v1, v2 = int(np.clip(np.min(v_arr), 0, img_h - 1)), int(np.clip(np.max(v_arr), 0, img_h - 1))
+
+            if (u2 - u1) < 8 or (v2 - v1) < 8:
+                continue
+
+            proj_clusters.append({
+                "cluster": c,
+                "box_2d": (u1, v1, u2, v2),
+                "center_2d": (u_c, v_c),
+                "dist": float(np.linalg.norm(centroid)),
+            })
+        return proj_clusters
 
     def _detect_2d_boxes(self, img: np.ndarray) -> List[Dict[str, Any]]:
-        """Obtain 2D bounding boxes from /bench_perception/objects or fallback local YOLO."""
+        """Obtain 2D bounding boxes and pose skeletons from local YOLO or upstream topic."""
         now = time.time()
-        # 1. Prefer upstream GPU TensorRT detections from /bench_perception/objects if active
+        # 1. If upstream YOLO is publishing recent objects, use them
         if self._last_camera_objects and (now - self._last_camera_objects_time < 1.5):
             h, w = img.shape[:2]
             fx = float(self.get_parameter("fx_color").value)
@@ -423,115 +641,215 @@ class CameraLidarFusionNode(LifecycleNode):
                 y1 = int(np.clip(v_c - bh * 0.5, 0, h - 1))
                 y2 = int(np.clip(v_c + bh * 0.5, 0, h - 1))
 
-                if x2 > x1 + 15 and y2 > y1 + 20:
+                if x2 > x1 + 10 and y2 > y1 + 10:
                     boxes.append({
                         "name": obj["class"],
                         "conf": obj["conf"],
                         "bbox": (x1, y1, x2, y2),
+                        "pos_hint": np.array([px, py, pz], dtype=np.float32),
+                        "kpts": None,
+                        "kconfs": None,
+                        "yaw": 0.0,
                     })
             if boxes:
                 return boxes
 
-        # 2. Fallback to local YOLO model if available
+        # 2. Local YOLO inference with Pose keypoint extraction
         boxes = []
         if self._yolo_model is not None:
             conf_thresh = float(self.get_parameter("confidence_threshold").value)
             try:
                 results = self._yolo_model(img, conf=conf_thresh, verbose=False)
                 for r in results:
-                    for b in r.boxes:
+                    for b_idx in range(len(r.boxes)):
+                        b = r.boxes[b_idx]
                         cls_id = int(b.cls[0])
                         name = self._yolo_model.names[cls_id]
                         conf = float(b.conf[0])
-                        x1, y1, x2, y2 = b.xyxy[0].tolist()
+                        x1, y1, x2, y2 = [int(v) for v in b.xyxy[0].tolist()]
+
+                        kpts_xy = None
+                        kpts_confs = None
+                        yaw_est = 0.0
+
+                        if r.keypoints is not None and b_idx < len(r.keypoints):
+                            k = r.keypoints[b_idx]
+                            kpts_xy = k.xy[0].cpu().numpy()
+                            kpts_confs = k.conf[0].cpu().numpy() if k.conf is not None else np.ones(len(kpts_xy))
+
+                            if len(kpts_confs) >= 7 and kpts_confs[5] > 0.35 and kpts_confs[6] > 0.35:
+                                dx_sh = float(kpts_xy[5, 0] - kpts_xy[6, 0])
+                                yaw_est = math.atan2(0.0, dx_sh)
+
                         boxes.append({
                             "name": name,
                             "conf": conf,
-                            "bbox": (int(x1), int(y1), int(x2), int(y2)),
+                            "bbox": (x1, y1, x2, y2),
+                            "pos_hint": None,
+                            "kpts": kpts_xy,
+                            "kconfs": kpts_confs,
+                            "yaw": yaw_est,
                         })
             except Exception as e:
-                self.get_logger().warn(f"Inference error: {e}")
+                self.get_logger().warn(f"YOLO inference error: {e}")
         return boxes
 
-    def _fuse_detections(self, detections: List[Dict[str, Any]], proj: Dict[str, np.ndarray]) -> List[Dict[str, Any]]:
-        """Perform 3D Euclidean clustering inside bounding box frustums."""
-        fused = []
-        u_p = proj["u"]
-        v_p = proj["v"]
-        d_p = proj["depth"]
-        bx_p = proj["base_x"]
-        by_p = proj["base_y"]
-        bz_p = proj["base_z"]
+    def _associate_multi_tier(self, detections: List[Dict[str, Any]],
+                              proj_clusters: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Perform Hungarian cross-modal matching with multi-tier fallback (FUSED + VISION)."""
+        dist_gate = float(self.get_parameter("hungarian_dist_gate_m").value)
+        fx = float(self.get_parameter("fx_color").value)
+        fy = float(self.get_parameter("fy_color").value)
+        cx = float(self.get_parameter("cx_color").value)
+        cy = float(self.get_parameter("cy_color").value)
+        cam_x = float(self.get_parameter("camera_mount_x").value)
+        cam_z = float(self.get_parameter("camera_mount_z").value)
 
-        margin = float(self.get_parameter("box_inner_margin").value)
-        cluster_eps = float(self.get_parameter("cluster_eps_m").value)
-        min_pts = int(self.get_parameter("cluster_min_pts").value)
-        ground_z = float(self.get_parameter("ground_filter_z_m").value)
+        cost_matrix = np.ones((len(detections), len(proj_clusters)), dtype=np.float32) * 1.0
 
-        for det in detections:
-            x1, y1, x2, y2 = det["bbox"]
-            bw = x2 - x1
-            bh = y2 - y1
+        for d_i, det in enumerate(detections):
+            d_box = det["bbox"]
+            pos_hint = det["pos_hint"]
+            hint_dist = float(np.linalg.norm(pos_hint)) if pos_hint is not None else 0.0
 
-            # Filter points in 2D box frustum
-            in_box = (
-                (u_p >= x1 + margin * bw) & (u_p <= x2 - margin * bw) &
-                (v_p >= y1 + margin * bh) & (v_p <= y2 - margin * bh)
-            )
+            for c_j, proj in enumerate(proj_clusters):
+                c_box = proj["box_2d"]
+                u_c, v_c = proj["center_2d"]
+                c_dist = proj["dist"]
 
-            box_d = d_p[in_box]
-            box_x = bx_p[in_box]
-            box_y = by_p[in_box]
-            box_z = bz_p[in_box]
+                iou = compute_iou_2d(d_box, c_box)
+                inside = (d_box[0] <= u_c <= d_box[2]) and (d_box[1] <= v_c <= d_box[3])
 
-            if len(box_d) < min_pts:
-                continue
+                dist_ok = True
+                if hint_dist > 1.0 and abs(c_dist - hint_dist) > dist_gate:
+                    dist_ok = False
 
-            # Remove ground points (Z_base < ground_z)
-            non_ground = box_z > ground_z
-            if np.sum(non_ground) >= min_pts:
-                b_d, b_x, b_y, b_z = box_d[non_ground], box_x[non_ground], box_y[non_ground], box_z[non_ground]
-            else:
-                b_d, b_x, b_y, b_z = box_d, box_x, box_y, box_z
+                if dist_ok:
+                    if inside:
+                        cost_matrix[d_i, c_j] = min(1.0 - iou, 0.35)
+                    elif iou > 0.10:
+                        cost_matrix[d_i, c_j] = 1.0 - iou
 
-            # 1D Depth Discontinuity Clustering
-            sort_idx = np.argsort(b_d)
-            d_sorted = b_d[sort_idx]
-            x_sorted = b_x[sort_idx]
-            y_sorted = b_y[sort_idx]
-            z_sorted = b_z[sort_idx]
+        matched_det_indices = set()
+        matched_cluster_indices = set()
+        matched_pairs = []
 
-            splits = np.where(np.diff(d_sorted) > cluster_eps)[0] + 1
-            clusters = np.split(np.arange(len(d_sorted)), splits)
+        if _HAS_SCIPY and len(detections) > 0 and len(proj_clusters) > 0:
+            row_ind, col_ind = linear_sum_assignment(cost_matrix)
+            for r, c in zip(row_ind, col_ind):
+                if cost_matrix[r, c] < 0.70:
+                    matched_det_indices.add(r)
+                    matched_cluster_indices.add(c)
+                    matched_pairs.append((r, c))
 
-            valid_clusters = [c for c in clusters if len(c) >= min_pts]
-            if not valid_clusters:
-                continue
+        current_actors = []
 
-            fg_idx = valid_clusters[0]  # Nearest obstacle = foreground human/object
-            fg_d = d_sorted[fg_idx]
-            fg_x = x_sorted[fg_idx]
-            fg_y = y_sorted[fg_idx]
-            fg_z = z_sorted[fg_idx]
-
-            fused.append({
+        # Add Fused Actors
+        for r, c in matched_pairs:
+            det = detections[r]
+            cl = proj_clusters[c]["cluster"]
+            current_actors.append({
+                "type": "FUSED",
                 "name": det["name"],
                 "conf": det["conf"],
-                "bbox": det["bbox"],
-                "dist": float(np.median(fg_d)),
-                "pts_count": len(fg_d),
-                "total_frustum_pts": len(box_d),
-                "pos_base": (float(np.median(fg_x)), float(np.median(fg_y)), float(np.median(fg_z))),
-                "size_3d": (
-                    max(0.5, float(np.ptp(fg_x))),
-                    max(0.5, float(np.ptp(fg_y))),
-                    max(1.0, float(np.ptp(fg_z))) if det["name"] == "person" else max(0.5, float(np.ptp(fg_z)))
-                )
+                "box": det["bbox"],
+                "pos": cl["centroid"],
+                "pts": cl["count"],
+                "kpts": det["kpts"],
+                "kconfs": det["kconfs"],
+                "yaw": det["yaw"],
             })
 
-        return fused
+        # Add Vision Actors (Never drop real people!)
+        for r, det in enumerate(detections):
+            if r not in matched_det_indices:
+                x1, y1, x2, y2 = det["bbox"]
+                u_cent = (x1 + x2) / 2.0
+                v_cent = (y1 + y2) / 2.0
 
-    def _publish_ros_messages(self, fused_objects: List[Dict[str, Any]], stamp: Any) -> None:
+                if det["pos_hint"] is not None:
+                    pos_est = det["pos_hint"]
+                else:
+                    # Pinhole floor raycasting: ground is Z_base = 0.0 -> Y_opt = +1.70
+                    v_feet = max(cy + 10, float(y2))
+                    z_opt = float(fy * 1.70 / (v_feet - cy))
+                    z_opt = np.clip(z_opt, 1.0, 15.0)
+
+                    x_opt = (u_cent - cx) * z_opt / fx
+                    y_opt = (v_cent - cy) * z_opt / fy
+                    pos_est = np.array([z_opt + cam_x, -x_opt, -y_opt + cam_z], dtype=np.float32)
+
+                current_actors.append({
+                    "type": "VISION",
+                    "name": det["name"],
+                    "conf": det["conf"],
+                    "box": det["bbox"],
+                    "pos": pos_est,
+                    "pts": 0,
+                    "kpts": det["kpts"],
+                    "kconfs": det["kconfs"],
+                    "yaw": det["yaw"],
+                })
+
+        return current_actors
+
+    def _update_kalman_trackers(self, current_actors: List[Dict[str, Any]]) -> List[KalmanBox3DTracker]:
+        """Update 3D Constant-Velocity Kalman Filter tracks."""
+        for trk in self._trackers:
+            trk.predict(dt=0.066)
+
+        matched_actor_ids = set()
+        matched_track_ids = set()
+        gate = float(self.get_parameter("kalman_association_gate_m").value)
+
+        # Associate actors to existing tracks
+        for a_idx, act in enumerate(current_actors):
+            pos_meas = act["pos"]
+            best_trk = None
+            best_dist = gate
+            for trk in self._trackers:
+                if trk.id not in matched_track_ids and trk.name == act["name"]:
+                    d_trk = float(np.linalg.norm(trk.x[:3] - pos_meas))
+                    if d_trk < best_dist:
+                        best_dist = d_trk
+                        best_trk = trk
+
+            if best_trk is not None:
+                best_trk.update(
+                    pos=pos_meas,
+                    bbox=act["box"],
+                    pts_count=act["pts"],
+                    track_type=act["type"],
+                    kpts=act["kpts"],
+                    kconfs=act["kconfs"],
+                    yaw=act["yaw"]
+                )
+                matched_track_ids.add(best_trk.id)
+                matched_actor_ids.add(a_idx)
+
+        # Initialize new tracks for unmatched actors
+        for a_idx, act in enumerate(current_actors):
+            if a_idx not in matched_actor_ids:
+                new_trk = KalmanBox3DTracker(act["pos"], act["name"], act["conf"], track_type=act["type"])
+                new_trk.update(
+                    pos=act["pos"],
+                    bbox=act["box"],
+                    pts_count=act["pts"],
+                    track_type=act["type"],
+                    kpts=act["kpts"],
+                    kconfs=act["kconfs"],
+                    yaw=act["yaw"]
+                )
+                self._trackers.append(new_trk)
+                matched_track_ids.add(new_trk.id)
+
+        # Prune dead tracks (missed > 6 frames)
+        self._trackers = [t for t in self._trackers if t.time_since_update <= 6]
+
+        max_coast = int(self.get_parameter("kalman_max_coast_frames").value)
+        return [t for t in self._trackers if t.time_since_update <= max_coast]
+
+    def _publish_ros_messages(self, active_trackers: List[KalmanBox3DTracker], stamp: Any) -> None:
         """Publish isolated DetectedObjects and MarkerArray."""
         if self._pub_objects is None or not self._pub_objects.is_activated:
             return
@@ -542,33 +860,33 @@ class CameraLidarFusionNode(LifecycleNode):
 
         marker_arr = MarkerArray()
 
-        for idx, obj in enumerate(fused_objects):
-            ox, oy, oz = obj["pos_base"]
-            sx, sy, sz = obj["size_3d"]
+        for idx, trk in enumerate(active_trackers):
+            ox, oy, oz = trk.x[:3]
+            sx, sy, sz = (0.7, 0.7, 1.7) if trk.name == "person" else (2.0, 4.2, 1.6)
 
             det = DetectedObject()
-            det.existence_probability = obj["conf"]
+            det.existence_probability = trk.conf
 
             cls_msg = ObjectClassification()
-            cls_msg.probability = obj["conf"]
-            if obj["name"] == "person":
+            cls_msg.probability = trk.conf
+            if trk.name == "person":
                 cls_msg.label = ObjectClassification.PEDESTRIAN
-            elif obj["name"] == "car":
+            elif trk.name == "car":
                 cls_msg.label = ObjectClassification.CAR
-            elif obj["name"] == "bicycle":
+            elif trk.name == "bicycle":
                 cls_msg.label = ObjectClassification.BICYCLE
             else:
                 cls_msg.label = ObjectClassification.UNKNOWN
             det.classification = [cls_msg]
 
             kin = DetectedObjectKinematics()
-            kin.pose_with_covariance.pose.position = Point(x=ox, y=oy, z=oz)
-            kin.pose_with_covariance.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
+            kin.pose_with_covariance.pose.position = Point(x=float(ox), y=float(oy), z=float(oz))
+            kin.pose_with_covariance.pose.orientation = Quaternion(x=0.0, y=0.0, z=math.sin(trk.yaw * 0.5), w=math.cos(trk.yaw * 0.5))
             det.kinematics = kin
 
             shape = Shape()
             shape.type = Shape.BOUNDING_BOX
-            shape.dimensions = Vector3(x=sx, y=sy, z=sz)
+            shape.dimensions = Vector3(x=float(sx), y=float(sy), z=float(sz))
             det.shape = shape
 
             out_objs.objects.append(det)
@@ -581,10 +899,11 @@ class CameraLidarFusionNode(LifecycleNode):
             m_box.id = idx * 2
             m_box.type = Marker.CUBE
             m_box.action = Marker.ADD
-            m_box.pose.position = Point(x=ox, y=oy, z=oz)
-            m_box.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
-            m_box.scale = Vector3(x=sx, y=sy, z=sz)
-            m_box.color = ColorRGBA(r=0.0, g=1.0, b=0.4, a=0.55) if obj["dist"] > 3.0 else ColorRGBA(r=1.0, g=0.2, b=0.0, a=0.65)
+            m_box.pose.position = Point(x=float(ox), y=float(oy), z=float(oz))
+            m_box.pose.orientation = Quaternion(x=0.0, y=0.0, z=math.sin(trk.yaw * 0.5), w=math.cos(trk.yaw * 0.5))
+            m_box.scale = Vector3(x=float(sx), y=float(sy), z=float(sz))
+            dist_m = float(np.linalg.norm(trk.x[:3]))
+            m_box.color = ColorRGBA(r=0.0, g=1.0, b=0.4, a=0.55) if dist_m > 3.0 else ColorRGBA(r=1.0, g=0.2, b=0.0, a=0.65)
             marker_arr.markers.append(m_box)
 
             # RViz Marker: Text Tag
@@ -595,9 +914,9 @@ class CameraLidarFusionNode(LifecycleNode):
             m_txt.id = idx * 2 + 1
             m_txt.type = Marker.TEXT_VIEW_FACING
             m_txt.action = Marker.ADD
-            m_txt.pose.position = Point(x=ox, y=oy, z=oz + sz / 2.0 + 0.3)
+            m_txt.pose.position = Point(x=float(ox), y=float(oy), z=float(oz + sz / 2.0 + 0.3))
             m_txt.scale.z = 0.35
-            m_txt.text = f"{obj['name'].upper()} {obj['dist']:.1f}m"
+            m_txt.text = f"ID:{trk.id} {trk.name.upper()} {dist_m:.1f}m"
             m_txt.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=0.95)
             marker_arr.markers.append(m_txt)
 
@@ -608,8 +927,8 @@ class CameraLidarFusionNode(LifecycleNode):
     def _publish_visual_streams(
         self,
         img: np.ndarray,
-        proj: Dict[str, np.ndarray],
-        fused_objects: List[Dict[str, Any]],
+        non_floor_pts: np.ndarray,
+        active_trackers: List[KalmanBox3DTracker],
         stamp: Any
     ) -> None:
         """Render annotated camera feed and BEV radar map, and publish images."""
@@ -620,83 +939,146 @@ class CameraLidarFusionNode(LifecycleNode):
         ):
             return
 
+        fx = float(self.get_parameter("fx_color").value)
+        fy = float(self.get_parameter("fy_color").value)
+        cx = float(self.get_parameter("cx_color").value)
+        cy = float(self.get_parameter("cy_color").value)
+        skel_thresh = float(self.get_parameter("skeleton_joint_threshold").value)
+
         # 1. Overlay Depth-Colored LiDAR Points onto Camera Frame
-        u_p, v_p, d_p = proj["u"], proj["v"], proj["depth"]
-        overlay = img.copy()
-        norm_depth = np.clip((d_p - 1.0) / 11.0, 0.0, 1.0)
+        # Calibrated: Z_opt = X_lidar - 0.6250, X_opt = -Y_lidar, Y_opt = -(Z_lidar + 0.0464)
+        z_opt_all = non_floor_pts[:, 0] - 0.6250
+        valid_front = z_opt_all > 0.45
+        z_v = z_opt_all[valid_front]
+        x_v = -non_floor_pts[valid_front, 1]
+        y_v = -(non_floor_pts[valid_front, 2] + 0.0464)
+
+        u = (fx * (x_v / z_v) + cx).astype(int)
+        v = (fy * (y_v / z_v) + cy).astype(int)
+
+        in_cam = (u >= 0) & (u < 1920) & (v >= 0) & (v < 1080)
+        u_p = u[in_cam]
+        v_p = v[in_cam]
+        d_p = z_v[in_cam]
+
+        cam_canvas = img.copy()
+        norm_depth = np.clip((d_p - 1.0) / 10.0, 0.0, 1.0)
         colors = cv2.applyColorMap((norm_depth * 255).astype(np.uint8), cv2.COLORMAP_TURBO)[:, 0, :]
         for (px, py), c in zip(zip(u_p, v_p), colors.tolist()):
-            cv2.circle(overlay, (px, py), 2, c, -1)
+            cv2.circle(cam_canvas, (px, py), 2, c, -1)
 
-        cam_blend = cv2.addWeighted(overlay, 0.50, img, 0.50, 0)
+        # Draw 2D Bounding Boxes, Pose Skeletons & Status Badges
+        for trk in active_trackers:
+            x1, y1, x2, y2 = trk.last_bbox
+            dist_m = float(np.linalg.norm(trk.x[:3]))
 
-        # Draw 2D + 3D Fused Bounding Boxes
-        for obj in fused_objects:
-            x1, y1, x2, y2 = obj["bbox"]
-            dist_m = obj["dist"]
-            label = obj["name"].upper()
-            ox, oy, oz = obj["pos_base"]
+            # Color palette
+            if trk.time_since_update > 0:
+                box_col = (0, 140, 255)  # Orange for coasting prediction
+            elif trk.track_type == "FUSED":
+                if dist_m < 2.5:
+                    box_col = (0, 45, 255)   # Red for close obstacle
+                elif dist_m < 5.0:
+                    box_col = (0, 215, 255)  # Yellow for caution
+                else:
+                    box_col = (0, 255, 120)  # Green for safe distance
+            else:
+                box_col = (255, 215, 0)      # Cyan for vision-confirmed actor
 
-            box_col = (0, 45, 255) if dist_m < 2.5 else ((0, 215, 255) if dist_m < 5.0 else (0, 255, 120))
-            cv2.rectangle(cam_blend, (x1, y1), (x2, y2), box_col, 3, cv2.LINE_AA)
+            cv2.rectangle(cam_canvas, (x1, y1), (x2, y2), box_col, 2, cv2.LINE_AA)
 
-            tag = f"{label} {dist_m:.2f}m [{obj['pts_count']} pts]"
-            (tw, th), _ = cv2.getTextSize(tag, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
-            cv2.rectangle(cam_blend, (x1, y1 - th - 10), (x1 + tw + 10, y1), box_col, -1)
-            cv2.putText(cam_blend, tag, (x1 + 5, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2, cv2.LINE_AA)
+            # Pose skeleton with dual-joint confidence gating
+            if trk.last_kpts is not None and trk.last_kconfs is not None:
+                kpts = trk.last_kpts
+                confs = trk.last_kconfs
+                for (p1, p2) in SKELETON_EDGES:
+                    if p1 < len(confs) and p2 < len(confs):
+                        if confs[p1] >= skel_thresh and confs[p2] >= skel_thresh:
+                            pt1 = (int(kpts[p1, 0]), int(kpts[p1, 1]))
+                            pt2 = (int(kpts[p2, 0]), int(kpts[p2, 1]))
+                            cv2.line(cam_canvas, pt1, pt2, (0, 255, 255), 2, cv2.LINE_AA)
+                for p_idx in range(len(confs)):
+                    if confs[p_idx] >= skel_thresh:
+                        pt = (int(kpts[p_idx, 0]), int(kpts[p_idx, 1]))
+                        cv2.circle(cam_canvas, pt, 3, (0, 255, 255), -1, cv2.LINE_AA)
 
-            badge = f"base_link: [{ox:.2f}, {oy:.2f}, {oz:.2f}]m"
-            cv2.rectangle(cam_blend, (x1, y2), (x1 + 270, y2 + 20), (15, 15, 15), -1)
-            cv2.putText(cam_blend, badge, (x1 + 4, y2 + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 255, 255), 1, cv2.LINE_AA)
+            # Badges
+            src_str = "PRED" if trk.time_since_update > 0 else (f"FUSED {trk.pts_count}p" if trk.track_type == "FUSED" else "VISION")
+            tag = f"ID:{trk.id} [{src_str}] {dist_m:.2f}m"
+            (tw, th), _ = cv2.getTextSize(tag, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
+            b_y1 = max(0, y1 - th - 8)
+            cv2.rectangle(cam_canvas, (x1, b_y1), (x1 + tw + 8, y1), box_col, -1)
+            cv2.putText(cam_canvas, tag, (x1 + 4, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0, 0, 0), 1, cv2.LINE_AA)
 
-        cam_view = cv2.resize(cam_blend, (1280, 720), interpolation=cv2.INTER_AREA)
+            speed = math.sqrt(trk.x[3]**2 + trk.x[4]**2)
+            sub_tag = f"base: [{trk.x[0]:+.2f}, {trk.x[1]:+.2f}, {trk.x[2]:+.2f}]m | V:{speed:.1f}m/s"
+            (stw, sth), _ = cv2.getTextSize(sub_tag, cv2.FONT_HERSHEY_SIMPLEX, 0.38, 1)
+            cv2.rectangle(cam_canvas, (x1, y2), (x1 + stw + 8, y2 + sth + 6), (15, 15, 15), -1)
+            cv2.putText(cam_canvas, sub_tag, (x1 + 4, y2 + sth + 2), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 255, 255), 1, cv2.LINE_AA)
 
-        # 2. Render 640x720 Top-Down BEV Radar
-        bev_panel = np.zeros((720, 640, 3), dtype=np.uint8)
+        cam_view_720 = cv2.resize(cam_canvas, (1280, 720), interpolation=cv2.INTER_AREA)
+
+        # 2. Render 640x720 Top-Down BEV Radar (Unobstructed full vertical canvas)
+        bev_w, bev_h = 640, 720
+        bev_panel = np.zeros((bev_h, bev_w, 3), dtype=np.uint8)
         bev_panel[:] = (18, 20, 26)
 
-        cx, cy = 320, 650
+        cx_b = bev_w // 2
+        cy_b = int(bev_h * 0.90)
         max_r = float(self.get_parameter("max_radar_range_m").value)
-        scale = 600.0 / max_r
+        scale = (bev_h * 0.85) / max_r
 
+        # Range rings
         for r in [2.5, 5.0, 7.5, 10.0, 12.5, 15.0]:
             r_px = int(r * scale)
-            cv2.circle(bev_panel, (cx, cy), r_px, (40, 45, 55), 1, cv2.LINE_AA)
-            cv2.putText(bev_panel, f"{r:.1f}m", (cx + 5, cy - r_px + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (80, 90, 110), 1)
+            cv2.circle(bev_panel, (cx_b, cy_b), r_px, (40, 45, 55), 1, cv2.LINE_AA)
+            cv2.putText(bev_panel, f"{r:.1f}m", (cx_b + 5, cy_b - r_px + 12), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (80, 90, 110), 1)
 
         # Vehicle footprint
         v_w = int(1.3 * scale)
-        cv2.rectangle(bev_panel, (cx - v_w//2, cy - int(1.8*scale)), (cx + v_w//2, cy + int(0.8*scale)), (0, 165, 255), 2)
-        cv2.putText(bev_panel, "E-TRIKE", (cx - 22, cy + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 165, 255), 1)
+        cv2.rectangle(bev_panel, (cx_b - v_w // 2, cy_b - int(1.8 * scale)), (cx_b + v_w // 2, cy_b + int(0.8 * scale)), (0, 165, 255), 2)
+        cv2.putText(bev_panel, "E-TRIKE", (cx_b - 22, cy_b + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 165, 255), 1)
 
-        # Plot background LiDAR points across full BEV canvas
-        if self._last_lidar_pts is not None:
-            xb = self._last_lidar_pts[:, 0] + 0.5750
-            yb = self._last_lidar_pts[:, 1]
-            valid_b = (xb > -1.5) & (xb < max_r) & (np.abs(yb) < max_r * 0.55)
-            px_b = (cx - yb[valid_b] * scale).astype(int)
-            py_b = (cy - xb[valid_b] * scale).astype(int)
-            for px, py in zip(px_b, py_b):
-                if 0 <= px < 640 and 0 <= py < 720:
-                    bev_panel[py, px] = (75, 115, 130)
+        # Background LiDAR scatter across full BEV canvas
+        xb = non_floor_pts[:, 0] + 0.5750
+        yb = non_floor_pts[:, 1]
+        valid_b = (xb > -1.5) & (xb < max_r) & (np.abs(yb) < max_r * 0.55)
+        px_b = (cx_b - yb[valid_b] * scale).astype(int)
+        py_b = (cy_b - xb[valid_b] * scale).astype(int)
+        for px, py in zip(px_b, py_b):
+            if 0 <= px < bev_w and 0 <= py < bev_h:
+                bev_panel[py, px] = (75, 115, 130)
 
-        # Plot fused targets
-        for obj in fused_objects:
-            ox, oy, _ = obj["pos_base"]
-            od = obj["dist"]
-            px = int(cx - oy * scale)
-            py = int(cy - ox * scale)
-            if 0 <= px < 640 and 0 <= py < 720:
-                col = (0, 45, 255) if od < 2.5 else ((0, 215, 255) if od < 5.0 else (0, 255, 120))
-                cv2.circle(bev_panel, (px, py), 12, col, 2, cv2.LINE_AA)
-                cv2.line(bev_panel, (cx, cy), (px, py), col, 1, cv2.LINE_AA)
-                cv2.putText(bev_panel, f"{obj['name'][:4].upper()} {od:.1f}m", (px - 22, py - 14),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.38, col, 1, cv2.LINE_AA)
+        # Plot tracked targets
+        for trk in active_trackers:
+            ox, oy, _ = trk.x[:3]
+            od = float(np.linalg.norm(trk.x[:3]))
+            px = int(cx_b - oy * scale)
+            py = int(cy_b - ox * scale)
+            if 0 <= px < bev_w and 0 <= py < bev_h:
+                if trk.track_type == "FUSED":
+                    col = (0, 45, 255) if od < 2.5 else ((0, 215, 255) if od < 5.0 else (0, 255, 120))
+                else:
+                    col = (255, 215, 0)
+
+                cv2.circle(bev_panel, (px, py), 11, col, 2, cv2.LINE_AA)
+                cv2.circle(bev_panel, (px, py), 3, col, -1)
+                cv2.line(bev_panel, (cx_b, cy_b), (px, py), col, 1, cv2.LINE_AA)
+
+                # Velocity vector
+                vx = trk.x[3]
+                vy = trk.x[4]
+                end_x = int(px - vy * scale * 0.5)
+                end_y = int(py - vx * scale * 0.5)
+                cv2.arrowedLine(bev_panel, (px, py), (end_x, end_y), (0, 255, 255), 2, cv2.LINE_AA, tipLength=0.3)
+
+                tag = f"ID:{trk.id} {od:.1f}m"
+                cv2.putText(bev_panel, tag, (px - 22, py - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.38, col, 1, cv2.LINE_AA)
 
         # 3. Publish ROS Image Messages
         try:
             if self._pub_debug_img is not None and self._pub_debug_img.is_activated:
-                msg_dbg = self._bridge.cv2_to_imgmsg(cam_view, encoding="bgr8")
+                msg_dbg = self._bridge.cv2_to_imgmsg(cam_view_720, encoding="bgr8")
                 msg_dbg.header.stamp = stamp
                 msg_dbg.header.frame_id = "kinect_front_optical_link"
                 self._pub_debug_img.publish(msg_dbg)
@@ -708,7 +1090,7 @@ class CameraLidarFusionNode(LifecycleNode):
                 self._pub_bev_img.publish(msg_bev)
 
             if self._pub_dashboard is not None and self._pub_dashboard.is_activated:
-                dash = np.hstack([cam_view, bev_panel])
+                dash = np.hstack([cam_view_720, bev_panel])
                 msg_dash = self._bridge.cv2_to_imgmsg(dash, encoding="bgr8")
                 msg_dash.header.stamp = stamp
                 msg_dash.header.frame_id = "base_link"

@@ -23,7 +23,7 @@
     lidar_mount_z: 1.7464
     camera_mount_x: 1.2000
     camera_mount_y: 0.0000
-    camera_mount_z: 1.0000
+    camera_mount_z: 1.7000
     camera_pitch_rad: 0.0000
 
     # Optical Intrinsics Fallback (Kinect v2 Color 1080p)
@@ -33,13 +33,19 @@
     cy_color: 539.5
 
     # 3D Clustering & Outlier Rejection
-    ground_filter_z_m: 0.15
-    cluster_eps_m: 0.45
-    cluster_min_pts: 3
-    box_inner_margin: 0.08
+    ground_filter_z_lidar_m: -1.40
+    cluster_eps_m: 0.28
+    cluster_min_pts: 4
+    box_inner_margin: 0.05
     max_radar_range_m: 15.0
+
+    # Multi-Tier Perception & Tracking
+    hungarian_dist_gate_m: 1.80
+    kalman_association_gate_m: 1.80
+    kalman_max_coast_frames: 3
 
     # Standalone YOLO Fallback (active if /bench_perception/objects is silent)
     auto_run_yolo: true
-    yolo_model_path: "/workspace/av_project/yolov8n.pt"
-    confidence_threshold: 0.40
+    yolo_model_path: "/workspace/av_project/data/ml_models/yolo26x-pose.pt"
+    confidence_threshold: 0.30
+    skeleton_joint_threshold: 0.40
