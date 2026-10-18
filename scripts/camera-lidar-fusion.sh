@@ -159,12 +159,12 @@ if ! docker exec "$CONTAINER" pgrep -f "static_transform_publisher.*lidar_link" 
     "
 fi
 
-# 6. Ensure Permissions on Fusion Scripts
-docker exec "$CONTAINER" chmod +x \
-    /workspace/autoware/src/our_packages/etrike_sensor_fusion/scripts/camera_lidar_fusion_node.py \
-    /workspace/autoware/src/our_packages/etrike_sensor_fusion/scripts/fusion_viewer.py \
-    /workspace/av_project/autoware/src/our_packages/etrike_sensor_fusion/scripts/camera_lidar_fusion_node.py \
-    /workspace/av_project/autoware/src/our_packages/etrike_sensor_fusion/scripts/fusion_viewer.py 2>/dev/null || true
+# 6. Ensure Permissions on Sensor and Fusion Scripts
+docker exec "$CONTAINER" bash -c "
+    chmod +x /workspace/autoware/src/our_packages/etrike_sensor_fusion/scripts/*.py \
+             /workspace/autoware/src/our_packages/etrike_common_launch/scripts/*.py \
+             /workspace/autoware/src/our_packages/etrike_yolo_perception/scripts/*.py 2>/dev/null || true
+"
 
 # 7. Non-Conflicting Teardown Trap
 cleanup() {

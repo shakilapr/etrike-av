@@ -33,7 +33,7 @@ def generate_launch_description():
         description="Whether to launch native X11 OpenCV HUD viewer window",
     )
 
-    fusion_node = LifecycleNode(
+    fusion_node = Node(
         package="etrike_sensor_fusion",
         executable="camera_lidar_fusion_node.py",
         name="camera_lidar_fusion_node",

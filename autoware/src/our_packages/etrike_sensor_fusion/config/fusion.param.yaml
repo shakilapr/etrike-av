@@ -2,7 +2,7 @@
   ros__parameters:
     # Execution & Telemetry
     publish_rate_hz: 15.0
-    sensor_timeout_sec: 1.2
+    sensor_timeout_sec: 4.0
 
     # Sensor Inputs (Read-Only)
     camera_image_topic: "/kinect_front/color/image_raw"

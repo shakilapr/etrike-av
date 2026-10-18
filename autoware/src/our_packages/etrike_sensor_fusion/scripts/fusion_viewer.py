@@ -81,8 +81,8 @@ class FusionViewerNode(Node):
         now = time.time()
 
         if self._last_img is not None:
-            # Check for stale stream (> 2.5s)
-            if now - self._last_rx_time > 2.5:
+            # Check for stale stream (> 5.0s)
+            if now - self._last_rx_time > 5.0:
                 disp = self._last_img.copy()
                 cv2.rectangle(disp, (40, 40), (600, 110), (0, 0, 180), -1)
                 cv2.putText(disp, "STREAM PAUSED / RECONNECTING...", (60, 85),
