@@ -655,9 +655,9 @@ class CameraLidarFusionNode(LifecycleNode):
         bev_panel = np.zeros((720, 640, 3), dtype=np.uint8)
         bev_panel[:] = (18, 20, 26)
 
-        cx, cy = 320, 430
+        cx, cy = 320, 650
         max_r = float(self.get_parameter("max_radar_range_m").value)
-        scale = (480.0 * 0.80) / max_r
+        scale = 600.0 / max_r
 
         for r in [2.5, 5.0, 7.5, 10.0, 12.5, 15.0]:
             r_px = int(r * scale)
@@ -669,15 +669,15 @@ class CameraLidarFusionNode(LifecycleNode):
         cv2.rectangle(bev_panel, (cx - v_w//2, cy - int(1.8*scale)), (cx + v_w//2, cy + int(0.8*scale)), (0, 165, 255), 2)
         cv2.putText(bev_panel, "E-TRIKE", (cx - 22, cy + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 165, 255), 1)
 
-        # Plot background LiDAR points
+        # Plot background LiDAR points across full BEV canvas
         if self._last_lidar_pts is not None:
             xb = self._last_lidar_pts[:, 0] + 0.5750
             yb = self._last_lidar_pts[:, 1]
-            valid_b = (xb > 0.1) & (xb < max_r) & (np.abs(yb) < max_r * 0.55)
+            valid_b = (xb > -1.5) & (xb < max_r) & (np.abs(yb) < max_r * 0.55)
             px_b = (cx - yb[valid_b] * scale).astype(int)
             py_b = (cy - xb[valid_b] * scale).astype(int)
             for px, py in zip(px_b, py_b):
-                if 0 <= px < 640 and 0 <= py < 480:
+                if 0 <= px < 640 and 0 <= py < 720:
                     bev_panel[py, px] = (75, 115, 130)
 
         # Plot fused targets
@@ -686,25 +686,12 @@ class CameraLidarFusionNode(LifecycleNode):
             od = obj["dist"]
             px = int(cx - oy * scale)
             py = int(cy - ox * scale)
-            if 0 <= px < 640 and 0 <= py < 480:
+            if 0 <= px < 640 and 0 <= py < 720:
                 col = (0, 45, 255) if od < 2.5 else ((0, 215, 255) if od < 5.0 else (0, 255, 120))
                 cv2.circle(bev_panel, (px, py), 12, col, 2, cv2.LINE_AA)
                 cv2.line(bev_panel, (cx, cy), (px, py), col, 1, cv2.LINE_AA)
                 cv2.putText(bev_panel, f"{obj['name'][:4].upper()} {od:.1f}m", (px - 22, py - 14),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.38, col, 1, cv2.LINE_AA)
-
-        # BEV Bottom Telemetry HUD
-        cv2.line(bev_panel, (0, 480), (640, 480), (60, 70, 85), 2)
-        cv2.putText(bev_panel, "ISOLATED BENCH PERCEPTION FUSION", (20, 515), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 255), 2)
-        nearest = f"{min([o['dist'] for o in fused_objects]):.2f}m" if fused_objects else "Clear"
-        cv2.putText(bev_panel, f"Fused 3D Objects: {len(fused_objects)} | Nearest: {nearest}", (20, 545),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.44, (0, 255, 120), 1)
-        cv2.putText(bev_panel, f"LiDAR points projected: {len(u_p):,}", (20, 575),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.44, (200, 200, 200), 1)
-        cv2.putText(bev_panel, "Target: Hesai XT32 (32-ch) + Kinect v2", (20, 605),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1)
-        cv2.putText(bev_panel, "Status: Isolated (Zero interference with Autoware)", (20, 635),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 200, 255), 1)
 
         # 3. Publish ROS Image Messages
         try:
