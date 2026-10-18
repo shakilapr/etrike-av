@@ -50,23 +50,31 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-import rclpy
-from rclpy.lifecycle import LifecycleNode, LifecyclePublisher
-from rclpy.lifecycle import LifecycleState, TransitionCallbackReturn
-from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
+try:
+    import rclpy
+    from rclpy.lifecycle import LifecycleNode, LifecyclePublisher
+    from rclpy.lifecycle import LifecycleState, TransitionCallbackReturn
+    from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 
-from autoware_perception_msgs.msg import (
-    DetectedObject,
-    DetectedObjectKinematics,
-    DetectedObjects,
-    ObjectClassification,
-    Shape,
-)
-from cv_bridge import CvBridge
-from geometry_msgs.msg import Point, Quaternion, Vector3
-from sensor_msgs.msg import CameraInfo, Image, PointCloud2
-from std_msgs.msg import ColorRGBA, Header, String
-from visualization_msgs.msg import Marker, MarkerArray
+    from autoware_perception_msgs.msg import (
+        DetectedObject,
+        DetectedObjectKinematics,
+        DetectedObjects,
+        ObjectClassification,
+        Shape,
+    )
+    from cv_bridge import CvBridge
+    from geometry_msgs.msg import Point, Quaternion, Vector3
+    from sensor_msgs.msg import CameraInfo, Image, PointCloud2
+    from std_msgs.msg import ColorRGBA, Header, String
+    from visualization_msgs.msg import Marker, MarkerArray
+    _HAS_ROS = True
+except ImportError:
+    _HAS_ROS = False
+    LifecycleNode = object
+    LifecyclePublisher = object
+    LifecycleState = object
+    TransitionCallbackReturn = object
 
 try:
     from scipy.optimize import linear_sum_assignment
