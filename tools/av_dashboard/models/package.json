@@ -1,0 +1,16 @@
+{
+  "name": "av-dashboard-models",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build:all": "node build_all_models.js",
+    "build:etrike": "node etrike/build_etrike.js",
+    "build:pedestrian": "node pedestrian/build_smpl.js",
+    "build:car": "node car/build_car.js",
+    "build:truck": "node truck/build_truck.js",
+    "build:cyclist": "node cyclist/build_cyclist.js",
+    "build:cone": "node cone/build_cone.js",
+    "build:obstacle": "node obstacle/build_obstacle.js"
+  }
+}
